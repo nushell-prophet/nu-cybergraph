@@ -46,7 +46,9 @@ export def main [
     # untracked newborn link would silently miss its own seal. certs/ and
     # seals/ hold artifacts of PREVIOUS seals — cataloguing them makes each
     # seal also attest the certificates issued so far (custody continuity).
-    let stage = [links certs seals]
+    # imported/ is the custody layer itself: cataloguing a foreign bundle is
+    # what proves "this neuron held the link no later than block K".
+    let stage = [links certs seals imported]
         | each {|d| $root | path join $d }
         | where {|d| ($d | path exists) and (ls $d | is-not-empty) }
     if ($stage | is-not-empty) {

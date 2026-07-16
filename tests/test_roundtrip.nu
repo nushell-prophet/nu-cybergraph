@@ -75,6 +75,14 @@ def "birth, seal, bundle, import, verify — the full link journey" [] {
     assert ($checks | first | get valid)
     assert ($checks | first | get neuron.bound)
 
+    # B's own seal catalogues the imported bundle — the custody layer:
+    # "this neuron held the link no later than block K"
+    seal --repo $b.repo --no-stamp --no-root-cid | ignore
+    let b_manifest = open --raw ($b.home | path join multiproofs tree-hashes.csv)
+        | from csv --no-infer
+    let bundled_record = $"imported/($born.record.neuron)/($born.cid)/links/($born.cid).json"
+    assert ($b_manifest | where filepath == $bundled_record | is-not-empty)
+
     # A second seal must not touch the frozen certificate (birth, not latest)
     let cert = $a.home | path join certs $"($born.cid).cert.nuon"
     let before = open --raw $cert | hash sha256
