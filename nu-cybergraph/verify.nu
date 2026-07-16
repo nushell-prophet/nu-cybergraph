@@ -1,0 +1,35 @@
+# Verify a link by CID — own or imported — always through its birth
+# certificate and the seal it was born under, never the repo's current root.
+
+use _repo.nu repo-root
+use _verify-helpers.nu [verify-bundle]
+use bundle.nu
+
+export def main [
+    link_cid: string # Link CID: authored here (certs/) or imported (imported/*/)
+    --repo: path # Repo root (default: git root of current directory)
+]: nothing -> any {
+    let root = repo-root $repo
+    if (($root | path join certs $"($link_cid).cert.nuon") | path exists) {
+        # Own link: one verification path for everything — materialize the
+        # portable bundle and check that, so "verifies here" always means
+        # "verifies anywhere".
+        let tmp = mktemp --directory
+        let result = try {
+            verify-bundle (bundle $link_cid --repo $root --out ($tmp | path join bundle))
+        } catch {|e|
+            rm -rf $tmp
+            error make {msg: $e.msg}
+        }
+        rm -rf $tmp
+        $result
+    } else {
+        # The same link CID can arrive from several neurons (identical record,
+        # identical CID) — verify every copy we hold.
+        let hits = glob ($root | path join imported * $link_cid)
+        if ($hits | is-empty) {
+            error make {msg: $"unknown link: ($link_cid) — not in certs/ or imported/"}
+        }
+        $hits | each {|bundle_dir| verify-bundle $bundle_dir }
+    }
+}
