@@ -38,14 +38,14 @@ Example (one line + `\n`, CID `QmZF4Nd4hAVHgLCW3YFEvtpDA52DX9z1vgX3CzH4L6yiwk`):
 {"cid_from":"QmUQUHEmv651XCBhiWUQpx2zf4PDts1aXL324ZFyV4QZPF","cid_to":"QmW9519sfmW2MvDb4TU4dKtiFAXm1UPDvE7JrMaBjprVHp","neuron":"QmddrVz92VH3LqT2i7uXeK4AVh6LyU7zjDiLbSdChPsULr","claimed_at":"2026-07-16T00:00:00+00:00"}
 ```
 
-Why JSON and not CSV/NUON: JSON is readable by every language and tool (and natively by nushell); CSV quoting is not canonical (the same reason nu-multiproof's merkle leaves hash parsed fields, not raw lines). Certificates are JSON too, for the same reach — nu-multiproof emits NUON proofs, but `seal` re-serializes them at freeze time, and `merkle verify` reads the JSON certificate unchanged because NUON is a superset of JSON.
+Why JSON and not CSV/NUON: JSON is readable by every language and tool (and natively by nushell); CSV quoting is not canonical (the same reason nu-multiproof's merkle leaves hash parsed fields, not raw lines). Certificates are JSON too, for the same reach — nu-multiproof's `merkle prove`/`verify` speak JSON natively.
 
 ## Neuron repo layout
 
 ```
 cybergraph/
   links/<link-cid>.json            # link records, one per file, self-addressed
-  certs/<link-cid>.cert.json       # birth certificates (frozen `merkle prove` output, as JSON)
+  certs/<link-cid>.cert.json       # birth certificates (frozen `merkle prove` output)
   seals/<root-hex-12>/             # archival root statement + signatures, one per seal
   exports/<link-cid>/              # bundles built by `bundle` (default --out)
   imported/<neuron-cid>/<link-cid>/ # foreign bundles, verified on import, kept intact

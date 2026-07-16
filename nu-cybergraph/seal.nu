@@ -71,12 +71,7 @@ export def main [
         }
     for f in $newborn {
         let proof = merkle prove ($f | path relative-to $root) --repo $root
-        # JSON for the same reason links are JSON (README "Why JSON"). NUON is
-        # a superset of JSON, so `merkle verify` reads the re-serialized
-        # certificate unchanged.
-        open --raw $proof | from nuon | to json --indent 2
-            | save --raw ($certs_dir | path join $"(($f | path parse).stem).cert.json")
-        rm $proof
+        mv $proof ($certs_dir | path join $"(($f | path parse).stem).cert.json")
     }
 
     # Snapshot this seal's root statement + signatures. multiproofs/tree-root.txt
