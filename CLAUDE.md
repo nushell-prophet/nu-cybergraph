@@ -20,7 +20,8 @@ All the code in alfa testing stage. No need to support backwards compability or 
 
 - A certificate in `certs/` is frozen at birth: never regenerate it on later seals — its OTS anchor is the link's earliest provable time bound.
 - `verify` must always check against the birth seal (via `seals/<root12>/` snapshots or the bundle's own root), never the repo's current `multiproofs/tree-root.txt`.
-- `import` refuses anything that fails merkle structure, signature, record self-addressing, or neuron binding. No partial imports.
+- `import` refuses anything that fails merkle structure, signature, record self-addressing, canonical pubkey form, or neuron binding. No partial imports.
+- Neuron identity is the CID of the pubkey file bytes in canonical form (`<type> <base64>\n`, no comment) — nu-multiproof's `pubkey canonical` is the one definition; `init` writes it, `verify-bundle` enforces it.
 - Imported bundles under `imported/` are foreign authority — read-only; re-export means copying them unchanged.
 
 ## Running tests

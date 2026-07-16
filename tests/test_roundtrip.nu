@@ -117,6 +117,23 @@ def "forged authorship is refused: neuron CID of a key that never signed" [] {
 }
 
 @test
+def "non-canonical pubkey file in a bundle is refused" [] {
+    let tmp_dir = $in.tmp_dir
+    let a = make-neuron $tmp_dir "a"
+    let born = link add $P1 $P2 --repo $a.repo --claimed-at "2026-07-16T00:00:00+00:00"
+    seal --repo $a.repo --no-stamp --no-root-cid | ignore
+    let bundle_dir = bundle $born.cid --repo $a.repo --out ($tmp_dir | path join out-bundle)
+
+    # Re-adding a comment keeps the key material — the signature would still
+    # verify and the neuron would merely unbind. The canonical-form check must
+    # refuse the bundle outright instead, naming the malformed file.
+    let pub = glob ($bundle_dir | path join multiproofs pubkeys *.pub) | first
+    let raw = open --raw $pub | str trim
+    $"($raw) mallory\n" | save --raw --force $pub
+    assert error {|| verify-bundle $bundle_dir }
+}
+
+@test
 def "tampered record in a bundle fails self-addressing" [] {
     let tmp_dir = $in.tmp_dir
     let a = make-neuron $tmp_dir "a"
