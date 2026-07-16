@@ -1,6 +1,6 @@
 # Bootstrap a neuron repo: multiproof machinery + the cybergraph directories.
 
-use _repo.nu repo-root
+use _repo.nu [repo-root graph-root]
 use _deps.nu [init]
 
 # `init` here is nu-multiproof's init (pubkey registration in
@@ -8,8 +8,12 @@ use _deps.nu [init]
 export def main [
     --repo: path # Target git repo root (default: git root of current directory)
     --pubkey: path # SSH public key to register (default: signing key from git config)
+    --nested # Home the whole graph in <repo>/cybergraph/ instead of the repo root
 ] {
-    let root = repo-root $repo
+    if $nested {
+        mkdir ((repo-root $repo) | path join cybergraph)
+    }
+    let root = graph-root $repo
     if $pubkey != null {
         init --repo $root --pubkey $pubkey
     } else {

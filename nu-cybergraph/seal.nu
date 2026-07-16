@@ -5,7 +5,7 @@
 # anchor is the link's earliest provable time bound; later seals only add
 # newer roots and must not touch existing certificates.
 
-use _repo.nu repo-root
+use _repo.nu graph-root
 use _deps.nu [seal merkle]
 
 # `seal` in the body is nu-multiproof's seal; this wrapper stages the
@@ -16,7 +16,7 @@ export def main [
     --no-stamp # Skip OTS timestamping (stamping is the point — tests only)
     --no-root-cid # Skip IPFS root CID (per-file CIDs are still computed pure-nu)
 ]: nothing -> record {
-    let root = repo-root $repo
+    let root = graph-root $repo
 
     # Fail fast BEFORE multiproof's seal mutates anything (it writes the
     # manifest and root statement before signing): signing needs the signer's

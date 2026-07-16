@@ -3,14 +3,14 @@
 # remains the link's authority for authorship and birth time through any
 # number of re-exports (re-export = pass the directory along unchanged).
 
-use _repo.nu repo-root
+use _repo.nu graph-root
 use _verify-helpers.nu [verify-bundle]
 
 export def main [
     bundle: path # Portable bundle directory to import
     --repo: path # Destination repo root (default: git root of current directory)
 ]: nothing -> record {
-    let root = repo-root $repo
+    let root = graph-root $repo
     let v = verify-bundle $bundle
     if not $v.valid {
         error make {msg: $"refusing to import: ($v.error)"}

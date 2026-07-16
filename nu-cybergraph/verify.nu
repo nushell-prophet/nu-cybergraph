@@ -1,7 +1,7 @@
 # Verify a link by CID — own or imported — always through its birth
 # certificate and the seal it was born under, never the repo's current root.
 
-use _repo.nu repo-root
+use _repo.nu graph-root
 use _verify-helpers.nu [verify-bundle]
 use bundle.nu
 
@@ -9,7 +9,7 @@ export def main [
     link_cid: string # Link CID: authored here (certs/) or imported (imported/*/)
     --repo: path # Repo root (default: git root of current directory)
 ]: nothing -> any {
-    let root = repo-root $repo
+    let root = graph-root $repo
     if (($root | path join certs $"($link_cid).cert.nuon") | path exists) {
         # Own link: one verification path for everything — materialize the
         # portable bundle and check that, so "verifies here" always means

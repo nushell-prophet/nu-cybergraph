@@ -1,6 +1,6 @@
 # Create link records in a neuron repo.
 
-use _repo.nu repo-root
+use _repo.nu graph-root
 use _record.nu [link-bytes link-cid]
 use _deps.nu [cid-v0]
 
@@ -26,7 +26,7 @@ export def add [
     --claimed-at: string # RFC 3339 timestamp claimed by the author (default: now, UTC)
     --repo: path # Target repo root (default: git root of current directory)
 ]: nothing -> record {
-    let root = repo-root $repo
+    let root = graph-root $repo
     let rec = {
         cid_from: $cid_from
         cid_to: $cid_to

@@ -2,14 +2,14 @@
 # verify it offline, in the layout nu-multiproof's README pins under
 # "Verifying without the origin repo".
 
-use _repo.nu repo-root
+use _repo.nu graph-root
 
 export def main [
     link_cid: string # CID of a link this repo authored (must have a certificate)
     --repo: path # Source repo root (default: git root of current directory)
     --out: path # Bundle destination (default: exports/<link_cid>)
 ]: nothing -> path {
-    let root = repo-root $repo
+    let root = graph-root $repo
     let cert = $root | path join certs $"($link_cid).cert.nuon"
     if not ($cert | path exists) {
         error make {msg: $"no birth certificate for ($link_cid) — run `nu-cybergraph seal` first"}

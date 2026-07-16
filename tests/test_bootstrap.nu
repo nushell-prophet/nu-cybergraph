@@ -5,6 +5,11 @@ use std/testing *
 
 use ../nu-cybergraph/init.nu
 use ../nu-cybergraph/seal.nu
+use ../nu-cybergraph/link.nu
+use ../nu-cybergraph/verify.nu
+
+const P1 = "QmUQUHEmv651XCBhiWUQpx2zf4PDts1aXL324ZFyV4QZPF"
+const P2 = "QmW9519sfmW2MvDb4TU4dKtiFAXm1UPDvE7JrMaBjprVHp"
 
 @before-each
 def setup []: nothing -> record {
@@ -49,6 +54,32 @@ def "seal before init fails fast, before anything is written" [] {
     assert ($err | str contains "nu-cybergraph init")
     # Nothing mutated: no manifest, no root statement
     assert not (($r.repo | path join multiproofs tree-hashes.csv) | path exists)
+}
+
+@test
+def "nested graph home: init --nested puts everything under cybergraph/" [] {
+    let r = make-bare-repo $in.tmp_dir
+    init --repo $r.repo --nested
+    assert (($r.repo | path join cybergraph multiproofs pubkeys) | path exists)
+    assert (($r.repo | path join cybergraph links) | path exists)
+
+    # An arbitrary user file at the repo root: tracked by git, untouched by
+    # the graph — the seal manifest covers only the cybergraph/ subtree
+    "arbitrary user file\n" | save ($r.repo | path join notes.md)
+    ^git -C $r.repo add -A
+
+    let born = link add $P1 $P2 --repo $r.repo --claimed-at "2026-07-16T00:00:00+00:00"
+    assert ($born.path | str contains $"cybergraph(char path_sep)links")
+    let sealed = seal --repo $r.repo --no-stamp --no-root-cid
+    assert equal $sealed.newborn 1
+    assert (($r.repo | path join cybergraph certs $"($born.cid).cert.nuon") | path exists)
+    let manifest = open --raw ($r.repo | path join cybergraph multiproofs tree-hashes.csv)
+        | from csv --no-infer
+    assert ($manifest | where filepath == "notes.md" | is-empty)
+    assert ($manifest | where filepath == $"links/($born.cid).json" | is-not-empty)
+
+    # Discovery is implicit from here on: verify finds the nested home itself
+    assert (verify $born.cid --repo $r.repo).valid
 }
 
 @test
