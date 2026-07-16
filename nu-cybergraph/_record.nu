@@ -14,6 +14,8 @@ export const LINK_KEYS = [cid_from cid_to neuron claimed_at]
 
 const CID_V0_RE = '^Qm[1-9A-HJ-NP-Za-km-z]{44}$'
 
+const RFC3339_RE = '^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?(Z|[+-]\d{2}:\d{2})$'
+
 export def validate-link [rec: record]: nothing -> nothing {
     let cols = $rec | columns
     if ($cols | sort) != ($LINK_KEYS | sort) {
@@ -24,11 +26,15 @@ export def validate-link [rec: record]: nothing -> nothing {
             error make {msg: $"($key) must be a base58btc CID v0 \(Qm + 44 chars\): (($rec | get $key) | to json)"}
         }
     }
-    # Parseability doubles as a charset guard: a datetime string contains no
-    # `"` or `\`, so compact JSON serialization stays escape-free and the
-    # canonical bytes stay trivially reproducible.
+    # Shape first: the README pins RFC 3339, and the constrained charset is
+    # the explicit guard that keeps compact JSON escape-free (no `"` or `\`),
+    # so the canonical bytes stay trivially reproducible. Then parseability:
+    # the regex admits impossible dates (month 13), `into datetime` rejects them.
+    if $rec.claimed_at !~ $RFC3339_RE {
+        error make {msg: $"claimed_at is not an RFC 3339 timestamp: ($rec.claimed_at | to json)"}
+    }
     try { $rec.claimed_at | into datetime | ignore } catch {
-        error make {msg: $"claimed_at is not a parseable timestamp: ($rec.claimed_at | to json)"}
+        error make {msg: $"claimed_at is not a real calendar date: ($rec.claimed_at | to json)"}
     }
 }
 

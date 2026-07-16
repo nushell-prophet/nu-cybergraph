@@ -46,6 +46,10 @@ def "malformed records are rejected" [] {
     assert error {|| validate-link ((golden-record) | reject claimed_at) }
     # Unparseable timestamp
     assert error {|| validate-link ((golden-record) | update claimed_at "yesterday-ish") }
+    # Parseable but not RFC 3339 — the spec pins the shape, not just parseability
+    assert error {|| validate-link ((golden-record) | update claimed_at "2026-07-16") }
+    # RFC 3339 shape but impossible date
+    assert error {|| validate-link ((golden-record) | update claimed_at "2026-13-01T00:00:00+00:00") }
 }
 
 @test
