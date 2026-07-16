@@ -53,7 +53,7 @@ multiproofs/                     # nu-multiproof machinery (manifest, pubkeys, O
 
 A sha256 git backend (`git init --object-format=sha256`) is recommended; the merkle/certificate layer works on sha1 repos too. Note GitHub does not host sha256 repos — Codeberg and plain remotes do.
 
-**Nested graph home (the default).** The whole layout above lives in one subdirectory: `init` creates `<repo>/cybergraph/` and every command finds it automatically from then on (rule: the graph home is `<git-root>/cybergraph` when that directory exists, the git root otherwise — so a repo already carrying a root-layout graph keeps it, and init never splits an existing graph). Particles are referenced by CID, not path, so they never need to live under the graph home — or in the repo at all. The seal manifest then covers only the graph subtree; a particle outside it still gets time-anchored the moment a sealed link mentions its CID, because showing bytes that hash to an anchored CID extends the anchor to those bytes.
+**Nested graph home (the default).** The whole layout above lives in one subdirectory: `init` creates `<repo>/cybergraph/` and every command finds it automatically from then on (rule: the graph home is `<git-root>/cybergraph` when that directory exists, the git root otherwise — root layout means the seal covers the whole repo, which is what this repo itself uses to attest its own code). Particles are referenced by CID, not path, so they never need to live under the graph home — or in the repo at all. The seal manifest then covers only the graph subtree; a particle outside it still gets time-anchored the moment a sealed link mentions its CID, because showing bytes that hash to an anchored CID extends the anchor to those bytes.
 
 ## Birth certificate
 

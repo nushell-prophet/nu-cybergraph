@@ -44,17 +44,6 @@ def "init is idempotent: re-run reports, never duplicates" [] {
 }
 
 @test
-def "existing root-layout graph is respected: init never splits it" [] {
-    let r = make-bare-repo $in.tmp_dir
-    # A graph initialized before the nested-by-default rule: multiproofs/ at the root
-    mkdir ($r.repo | path join multiproofs)
-    init --repo $r.repo
-    assert not (($r.repo | path join cybergraph) | path exists)
-    assert equal (glob ($r.repo | path join multiproofs pubkeys *.pub) | length) 1
-    assert (($r.repo | path join links) | path exists)
-}
-
-@test
 def "seal before init fails fast, before anything is written" [] {
     let r = make-bare-repo $in.tmp_dir
     "hi\n" | save ($r.repo | path join readme.md)

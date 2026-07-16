@@ -9,14 +9,11 @@ export def main [
     --repo: path # Target git repo root (default: git root of current directory)
     --pubkey: path # SSH public key to register (default: signing key from git config)
 ] {
-    let base = repo-root $repo
-    # Nested by default: the graph lives in <repo>/cybergraph/, one service
-    # dir in an arbitrary-shaped repo. Guard: a repo already carrying a
-    # root-layout graph keeps it — re-running init must never split an
-    # existing graph into a second home.
-    if not (($base | path join multiproofs) | path exists) {
-        mkdir ($base | path join cybergraph)
-    }
+    # Nested always: the graph lives in <repo>/cybergraph/, one service dir
+    # in an arbitrary-shaped repo. Root layout (graph = whole repo, as in
+    # this repo itself) is still honored by graph-root discovery — it just
+    # isn't something init creates.
+    mkdir ((repo-root $repo) | path join cybergraph)
     let root = graph-root $repo
     if $pubkey != null {
         init --repo $root --pubkey $pubkey
