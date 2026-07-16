@@ -38,9 +38,20 @@ def "init is idempotent: re-run reports, never duplicates" [] {
     let r = make-bare-repo $in.tmp_dir
     init --repo $r.repo
     init --repo $r.repo
+    assert equal (glob ($r.repo | path join cybergraph multiproofs pubkeys *.pub) | length) 1
+    assert (($r.repo | path join cybergraph links) | path exists)
+    assert (($r.repo | path join cybergraph certs) | path exists)
+}
+
+@test
+def "existing root-layout graph is respected: init never splits it" [] {
+    let r = make-bare-repo $in.tmp_dir
+    # A graph initialized before the nested-by-default rule: multiproofs/ at the root
+    mkdir ($r.repo | path join multiproofs)
+    init --repo $r.repo
+    assert not (($r.repo | path join cybergraph) | path exists)
     assert equal (glob ($r.repo | path join multiproofs pubkeys *.pub) | length) 1
     assert (($r.repo | path join links) | path exists)
-    assert (($r.repo | path join certs) | path exists)
 }
 
 @test
@@ -57,9 +68,9 @@ def "seal before init fails fast, before anything is written" [] {
 }
 
 @test
-def "nested graph home: init --nested puts everything under cybergraph/" [] {
+def "nested graph home: init puts everything under cybergraph/ by default" [] {
     let r = make-bare-repo $in.tmp_dir
-    init --repo $r.repo --nested
+    init --repo $r.repo
     assert (($r.repo | path join cybergraph multiproofs pubkeys) | path exists)
     assert (($r.repo | path join cybergraph links) | path exists)
 
@@ -92,5 +103,5 @@ def "seal with an unregistered --key names the fix" [] {
     let err = try { seal --repo $r.repo --key $other --no-stamp --no-root-cid; null } catch {|e| $e.msg }
     assert ($err != null) "seal accepted a key that is not registered"
     assert ($err | str contains $"init --pubkey ($other).pub")
-    assert not (($r.repo | path join multiproofs tree-hashes.csv) | path exists)
+    assert not (($r.repo | path join cybergraph multiproofs tree-hashes.csv) | path exists)
 }

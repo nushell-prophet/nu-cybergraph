@@ -39,7 +39,7 @@ def make-neuron [tmp_dir: path name: string]: nothing -> record {
     ^ssh-keygen -t ed25519 -f $key -N "" -C $name -q
     ^git -C $repo config user.signingKey $key
     init --repo $repo
-    {repo: $repo key: $key pub: $"($key).pub"}
+    {repo: $repo home: ($repo | path join cybergraph) key: $key pub: $"($key).pub"}
 }
 
 @test
@@ -51,7 +51,7 @@ def "birth, seal, bundle, import, verify — the full link journey" [] {
     let born = link add $P1 $P2 --repo $a.repo --claimed-at "2026-07-16T00:00:00+00:00"
     let sealed = seal --repo $a.repo --no-stamp --no-root-cid
     assert equal $sealed.newborn 1
-    assert (($a.repo | path join certs $"($born.cid).cert.nuon") | path exists)
+    assert (($a.home | path join certs $"($born.cid).cert.nuon") | path exists)
     assert (($sealed.snapshot | path join tree-root.txt) | path exists)
     assert ((glob ($sealed.snapshot | path join "tree-root.txt.*.sig") | length) == 1)
 
@@ -67,7 +67,7 @@ def "birth, seal, bundle, import, verify — the full link journey" [] {
     let b = make-neuron $tmp_dir "b"
     let imported = import $bundle_dir --repo $b.repo
     assert equal $imported.neuron $born.record.neuron
-    assert (($b.repo | path join imported $born.record.neuron $born.cid) | path exists)
+    assert (($b.home | path join imported $born.record.neuron $born.cid) | path exists)
 
     # B verifies its copy offline, by CID alone
     let checks = verify $born.cid --repo $b.repo
@@ -76,7 +76,7 @@ def "birth, seal, bundle, import, verify — the full link journey" [] {
     assert ($checks | first | get neuron.bound)
 
     # A second seal must not touch the frozen certificate (birth, not latest)
-    let cert = $a.repo | path join certs $"($born.cid).cert.nuon"
+    let cert = $a.home | path join certs $"($born.cid).cert.nuon"
     let before = open --raw $cert | hash sha256
     link add $P2 $P1 --repo $a.repo --claimed-at "2026-07-16T01:00:00+00:00"
     let sealed2 = seal --repo $a.repo --no-stamp --no-root-cid

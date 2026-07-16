@@ -8,10 +8,14 @@ use _deps.nu [init]
 export def main [
     --repo: path # Target git repo root (default: git root of current directory)
     --pubkey: path # SSH public key to register (default: signing key from git config)
-    --nested # Home the whole graph in <repo>/cybergraph/ instead of the repo root
 ] {
-    if $nested {
-        mkdir ((repo-root $repo) | path join cybergraph)
+    let base = repo-root $repo
+    # Nested by default: the graph lives in <repo>/cybergraph/, one service
+    # dir in an arbitrary-shaped repo. Guard: a repo already carrying a
+    # root-layout graph keeps it — re-running init must never split an
+    # existing graph into a second home.
+    if not (($base | path join multiproofs) | path exists) {
+        mkdir ($base | path join cybergraph)
     }
     let root = graph-root $repo
     if $pubkey != null {
