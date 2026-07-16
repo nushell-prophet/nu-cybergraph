@@ -16,7 +16,15 @@ export def main [
         # "verifies anywhere".
         let tmp = mktemp --directory
         let result = try {
-            verify-bundle (bundle $link_cid --repo $root --out ($tmp | path join bundle))
+            # Pass the caller's $repo through, not the resolved $root:
+            # graph-root is not idempotent (it always appends cybergraph/),
+            # so a resolved home must never be re-resolved.
+            let b = if $repo != null {
+                bundle $link_cid --repo $repo --out ($tmp | path join bundle)
+            } else {
+                bundle $link_cid --out ($tmp | path join bundle)
+            }
+            verify-bundle $b
         } catch {|e|
             rm -rf $tmp
             error make {msg: $e.msg}

@@ -43,17 +43,18 @@ Why JSON and not CSV/NUON: JSON is readable by every language and tool (and nati
 ## Neuron repo layout
 
 ```
-links/<link-cid>.json            # link records, one per file, self-addressed
-certs/<link-cid>.cert.nuon       # birth certificates (frozen `merkle prove` output)
-seals/<root-hex-12>/             # archival root statement + signatures, one per seal
-exports/<link-cid>/              # bundles built by `bundle` (default --out)
-imported/<neuron-cid>/<link-cid>/ # foreign bundles, verified on import, kept intact
-multiproofs/                     # nu-multiproof machinery (manifest, pubkeys, OTS)
+cybergraph/
+  links/<link-cid>.json            # link records, one per file, self-addressed
+  certs/<link-cid>.cert.nuon       # birth certificates (frozen `merkle prove` output)
+  seals/<root-hex-12>/             # archival root statement + signatures, one per seal
+  exports/<link-cid>/              # bundles built by `bundle` (default --out)
+  imported/<neuron-cid>/<link-cid>/ # foreign bundles, verified on import, kept intact
+  multiproofs/                     # nu-multiproof machinery (manifest, pubkeys, OTS)
 ```
 
 A sha256 git backend (`git init --object-format=sha256`) is recommended; the merkle/certificate layer works on sha1 repos too. Note GitHub does not host sha256 repos — Codeberg and plain remotes do.
 
-**Nested graph home (the default).** The whole layout above lives in one subdirectory: `init` creates `<repo>/cybergraph/` and every command finds it automatically from then on (rule: the graph home is `<git-root>/cybergraph` when that directory exists, the git root otherwise — root layout means the seal covers the whole repo, which is what this repo itself uses to attest its own code). Particles are referenced by CID, not path, so they never need to live under the graph home — or in the repo at all. The seal manifest then covers only the graph subtree; a particle outside it still gets time-anchored the moment a sealed link mentions its CID, because showing bytes that hash to an anchored CID extends the anchor to those bytes.
+**Graph home.** The graph home is always `<git-root>/cybergraph/` — `init` creates it, every command finds it. Particles are referenced by CID, not path, so they never need to live under the graph home — or in the repo at all. The seal manifest covers only the graph subtree; a particle outside it still gets time-anchored the moment a sealed link mentions its CID, because showing bytes that hash to an anchored CID extends the anchor to those bytes. (Attesting a whole repo's files is a different job — use nu-multiproof's `seal` directly for that.)
 
 ## Birth certificate
 
