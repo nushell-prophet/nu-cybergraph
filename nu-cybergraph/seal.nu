@@ -18,6 +18,30 @@ export def main [
 ]: nothing -> record {
     let root = repo-root $repo
 
+    # Fail fast BEFORE multiproof's seal mutates anything (it writes the
+    # manifest and root statement before signing): signing needs the signer's
+    # pubkey registered in multiproofs/pubkeys/. Registration is deliberate —
+    # it establishes the neuron identity — so seal points to init instead of
+    # registering as a side effect.
+    let registered = glob ($root | path join multiproofs pubkeys *.pub)
+    if ($registered | is-empty) {
+        let hint = if $key != null { $" --pubkey ($key)" } else { "" }
+        error make {msg: $"no pubkey registered in multiproofs/pubkeys/ — run `nu-cybergraph init($hint)` first"}
+    }
+    if $key != null {
+        let pub = if ($key | str ends-with ".pub") { $key } else { $"($key).pub" }
+        if ($pub | path exists) {
+            # Compare key material (type + base64), ignoring comments
+            let material = open --raw $pub | str trim | split row " " | first 2 | str join " "
+            let known = $registered | any {|f|
+                (open --raw $f | str trim | split row " " | first 2 | str join " ") == $material
+            }
+            if not $known {
+                error make {msg: $"($pub) is not registered in multiproofs/pubkeys/ — run `nu-cybergraph init --pubkey ($pub)` first"}
+            }
+        }
+    }
+
     # Stage the cybergraph dirs: the manifest walks `git ls-files`, so an
     # untracked newborn link would silently miss its own seal. certs/ and
     # seals/ hold artifacts of PREVIOUS seals — cataloguing them makes each
