@@ -53,7 +53,7 @@ def "seal before init fails fast, before anything is written" [] {
     assert ($err != null) "seal ran without a registered pubkey"
     assert ($err | str contains "nu-cybergraph init")
     # Nothing mutated: no manifest, no root statement
-    assert not (($r.repo | path join multiproofs tree-hashes.csv) | path exists)
+    assert not (($r.repo | path join cybergraph multiproofs tree-hashes.csv) | path exists)
 }
 
 @test
