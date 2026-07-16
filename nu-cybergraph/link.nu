@@ -16,7 +16,9 @@ def own-neuron-cid [root: path]: nothing -> string {
 }
 
 # Write a new link record to links/<cid>.json, named by its own content address.
-@example "link two particles" { link add QmUQUHEmv651XCBhiWUQpx2zf4PDts1aXL324ZFyV4QZPF QmW9519sfmW2MvDb4TU4dKtiFAXm1UPDvE7JrMaBjprVHp }
+# A particle is any content-addressed file; its CID is the CID v0 of its bytes
+# (compute one with nu-multiproof: `open --raw file.md | nu-multiproof cid-v0`).
+@example "link two particles by the CIDs of their bytes" { link add QmUQUHEmv651XCBhiWUQpx2zf4PDts1aXL324ZFyV4QZPF QmW9519sfmW2MvDb4TU4dKtiFAXm1UPDvE7JrMaBjprVHp }
 export def add [
     cid_from: string # CID v0 of the source particle
     cid_to: string # CID v0 of the target particle
