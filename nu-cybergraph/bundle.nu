@@ -10,11 +10,11 @@ export def main [
     --out: path # Bundle destination (default: exports/<link_cid>)
 ]: nothing -> path {
     let root = graph-root $repo
-    let cert = $root | path join certs $"($link_cid).cert.nuon"
+    let cert = $root | path join certs $"($link_cid).cert.json"
     if not ($cert | path exists) {
         error make {msg: $"no birth certificate for ($link_cid) — run `nu-cybergraph seal` first"}
     }
-    let proof = open --raw $cert | from nuon
+    let proof = open --raw $cert | from json
     let root_hex = $proof.root
     let snap = $root | path join seals ($root_hex | str substring 0..11)
     if not ($snap | path exists) {
@@ -28,7 +28,7 @@ export def main [
     mkdir ($out | path join links) ($out | path join multiproofs pubkeys)
 
     cp ($root | path join $proof.leaf.filepath) ($out | path join links)
-    cp $cert ($out | path join $"($link_cid).cert.nuon")
+    cp $cert ($out | path join $"($link_cid).cert.json")
     glob ($snap | path join *) | each {|f| cp $f ($out | path join multiproofs) }
 
     # Signer pubkeys, derived from the snapshot's sig names (tree-root.txt.<name>.sig).

@@ -72,7 +72,7 @@ def "nested graph home: init puts everything under cybergraph/ by default" [] {
     assert ($born.path | str contains $"cybergraph(char path_sep)links")
     let sealed = seal --repo $r.repo --no-stamp --no-root-cid
     assert equal $sealed.newborn 1
-    assert (($r.repo | path join cybergraph certs $"($born.cid).cert.nuon") | path exists)
+    assert (($r.repo | path join cybergraph certs $"($born.cid).cert.json") | path exists)
     let manifest = open --raw ($r.repo | path join cybergraph multiproofs tree-hashes.csv)
         | from csv --no-infer
     assert ($manifest | where filepath == "notes.md" | is-empty)

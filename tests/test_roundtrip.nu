@@ -51,7 +51,7 @@ def "birth, seal, bundle, import, verify — the full link journey" [] {
     let born = link add $P1 $P2 --repo $a.repo --claimed-at "2026-07-16T00:00:00+00:00"
     let sealed = seal --repo $a.repo --no-stamp --no-root-cid
     assert equal $sealed.newborn 1
-    assert (($a.home | path join certs $"($born.cid).cert.nuon") | path exists)
+    assert (($a.home | path join certs $"($born.cid).cert.json") | path exists)
     assert (($sealed.snapshot | path join tree-root.txt) | path exists)
     assert ((glob ($sealed.snapshot | path join "tree-root.txt.*.sig") | length) == 1)
 
@@ -84,7 +84,7 @@ def "birth, seal, bundle, import, verify — the full link journey" [] {
     assert ($b_manifest | where filepath == $bundled_record | is-not-empty)
 
     # A second seal must not touch the frozen certificate (birth, not latest)
-    let cert = $a.home | path join certs $"($born.cid).cert.nuon"
+    let cert = $a.home | path join certs $"($born.cid).cert.json"
     let before = open --raw $cert | hash sha256
     link add $P2 $P1 --repo $a.repo --claimed-at "2026-07-16T01:00:00+00:00"
     let sealed2 = seal --repo $a.repo --no-stamp --no-root-cid

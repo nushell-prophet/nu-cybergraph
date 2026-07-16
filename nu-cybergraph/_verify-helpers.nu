@@ -11,10 +11,11 @@ use _record.nu [read-link]
 # their own key and claim authorship — the signature would verify, but against
 # the wrong identity.
 export def verify-bundle [bundle: path]: nothing -> record {
-    let certs = glob ($bundle | path join *.cert.nuon)
+    let certs = glob ($bundle | path join *.cert.json)
     if ($certs | length) != 1 {
-        error make {msg: $"expected exactly one *.cert.nuon at the bundle root, found ($certs | length) in ($bundle)"}
+        error make {msg: $"expected exactly one *.cert.json at the bundle root, found ($certs | length) in ($bundle)"}
     }
+    # merkle verify parses the certificate with `from nuon`; JSON is valid NUON.
     let v = merkle verify ($certs | first) --repo $bundle
 
     # read-link throws on a record that fails self-addressing — tampered bytes

@@ -10,7 +10,7 @@ export def main [
     --repo: path # Repo root (default: git root of current directory)
 ]: nothing -> any {
     let root = graph-root $repo
-    if (($root | path join certs $"($link_cid).cert.nuon") | path exists) {
+    if (($root | path join certs $"($link_cid).cert.json") | path exists) {
         # Own link: one verification path for everything — materialize the
         # portable bundle and check that, so "verifies here" always means
         # "verifies anywhere".

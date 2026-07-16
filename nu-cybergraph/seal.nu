@@ -67,11 +67,16 @@ export def main [
     mkdir $certs_dir
     let newborn = glob ($root | path join links *.json)
         | where {|f|
-            not (($certs_dir | path join $"(($f | path parse).stem).cert.nuon") | path exists)
+            not (($certs_dir | path join $"(($f | path parse).stem).cert.json") | path exists)
         }
     for f in $newborn {
         let proof = merkle prove ($f | path relative-to $root) --repo $root
-        mv $proof ($certs_dir | path join $"(($f | path parse).stem).cert.nuon")
+        # JSON for the same reason links are JSON (README "Why JSON"). NUON is
+        # a superset of JSON, so `merkle verify` reads the re-serialized
+        # certificate unchanged.
+        open --raw $proof | from nuon | to json --indent 2
+            | save --raw ($certs_dir | path join $"(($f | path parse).stem).cert.json")
+        rm $proof
     }
 
     # Snapshot this seal's root statement + signatures. multiproofs/tree-root.txt
