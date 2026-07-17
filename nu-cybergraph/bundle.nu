@@ -62,6 +62,5 @@ export def main [
         }
     }
 
-    print $"Bundle: ($out)"
     $out
 }

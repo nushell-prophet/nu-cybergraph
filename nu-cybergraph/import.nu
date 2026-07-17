@@ -22,6 +22,5 @@ export def main [
     }
     mkdir ($dest | path dirname)
     cp -r ($bundle | path expand) $dest
-    print $"Imported: ($dest)"
     {link: $link_cid neuron: $v.neuron.cid path: $dest ots: $v.ots.status}
 }
