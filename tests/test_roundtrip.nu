@@ -55,8 +55,11 @@ def "birth, seal, bundle, import, verify — the full link journey" [] {
     assert (($sealed.snapshot | path join tree-root.txt) | path exists)
     assert ((glob ($sealed.snapshot | path join "tree-root.txt.*.sig") | length) == 1)
 
-    # Own-link verify goes through the same bundle path a stranger would use
-    let own = verify $born.cid --repo $a.repo
+    # Own-link verify goes through the same bundle path a stranger would use;
+    # the result is a one-row table — same shape as the imported case below
+    let owns = verify $born.cid --repo $a.repo
+    assert equal ($owns | length) 1
+    let own = $owns | first
     assert $own.valid
     assert $own.neuron.bound
     assert equal $own.record $born.record
@@ -91,7 +94,7 @@ def "birth, seal, bundle, import, verify — the full link journey" [] {
     assert equal $sealed2.newborn 1
     assert equal (open --raw $cert | hash sha256) $before
     # ...and the old link still verifies against its archived root
-    assert (verify $born.cid --repo $a.repo).valid
+    assert (verify $born.cid --repo $a.repo | first | get valid)
 }
 
 @test

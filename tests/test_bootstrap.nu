@@ -79,7 +79,7 @@ def "nested graph home: init puts everything under cybergraph/ by default" [] {
     assert ($manifest | where filepath == $"links/($born.cid).json" | is-not-empty)
 
     # Discovery is implicit from here on: verify finds the nested home itself
-    assert (verify $born.cid --repo $r.repo).valid
+    assert (verify $born.cid --repo $r.repo | first | get valid)
 }
 
 @test

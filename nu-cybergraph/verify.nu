@@ -1,5 +1,9 @@
 # Verify a link by CID — own or imported — always through its birth
 # certificate and the seal it was born under, never the repo's current root.
+#
+# Returns a table, one row per verified copy: an own link has exactly one;
+# the same CID imported from several neurons yields one row each. One shape
+# for both cases, so callers never branch on where the link came from.
 
 use _repo.nu graph-root
 use _verify-helpers.nu [verify-bundle]
@@ -8,7 +12,7 @@ use bundle.nu
 export def main [
     link_cid: string # Link CID: authored here (certs/) or imported (imported/*/)
     --repo: path # Repo root (default: git root of current directory)
-]: nothing -> any {
+]: nothing -> table {
     let root = graph-root $repo
     if (($root | path join certs $"($link_cid).cert.json") | path exists) {
         # Own link: one verification path for everything — materialize the
@@ -30,7 +34,7 @@ export def main [
             error make {msg: $e.msg}
         }
         rm -rf $tmp
-        $result
+        [$result]
     } else {
         # The same link CID can arrive from several neurons (identical record,
         # identical CID) — verify every copy we hold.
