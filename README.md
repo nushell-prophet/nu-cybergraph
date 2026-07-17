@@ -6,7 +6,7 @@ A local cybergraph on a git backend: content-addressed link records between part
 
 ## Concept
 
-A **particle** is any content-addressed file (CID v0). A **link** is a directed edge between two particles, asserted by a **neuron** — an identity that is itself just the CID of an SSH public key. A neuron's cybergraph is a git repository of link records.
+A **particle** is a content-addressed file (CID v0) — a CID becomes a particle when a link references it. A **link** is a directed edge between two particles, asserted by a **neuron** — an identity that is itself just the CID of an SSH public key. A neuron's cybergraph is a git repository of link records.
 
 The design goal is cheap per-link portability: one neuron can hand a single link to another with a verifiable author signature and a verifiable birth-time bound, **without** signing every record individually and without shipping its whole graph. The mechanism is a **birth certificate**: sign and OTS-stamp one merkle root per seal (nu-multiproof's machinery), then freeze each link's inclusion proof from the first seal that catalogued it.
 
