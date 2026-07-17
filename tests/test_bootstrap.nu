@@ -83,6 +83,20 @@ def "nested graph home: init puts everything under cybergraph/ by default" [] {
 }
 
 @test
+def "seal with --key but no .pub next to it fails fast" [] {
+    let r = make-bare-repo $in.tmp_dir
+    init --repo $r.repo
+    let other = $in.tmp_dir | path join other-key
+    ^ssh-keygen -t ed25519 -f $other -N "" -q
+    rm $"($other).pub"
+
+    let err = try { seal --repo $r.repo --key $other --no-stamp --no-root-cid; null } catch {|e| $e.msg }
+    assert ($err != null) "seal ran without the public key present"
+    assert ($err | str contains $"($other).pub")
+    assert not (($r.repo | path join cybergraph multiproofs tree-hashes.csv) | path exists)
+}
+
+@test
 def "seal with an unregistered --key names the fix" [] {
     let r = make-bare-repo $in.tmp_dir
     init --repo $r.repo

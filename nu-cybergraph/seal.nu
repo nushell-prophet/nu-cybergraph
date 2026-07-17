@@ -30,15 +30,20 @@ export def main [
     }
     if $key != null {
         let pub = if ($key | str ends-with ".pub") { $key } else { $"($key).pub" }
-        if ($pub | path exists) {
-            # Compare key material (type + base64), ignoring comments
-            let material = open --raw $pub | str trim | split row " " | first 2 | str join " "
-            let known = $registered | any {|f|
-                (open --raw $f | str trim | split row " " | first 2 | str join " ") == $material
-            }
-            if not $known {
-                error make {msg: $"($pub) is not registered in multiproofs/pubkeys/ — run `nu-cybergraph init --pubkey ($pub)` first"}
-            }
+        # A missing .pub must error, not skip: ssh-keygen signs with the
+        # private key alone, so skipping would let multiproof's seal write the
+        # manifest and sign with an unregistered key — the exact half-mutated
+        # state this fail-fast block exists to prevent.
+        if not ($pub | path exists) {
+            error make {msg: $"cannot check key registration: ($pub) does not exist"}
+        }
+        # Compare key material (type + base64), ignoring comments
+        let material = open --raw $pub | str trim | split row " " | first 2 | str join " "
+        let known = $registered | any {|f|
+            (open --raw $f | str trim | split row " " | first 2 | str join " ") == $material
+        }
+        if not $known {
+            error make {msg: $"($pub) is not registered in multiproofs/pubkeys/ — run `nu-cybergraph init --pubkey ($pub)` first"}
         }
     }
 
