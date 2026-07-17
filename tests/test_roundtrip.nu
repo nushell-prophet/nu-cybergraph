@@ -195,6 +195,29 @@ def "handoff makes direction a signed claim, woven into the custody chain" [] {
     let m = make-neuron $tmp_dir "m"
     assert error {|| import $a_out --repo $m.repo }
 
+    # Pinned residual (accepted, README "Three honest limits"): the refusal
+    # above is a fail-fast for honest flows, not a boundary — whoever holds
+    # the bytes can strip the unsealed handoff and import the bundle as an
+    # open one. Only the recipient's SEAL makes a handoff permanent (the
+    # strip-after-seal case is caught, tested at the end of this test).
+    let laundered = $tmp_dir | path join laundered
+    cp -r $a_out $laundered
+    rm ($laundered | path join $"($born.cid).handoff.json")
+    glob ($laundered | path join $"($born.cid).handoff.json.*.sig") | each {|f| rm $f }
+    let m_imported = import $laundered --repo $m.repo
+
+    # Forged custodian at the custody level: mallory edits their receipt to
+    # claim B's identity before sealing. The seal signs the forged bytes fine —
+    # only the binding check (custodian CID vs the validly-signing key) refuses.
+    open --raw $m_imported.receipt
+    | str replace (neuron-cid $m.home) (neuron-cid $b.home)
+    | save --raw --force $m_imported.receipt
+    seal --repo $m.repo --no-stamp --no-root-cid | ignore
+    let m_out = bundle $born.cid --repo $m.repo --out ($tmp_dir | path join m-out)
+    let mv = verify-bundle $m_out
+    assert not $mv.valid
+    assert not ($mv.custody | first | get bound)
+
     # The named recipient imports; the receipt pins the handoff's hash
     let b_imported = import $a_out --repo $b.repo
     let b_receipt = open --raw $b_imported.receipt | from json

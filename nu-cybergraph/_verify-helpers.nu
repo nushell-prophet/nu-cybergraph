@@ -186,7 +186,10 @@ export def verify-bundle [bundle: path]: nothing -> record {
     # The tail handoff is the one no later layer has consumed: whoever imports
     # this bundle is the recipient it names (import enforces that).
     let tail_handoff = if ($custody | is-empty) { $root_handoff } else { $custody | last | get handoff }
-    let handed_to = if $tail_handoff == null { null } else { $tail_handoff.to }
+    # Only a VALID tail handoff names an addressee — a tampered one already
+    # fails verification, but a caller keying on handed_to alone must not be
+    # handed its forged `to`.
+    let handed_to = if $tail_handoff == null or not $tail_handoff.valid { null } else { $tail_handoff.to }
     if $handed_to != null {
         print $"handoff:   addressed to ($handed_to)"
     }
