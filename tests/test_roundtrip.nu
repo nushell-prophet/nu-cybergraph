@@ -171,6 +171,58 @@ def "custody chain: each re-export appends a provable, ordered layer" [] {
     assert not ($tv.custody | first | get valid)
 }
 
+# Not "handoff: …" because: a leading `word:` makes nutest's generated
+# `execute: { <name> }` block parse as a record and the whole suite fails.
+@test
+def "handoff makes direction a signed claim, woven into the custody chain" [] {
+    let tmp_dir = $in.tmp_dir
+    let a = make-neuron $tmp_dir "a"
+    let b = make-neuron $tmp_dir "b"
+    let c = make-neuron $tmp_dir "c"
+
+    let born = link add $P1 $P2 --repo $a.repo --claimed-at "2026-07-16T00:00:00+00:00"
+    seal --repo $a.repo --no-stamp --no-root-cid | ignore
+
+    # A hands the birth bundle to B by neuron CID: signed handoff at the root
+    let a_out = bundle $born.cid --repo $a.repo --out ($tmp_dir | path join a-out) --to (neuron-cid $b.home)
+    let root_handoff = $a_out | path join $"($born.cid).handoff.json"
+    assert ($root_handoff | path exists)
+    let av = verify-bundle $a_out
+    assert $av.valid
+    assert equal $av.handed_to (neuron-cid $b.home)
+
+    # Wrong recipient: mallory can hold the bundle but cannot become a custodian
+    let m = make-neuron $tmp_dir "m"
+    assert error {|| import $a_out --repo $m.repo }
+
+    # The named recipient imports; the receipt pins the handoff's hash
+    let b_imported = import $a_out --repo $b.repo
+    let b_receipt = open --raw $b_imported.receipt | from json
+    assert equal $b_receipt.handoff (open --raw $root_handoff | hash sha256)
+
+    seal --repo $b.repo --no-stamp --no-root-cid | ignore
+    let b_out = bundle $born.cid --repo $b.repo --out ($tmp_dir | path join b-out) --to (neuron-cid $c.home)
+
+    import $b_out --repo $c.repo | ignore
+    seal --repo $c.repo --no-stamp --no-root-cid | ignore
+    # C re-exports openly (no recipient): legal, the chain just ends unaddressed
+    let c_out = bundle $born.cid --repo $c.repo --out ($tmp_dir | path join c-out)
+
+    let v = verify-bundle $c_out
+    assert $v.valid
+    assert equal $v.handoff.to (neuron-cid $b.home)
+    assert equal ($v.custody | first | get handoff | get to) (neuron-cid $c.home)
+    assert equal ($v.custody | last | get handoff) null
+    assert equal $v.handed_to null
+
+    # Stripping the author's handoff breaks B's sealed receipt — detected
+    let stripped = $tmp_dir | path join stripped
+    cp -r $c_out $stripped
+    rm ($stripped | path join $"($born.cid).handoff.json")
+    glob ($stripped | path join $"($born.cid).handoff.json.*.sig") | each {|f| rm $f }
+    assert not (verify-bundle $stripped | get valid)
+}
+
 @test
 def "forged authorship is refused: neuron CID of a key that never signed" [] {
     let tmp_dir = $in.tmp_dir

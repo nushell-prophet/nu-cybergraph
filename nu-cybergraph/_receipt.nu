@@ -15,9 +15,10 @@ use _deps.nu [cid-v0]
 use _record.nu [CID_V0_RE RFC3339_RE]
 use _layout.nu [CUSTODY_DIR custody-dir]
 
-export const RECEIPT_KEYS = [link neuron custodian received_at files prev]
+export const RECEIPT_KEYS = [link neuron custodian received_at files prev handoff]
 
-const SHA256_RE = '^[0-9a-f]{64}$'
+# Exported for _handoff.nu — same hash-field discipline.
+export const SHA256_RE = '^[0-9a-f]{64}$'
 
 export def validate-receipt [rec: record]: nothing -> nothing {
     let cols = $rec | columns
@@ -42,6 +43,13 @@ export def validate-receipt [rec: record]: nothing -> nothing {
     }
     if $rec.prev != null and $rec.prev !~ $SHA256_RE {
         error make {msg: $"receipt prev must be null or a sha256 hex: ($rec.prev | to json)"}
+    }
+    # `handoff`: sha256 of the handoff file this custodian received the bundle
+    # by (null when it arrived without one). Hashing it into the sealed receipt
+    # is what makes the sender's claim strippable only before the recipient
+    # seals, never after.
+    if $rec.handoff != null and $rec.handoff !~ $SHA256_RE {
+        error make {msg: $"receipt handoff must be null or a sha256 hex: ($rec.handoff | to json)"}
     }
 }
 

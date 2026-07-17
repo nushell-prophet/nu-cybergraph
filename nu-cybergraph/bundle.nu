@@ -9,12 +9,16 @@
 # proof bundle in the same layout, over the receipt instead of the record,
 # so the same verification machinery covers both.
 
+use _deps.nu [ssh-sign]
 use _repo.nu graph-root
 use _layout.nu [
     links-dir exports-dir cert-path cert-filename snapshot-dir imported-dir
     receipt-relpath receipt-cert-path receipt-cert-filename custody-dir custody-layer-dirname
+    handoff-filename
 ]
-use _receipt.nu [read-receipt custody-layers]
+use _record.nu [CID_V0_RE]
+use _receipt.nu [read-receipt custody-layers own-neuron]
+use _handoff.nu [handoff-bytes HANDOFF_NAMESPACE]
 
 # Copy one seal's verification artifacts into a proof dir: the snapshot's
 # root statement + signatures, the signer pubkeys, and the OTS bundles
@@ -59,12 +63,41 @@ def assemble-seal-artifacts [root: path out: path root_hex: string] {
     }
 }
 
+# Write and sign the sender's handoff into a proof dir. Signed directly with
+# the repo's key, not through a seal: the bundle leaves at export time,
+# before any later seal could catalogue the handoff — a detached signature
+# is the only immediate, local authentication available.
+def write-handoff [root: path dir: path link_cid: string to: string receipt_hash: any key: any] {
+    let handoff = {
+        link: $link_cid
+        from: (own-neuron $root)
+        to: $to
+        receipt: $receipt_hash
+        handed_at: (date now | format date "%+")
+    }
+    let file = $dir | path join (handoff-filename $link_cid)
+    handoff-bytes $handoff | save --raw $file
+    let key = if $key != null { $key } else {
+        let k = ^git -C $root config user.signingKey | complete
+        if $k.exit_code != 0 or ($k.stdout | str trim | is-empty) {
+            error make {msg: "handoff needs a signing key: set git config user.signingKey or pass --key"}
+        }
+        $k.stdout | str trim | path expand
+    }
+    ssh-sign sign $file --key $key --pubkeys-dir ($root | path join multiproofs pubkeys) --namespace $HANDOFF_NAMESPACE
+}
+
 export def main [
     link_cid: string # CID of a link: authored here (certs/) or imported (imported/*/)
     --repo: path # Source repo root (default: git root of current directory)
     --out: path # Bundle destination (default: exports/<link_cid>)
+    --to: string # Recipient neuron CID — adds a signed handoff (default: none, an open export)
+    --key: path # SSH private key for the handoff signature (default: from git config user.signingKey)
 ]: nothing -> path {
     let root = graph-root $repo
+    if $to != null and $to !~ $CID_V0_RE {
+        error make {msg: $"--to must be a neuron CID \(base58btc CID v0\): ($to)"}
+    }
     let out = if $out != null { $out | path expand } else { exports-dir $root | path join $link_cid }
     if ($out | path exists) {
         error make {msg: $"bundle destination already exists: ($out)"}
@@ -78,6 +111,10 @@ export def main [
         cp ($root | path join $proof.leaf.filepath) (links-dir $out)
         cp $cert ($out | path join (cert-filename $link_cid))
         assemble-seal-artifacts $root $out $proof.root
+        if $to != null {
+            # The author has no receipt — their handoff pins nothing but the link
+            write-handoff $root $out $link_cid $to null $key
+        }
         return $out
     }
 
@@ -100,5 +137,10 @@ export def main [
     cp ($root | path join (receipt-relpath $link_cid)) ($layer | path join (receipt-relpath $link_cid))
     cp $rcert ($layer | path join (receipt-cert-filename $link_cid))
     assemble-seal-artifacts $root $layer $proof.root
+    if $to != null {
+        # A custodian's handoff pins their receipt — the exact chain state handed over
+        let receipt_hash = open --raw ($root | path join (receipt-relpath $link_cid)) | hash sha256
+        write-handoff $root $layer $link_cid $to $receipt_hash $key
+    }
     $out
 }

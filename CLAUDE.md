@@ -24,6 +24,7 @@ All the code in alfa testing stage. No need to support backwards compability or 
 - Neuron identity is the CID of the pubkey file bytes in canonical form (`<type> <base64>\n`, no comment) — nu-multiproof's `pubkey canonical` is the one definition; `init` writes it, `verify-bundle` enforces it.
 - Imported bundles under `imported/` are foreign authority — read-only (no `ots upgrade` inside either); re-export means copying them unchanged plus appending your own custody layer.
 - A custody receipt (`receipts/<link>.receipt.json`) is written by `import` outside the read-only copy and frozen by the first seal after — same freeze rule as certificates. Its `prev` hash chains custody layers in order; verification enforces the chain, the `files` byte manifest, and the custodian binding.
+- A handoff (`<link>.handoff.json` + detached SSH sig, `bundle --to`) is the ONE directly-signed artifact — it cannot ride a seal because the bundle leaves at export time. The recipient's receipt hashes it back (`handoff` field), and `import` refuses a bundle handed to a different neuron.
 
 ## Running tests
 

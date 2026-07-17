@@ -10,7 +10,7 @@
 # appended.
 
 use _repo.nu graph-root
-use _layout.nu [imported-dir receipts-dir receipt-relpath]
+use _layout.nu [imported-dir receipts-dir receipt-relpath handoff-filename]
 use _receipt.nu [receipt-bytes bundle-manifest custody-layers own-neuron]
 use _verify-helpers.nu [verify-bundle]
 
@@ -22,6 +22,13 @@ export def main [
     let v = verify-bundle $bundle
     if not $v.valid {
         error make {msg: $"refusing to import: ($v.error)"}
+    }
+    let me = own-neuron $root
+    # A bundle handed to someone else must not land here: this repo's custody
+    # layer could never verify (the chain demands the previous holder's
+    # handoff name THIS custodian), so fail before anything mutates.
+    if $v.handed_to != null and $v.handed_to != $me {
+        error make {msg: $"refusing to import: bundle was handed to ($v.handed_to), not to this repo's neuron ($me)"}
     }
     let link_cid = $v.leaf.filepath | path parse | get stem
     let dest = imported-dir $root | path join $v.neuron.cid $link_cid
@@ -37,13 +44,20 @@ export def main [
     let prev = if ($layers | is-empty) { null } else {
         open --raw ($layers | last | get dir | path join (receipt-relpath $link_cid)) | hash sha256
     }
+    # Hash of the handoff we arrived by, pulled into the sealed chain — after
+    # this repo seals, the sender's claim can no longer be stripped.
+    let handoff = if $v.handed_to == null { null } else {
+        let tail_dir = if ($layers | is-empty) { $dest } else { $layers | last | get dir }
+        open --raw ($tail_dir | path join (handoff-filename $link_cid)) | hash sha256
+    }
     let receipt = {
         link: $link_cid
         neuron: $v.neuron.cid
-        custodian: (own-neuron $root)
+        custodian: $me
         received_at: (date now | format date "%+")
         files: (bundle-manifest $dest)
         prev: $prev
+        handoff: $handoff
     }
     mkdir (receipts-dir $root)
     let receipt_path = $root | path join (receipt-relpath $link_cid)

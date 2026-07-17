@@ -71,6 +71,13 @@ export def custody-layer-dirname [index: int neuron_cid: string]: nothing -> str
     $"($index)-($neuron_cid | str substring 0..11)"
 }
 
+# <cid>.handoff.json — the sender's signed handoff, at the root of the proof
+# dir it leaves from: the bundle root for the author, the sender's custody
+# layer for a custodian.
+export def handoff-filename [link_cid: string]: nothing -> string {
+    $"($link_cid).handoff.json"
+}
+
 # <cid>.cert.json — the certificate filename, also used at a bundle's root
 export def cert-filename [link_cid: string]: nothing -> string {
     $"($link_cid).cert.json"

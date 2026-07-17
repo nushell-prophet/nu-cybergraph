@@ -1,10 +1,11 @@
 # Bundle verification = nu-multiproof's merkle verify + the cybergraph-specific
 # neuron binding + the custody chain. Shared by import.nu and verify.nu.
 
-use _deps.nu [merkle cid-v0 pubkey]
+use _deps.nu [merkle cid-v0 pubkey ssh-sign]
 use _record.nu [read-link]
 use _receipt.nu [read-receipt bundle-manifest custody-layers]
-use _layout.nu [receipt-relpath custody-layer-dirname]
+use _handoff.nu [read-handoff HANDOFF_NAMESPACE]
+use _layout.nu [receipt-relpath custody-layer-dirname handoff-filename]
 
 # Neuron identity is the CID of the pubkey file bytes, so the spec pins one
 # encoding: `pubkey canonical` form. A non-canonical file is a malformed
@@ -45,6 +46,37 @@ def bound [v: record pubs: table claimed: string]: nothing -> bool {
     }
 }
 
+# A proof dir's outgoing handoff, if present — null when the dir has none
+# (exporting without naming a recipient is legal). Checks the signed
+# direction claim: shape, the claims it travels with (this link, this
+# holder, the holder's exact receipt — null for the author), and a valid
+# signature by a pubkey whose CID IS `from` (the handoff twin of the neuron
+# binding). Whether `to` matches the NEXT holder is the caller's chain check.
+def check-handoff [dir: path link_cid: string holder: string expected_receipt: any pubs: table]: nothing -> any {
+    let file = $dir | path join (handoff-filename $link_cid)
+    if not ($file | path exists) {
+        return null
+    }
+    let h = read-handoff $file
+    let claims_ok = $h.link == $link_cid and $h.from == $holder and $h.receipt == $expected_receipt
+    let sigs = try {
+        ssh-sign verify $file --pubkeys-dir ($dir | path join multiproofs pubkeys) --namespace $HANDOFF_NAMESPACE
+    } catch { [] }
+    let signed = $sigs | where valid | any {|s|
+        $pubs | where name == $s.signer | any {|p| ($p.bytes | cid-v0) == $h.from }
+    }
+    {
+        to: $h.to
+        hash: (open --raw $file | hash sha256)
+        valid: ($claims_ok and $signed)
+        error: (if not $claims_ok {
+            "handoff claims do not match the link/holder/receipt it travels with"
+        } else if not $signed {
+            "no valid signature by the handoff's `from` neuron"
+        } else { null })
+    }
+}
+
 # Verify the custody chain of a bundle: one row per layer, in chain order.
 # On top of each layer's multiproof result (structure, signature, content,
 # OTS), the chain checks:
@@ -53,10 +85,17 @@ def bound [v: record pubs: table claimed: string]: nothing -> bool {
 # - `files` — the receipt's manifest matches the birth files byte-for-byte
 # - `prev` — the receipt hashes the previous layer's receipt file (null for
 #   layer 1), which is what proves the order of custody transitively
+# - the handoff seam: the receipt's `handoff` must hash the previous holder's
+#   handoff file exactly (null when there was none), and that handoff must
+#   name THIS custodian as `to` — so a handed-over bundle cannot grow a layer
+#   by anyone but the named recipient, and a handoff cannot be stripped
+# - the layer's own outgoing handoff, when present (check-handoff)
 # - the layer dirname matches its verified content, so naming cannot lie
 # Malformed layers (bad name, wrong leaf, unparseable receipt) throw;
 # crypto/content/chain mismatches return valid: false rows.
-def verify-custody [bundle: path link_cid: string author: string]: nothing -> table {
+# root_handoff: the author's outgoing handoff (check-handoff on the bundle
+# root, null if absent) — the seam checks treat the birth bundle as layer 0.
+def verify-custody [bundle: path link_cid: string author: string root_handoff: any]: nothing -> table {
     let layers = custody-layers $bundle
     if ($layers | is-empty) {
         return []
@@ -67,6 +106,7 @@ def verify-custody [bundle: path link_cid: string author: string]: nothing -> ta
     let birth_files = bundle-manifest $bundle
     # "" = no previous layer yet ("" over null: a mut can't change type)
     mut prev_hash = ""
+    mut prev_handoff = $root_handoff
     mut out = []
     for layer in $layers {
         let checked = verify-proof-dir $layer.dir
@@ -85,15 +125,27 @@ def verify-custody [bundle: path link_cid: string author: string]: nothing -> ta
         let files_ok = $receipt.files == $birth_files
         let prev_expected = if $prev_hash == "" { null } else { $prev_hash }
         let prev_ok = $receipt.prev == $prev_expected
-        let valid = $v.valid and $custodian_bound and $files_ok and $prev_ok
+        let handoff_hash_ok = $receipt.handoff == (if $prev_handoff == null { null } else { $prev_handoff.hash })
+        let addressed_ok = $prev_handoff == null or $prev_handoff.to == $receipt.custodian
+        let receipt_hash = open --raw ($layer.dir | path join $v.leaf.filepath) | hash sha256
+        let own_handoff = check-handoff $layer.dir $link_cid $receipt.custodian $receipt_hash $checked.pubs
+        let handoff_ok = $handoff_hash_ok and $addressed_ok and ($own_handoff == null or $own_handoff.valid)
+        let valid = $v.valid and $custodian_bound and $files_ok and $prev_ok and $handoff_ok
         let error = if $v.error != null { $v.error } else if not $custodian_bound {
             "receipt's custodian CID matches no validly-signing pubkey in the layer"
         } else if not $files_ok {
             "receipt's files manifest does not match the bundle's birth files"
         } else if not $prev_ok {
             "receipt's prev hash does not match the previous layer's receipt — custody chain broken"
+        } else if not $handoff_hash_ok {
+            "receipt's handoff hash does not match the previous holder's handoff file"
+        } else if not $addressed_ok {
+            $"previous holder handed the bundle to ($prev_handoff.to), not to this layer's custodian"
+        } else if $own_handoff != null and not $own_handoff.valid {
+            $own_handoff.error
         } else { null }
-        $prev_hash = open --raw ($layer.dir | path join $v.leaf.filepath) | hash sha256
+        $prev_hash = $receipt_hash
+        $prev_handoff = $own_handoff
         $out = $out | append {
             index: $layer.index
             custodian: $receipt.custodian
@@ -101,6 +153,7 @@ def verify-custody [bundle: path link_cid: string author: string]: nothing -> ta
             bound: $custodian_bound
             root: $v.root
             ots: $v.ots
+            handoff: $own_handoff
             valid: $valid
             error: $error
         }
@@ -122,19 +175,33 @@ export def verify-bundle [bundle: path]: nothing -> record {
     print $"neuron:    (if $neuron_bound { 'bound' } else { 'NOT BOUND \(no valid signature by the claimed neuron\)' })"
 
     let link_cid = $v.leaf.filepath | path parse | get stem
-    let custody = verify-custody $bundle $link_cid $rec.neuron
+    let root_handoff = check-handoff $bundle $link_cid $rec.neuron null $birth.pubs
+    let custody = verify-custody $bundle $link_cid $rec.neuron $root_handoff
     let custody_ok = $custody | all { $in.valid }
+    let root_handoff_ok = $root_handoff == null or $root_handoff.valid
     if ($custody | is-not-empty) {
         print $"custody:   ($custody | length) layers, (if $custody_ok { 'chain valid' } else { 'CHAIN INVALID' })"
+    }
+
+    # The tail handoff is the one no later layer has consumed: whoever imports
+    # this bundle is the recipient it names (import enforces that).
+    let tail_handoff = if ($custody | is-empty) { $root_handoff } else { $custody | last | get handoff }
+    let handed_to = if $tail_handoff == null { null } else { $tail_handoff.to }
+    if $handed_to != null {
+        print $"handoff:   addressed to ($handed_to)"
     }
 
     $v
     | insert record $rec
     | insert neuron {cid: $rec.neuron bound: $neuron_bound}
+    | insert handoff $root_handoff
     | insert custody $custody
-    | update valid ($v.valid and $neuron_bound and $custody_ok)
+    | insert handed_to $handed_to
+    | update valid ($v.valid and $neuron_bound and $root_handoff_ok and $custody_ok)
     | update error (if $v.error != null { $v.error } else if not $neuron_bound {
         "record's neuron CID matches no validly-signing pubkey in the bundle"
+    } else if not $root_handoff_ok {
+        $root_handoff.error
     } else if not $custody_ok {
         ($custody | where not valid | first | get error)
     } else { null })

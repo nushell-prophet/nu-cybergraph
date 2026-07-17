@@ -9,5 +9,6 @@
 export use ../../../ai-sandbox-dev-container/nu-multiproof/nu-multiproof/cid-v0.nu
 export use ../../../ai-sandbox-dev-container/nu-multiproof/nu-multiproof/merkle.nu
 export use ../../../ai-sandbox-dev-container/nu-multiproof/nu-multiproof/pubkey.nu
+export use ../../../ai-sandbox-dev-container/nu-multiproof/nu-multiproof/ssh-sign.nu
 export use ../../../ai-sandbox-dev-container/nu-multiproof/nu-multiproof/seal.nu
 export use ../../../ai-sandbox-dev-container/nu-multiproof/nu-multiproof/init.nu
