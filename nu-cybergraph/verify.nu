@@ -10,6 +10,8 @@ use _layout.nu [cert-path imported-dir]
 use _verify-helpers.nu [verify-bundle]
 use bundle.nu
 
+# Verify a link — own or imported — against its birth seal, never the current
+# root. One row per verified copy: own links have one, imports one per neuron.
 export def main [
     link_cid: string # Link CID: authored here (certs/) or imported (imported/*/)
     --repo: path # Repo root (default: git root of current directory)

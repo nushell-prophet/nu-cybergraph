@@ -20,6 +20,8 @@ export const RECEIPT_KEYS = [link neuron custodian received_at files prev handof
 # Exported for _handoff.nu — same hash-field discipline.
 export const SHA256_RE = '^[0-9a-f]{64}$'
 
+# Enforce the receipt shape: exact RECEIPT_KEYS set, CID fields, RFC 3339
+# received_at, non-empty files manifest, hash-or-null chain fields (prev, handoff).
 export def validate-receipt [rec: record]: nothing -> nothing {
     let cols = $rec | columns
     if ($cols | sort) != ($RECEIPT_KEYS | sort) {
@@ -62,6 +64,8 @@ export def receipt-bytes [rec: record]: nothing -> binary {
     ($rec | select ...$RECEIPT_KEYS | to json --raw) + "\n" | into binary
 }
 
+# Read a receipt file and validate its shape. No self-addressing check —
+# a receipt's authority is the seal covering it, not its filename.
 export def read-receipt [file: path]: nothing -> record {
     let rec = open --raw $file | from json
     validate-receipt $rec

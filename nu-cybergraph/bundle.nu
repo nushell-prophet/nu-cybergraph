@@ -87,6 +87,9 @@ def write-handoff [root: path dir: path link_cid: string to: string receipt_hash
     ssh-sign sign $file --key $key --pubkeys-dir ($root | path join multiproofs pubkeys) --namespace $HANDOFF_NAMESPACE
 }
 
+# Export a link as a portable, offline-verifiable bundle: the birth bundle
+# for an own link; for an imported link, the foreign bundle unchanged plus
+# this repo's custody layer. --to names the recipient in a signed handoff.
 export def main [
     link_cid: string # CID of a link: authored here (certs/) or imported (imported/*/)
     --repo: path # Source repo root (default: git root of current directory)

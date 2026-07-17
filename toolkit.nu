@@ -1,3 +1,4 @@
+# Entry point stub — the tasks are the `main <task>` subcommands below.
 export def main [] { }
 
 # Requires a nutest checkout at ../../ai-sandbox-dev-container/nutest — the

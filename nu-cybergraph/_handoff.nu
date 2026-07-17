@@ -24,6 +24,8 @@ export const HANDOFF_KEYS = [link from to receipt handed_at]
 # other kind of file signature made with the same key (and vice versa).
 export const HANDOFF_NAMESPACE = "cybergraph-handoff"
 
+# Enforce the handoff shape: exact HANDOFF_KEYS set, CID fields (link, from, to),
+# receipt hash-or-null, RFC 3339 handed_at.
 export def validate-handoff [rec: record]: nothing -> nothing {
     let cols = $rec | columns
     if ($cols | sort) != ($HANDOFF_KEYS | sort) {
@@ -49,6 +51,8 @@ export def handoff-bytes [rec: record]: nothing -> binary {
     ($rec | select ...$HANDOFF_KEYS | to json --raw) + "\n" | into binary
 }
 
+# Read a handoff file and validate its shape — authenticity is the detached
+# signature beside it, checked by verification, not here.
 export def read-handoff [file: path]: nothing -> record {
     let rec = open --raw $file | from json
     validate-handoff $rec
