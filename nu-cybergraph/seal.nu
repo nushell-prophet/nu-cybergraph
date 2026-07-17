@@ -6,7 +6,7 @@
 # newer roots and must not touch existing certificates.
 
 use _repo.nu graph-root
-use _layout.nu [links-dir certs-dir cert-path snapshot-dir LINKS_DIR CERTS_DIR SEALS_DIR IMPORTED_DIR]
+use _layout.nu [links-dir certs-dir cert-path snapshot-dir receipts-dir receipt-cert-path LINKS_DIR CERTS_DIR SEALS_DIR IMPORTED_DIR RECEIPTS_DIR]
 use _deps.nu [seal merkle]
 
 # `seal` in the body is nu-multiproof's seal; this wrapper stages the
@@ -53,8 +53,9 @@ export def main [
     # seals/ hold artifacts of PREVIOUS seals — cataloguing them makes each
     # seal also attest the certificates issued so far (custody continuity).
     # imported/ is the custody layer itself: cataloguing a foreign bundle is
-    # what proves "this neuron held the link no later than block K".
-    let stage = [$LINKS_DIR $CERTS_DIR $SEALS_DIR $IMPORTED_DIR]
+    # what proves "this neuron held the link no later than block K"; receipts/
+    # is that claim made portable — the statement `bundle` re-exports.
+    let stage = [$LINKS_DIR $CERTS_DIR $SEALS_DIR $IMPORTED_DIR $RECEIPTS_DIR]
         | each {|d| $root | path join $d }
         | where {|d| ($d | path exists) and (ls $d | is-not-empty) }
     if ($stage | is-not-empty) {
@@ -77,6 +78,17 @@ export def main [
         mv $proof (cert-path $root (($f | path parse).stem))
     }
 
+    # Same freeze rule for custody receipts: the FIRST seal that catalogues a
+    # receipt sets its earliest provable custody bound, so its proof freezes
+    # beside it and later seals must not touch it. (*.receipt.cert.json does
+    # not match *.receipt.json — the glob skips already-frozen proofs.)
+    let new_receipts = glob (receipts-dir $root | path join *.receipt.json)
+        | where {|f| not ((receipt-cert-path $root ($f | path basename | str replace ".receipt.json" "")) | path exists) }
+    for f in $new_receipts {
+        let proof = merkle prove ($f | path relative-to $root) --repo $root
+        mv $proof (receipt-cert-path $root ($f | path basename | str replace ".receipt.json" ""))
+    }
+
     # Snapshot this seal's root statement + signatures. multiproofs/tree-root.txt
     # is overwritten by every seal, but certificates verify against the root
     # they were born under — the snapshot is what `bundle` exports later.
@@ -87,5 +99,5 @@ export def main [
         glob ($root | path join multiproofs tree-root.txt.*sig) | each {|s| cp $s $snap }
     }
 
-    {sealed: $sealed newborn: ($newborn | length) snapshot: $snap}
+    {sealed: $sealed newborn: ($newborn | length) receipts: ($new_receipts | length) snapshot: $snap}
 }

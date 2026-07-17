@@ -9,6 +9,8 @@ export const CERTS_DIR = "certs"
 export const SEALS_DIR = "seals"
 export const EXPORTS_DIR = "exports"
 export const IMPORTED_DIR = "imported"
+export const RECEIPTS_DIR = "receipts"
+export const CUSTODY_DIR = "custody"
 
 # <root>/links
 export def links-dir [root: path]: nothing -> path {
@@ -33,6 +35,40 @@ export def exports-dir [root: path]: nothing -> path {
 # <root>/imported
 export def imported-dir [root: path]: nothing -> path {
     $root | path join $IMPORTED_DIR
+}
+
+# <root>/receipts
+export def receipts-dir [root: path]: nothing -> path {
+    $root | path join $RECEIPTS_DIR
+}
+
+# receipts/<cid>.receipt.json — the custody receipt's manifest path, relative
+# to the graph root. Relative because it doubles as the proof's leaf.filepath:
+# a custody layer places the receipt at this same path inside the layer dir.
+export def receipt-relpath [link_cid: string]: nothing -> string {
+    [$RECEIPTS_DIR $"($link_cid).receipt.json"] | path join
+}
+
+# <cid>.receipt.cert.json — the frozen receipt proof, also at a layer's root
+export def receipt-cert-filename [link_cid: string]: nothing -> string {
+    $"($link_cid).receipt.cert.json"
+}
+
+# <root>/receipts/<cid>.receipt.cert.json
+export def receipt-cert-path [root: path link_cid: string]: nothing -> path {
+    receipts-dir $root | path join (receipt-cert-filename $link_cid)
+}
+
+# <bundle>/custody — the appended custody layers of a re-exported bundle
+export def custody-dir [bundle: path]: nothing -> path {
+    $bundle | path join $CUSTODY_DIR
+}
+
+# custody/<index>-<neuron-cid-prefix> — one custody layer. The index makes the
+# intended order readable; verification enforces it against the receipt chain,
+# so a renamed or renumbered layer fails instead of lying silently.
+export def custody-layer-dirname [index: int neuron_cid: string]: nothing -> string {
+    $"($index)-($neuron_cid | str substring 0..11)"
 }
 
 # <cid>.cert.json — the certificate filename, also used at a bundle's root

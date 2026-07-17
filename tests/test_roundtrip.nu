@@ -97,6 +97,80 @@ def "birth, seal, bundle, import, verify — the full link journey" [] {
     assert (verify $born.cid --repo $a.repo | first | get valid)
 }
 
+# The repo's neuron identity: CID of its single registered (canonical) pubkey
+def neuron-cid [home: path]: nothing -> string {
+    open --raw (glob ($home | path join multiproofs pubkeys *.pub) | first) | into binary | cid-v0
+}
+
+@test
+def "custody chain: each re-export appends a provable, ordered layer" [] {
+    let tmp_dir = $in.tmp_dir
+    let a = make-neuron $tmp_dir "a"
+    let born = link add $P1 $P2 --repo $a.repo --claimed-at "2026-07-16T00:00:00+00:00"
+    seal --repo $a.repo --no-stamp --no-root-cid | ignore
+    let a_out = bundle $born.cid --repo $a.repo --out ($tmp_dir | path join a-out)
+
+    # B imports the birth bundle: receipt written, first custodian chains to nothing
+    let b = make-neuron $tmp_dir "b"
+    let b_imported = import $a_out --repo $b.repo
+    assert equal $b_imported.custody 0
+    let b_receipt = open --raw $b_imported.receipt | from json
+    assert equal $b_receipt.prev null
+    assert equal $b_receipt.custodian (neuron-cid $b.home)
+
+    # Re-export before sealing must refuse: custody is provable only once sealed
+    assert error {|| bundle $born.cid --repo $b.repo --out ($tmp_dir | path join too-early) }
+
+    let sealed_b = seal --repo $b.repo --no-stamp --no-root-cid
+    assert equal $sealed_b.receipts 1
+    assert (($b.home | path join receipts $"($born.cid).receipt.cert.json") | path exists)
+    let b_out = bundle $born.cid --repo $b.repo --out ($tmp_dir | path join b-out)
+
+    # C imports B's re-export: verifies layer 1, chains its own receipt to B's
+    let c = make-neuron $tmp_dir "c"
+    let c_imported = import $b_out --repo $c.repo
+    assert equal $c_imported.custody 1
+    let c_receipt = open --raw $c_imported.receipt | from json
+    let b_layer_receipt = $b_out | path join custody $"1-($b_receipt.custodian | str substring 0..11)" receipts $"($born.cid).receipt.json"
+    assert equal $c_receipt.prev (open --raw $b_layer_receipt | hash sha256)
+
+    seal --repo $c.repo --no-stamp --no-root-cid | ignore
+    let c_out = bundle $born.cid --repo $c.repo --out ($tmp_dir | path join c-out)
+
+    # A stranger verifies the whole dissemination path offline: A authored,
+    # then B held it, then C — ordered by the receipt chain
+    let v = verify-bundle $c_out
+    assert $v.valid
+    assert $v.neuron.bound
+    assert equal ($v.custody | get index) [1 2]
+    assert equal ($v.custody | get custodian) [(neuron-cid $b.home) (neuron-cid $c.home)]
+    assert ($v.custody | all { $in.bound })
+
+    # ...and the chain survives a fourth hop's import + repo-level verify
+    let d = make-neuron $tmp_dir "d"
+    import $c_out --repo $d.repo | ignore
+    let d_check = verify $born.cid --repo $d.repo | first
+    assert $d_check.valid
+    assert equal ($d_check.custody | length) 2
+
+    # Stripping a middle layer breaks the chain loudly (indices no longer
+    # start at 1, and C's prev would point at a missing receipt)
+    let stripped = $tmp_dir | path join stripped
+    cp -r $c_out $stripped
+    rm -r ($stripped | path join custody $"1-($b_receipt.custodian | str substring 0..11)")
+    assert error {|| verify-bundle $stripped }
+
+    # Tampering with a layer's receipt bytes fails its content proof AND the
+    # next layer's prev hash — the chain pins every receipt's exact bytes
+    let tampered = $tmp_dir | path join tampered
+    cp -r $c_out $tampered
+    let target = $tampered | path join custody $"1-($b_receipt.custodian | str substring 0..11)" receipts $"($born.cid).receipt.json"
+    open --raw $target | str replace --regex '"received_at":"\d{4}' '"received_at":"2099' | save --raw --force $target
+    let tv = verify-bundle $tampered
+    assert not $tv.valid
+    assert not ($tv.custody | first | get valid)
+}
+
 @test
 def "forged authorship is refused: neuron CID of a key that never signed" [] {
     let tmp_dir = $in.tmp_dir

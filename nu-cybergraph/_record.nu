@@ -12,9 +12,10 @@ use _deps.nu [cid-v0]
 
 export const LINK_KEYS = [cid_from cid_to neuron claimed_at]
 
-const CID_V0_RE = '^Qm[1-9A-HJ-NP-Za-km-z]{44}$'
+# Exported for _receipt.nu — receipts reuse the record's field disciplines.
+export const CID_V0_RE = '^Qm[1-9A-HJ-NP-Za-km-z]{44}$'
 
-const RFC3339_RE = '^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?(Z|[+-]\d{2}:\d{2})$'
+export const RFC3339_RE = '^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?(Z|[+-]\d{2}:\d{2})$'
 
 export def validate-link [rec: record]: nothing -> nothing {
     let cols = $rec | columns

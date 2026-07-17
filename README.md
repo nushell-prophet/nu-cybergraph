@@ -18,8 +18,8 @@ use nu-cybergraph/
 nu-cybergraph init                       # multiproof init + links/ certs/ under <repo>/cybergraph/
 nu-cybergraph link add Qm…from Qm…to     # write links/<cid>.json
 nu-cybergraph seal                       # sign + stamp the root, freeze new certificates
-nu-cybergraph bundle Qm…link             # portable bundle → exports/<cid>/
-nu-cybergraph import path/to/bundle      # verify, then keep under imported/<neuron>/<cid>/
+nu-cybergraph bundle Qm…link             # portable bundle → exports/<cid>/ (imported link: re-export + custody layer)
+nu-cybergraph import path/to/bundle      # verify, keep under imported/<neuron>/<cid>/, write custody receipt
 nu-cybergraph verify Qm…link             # own or imported, always against the birth seal
 ```
 
@@ -49,6 +49,7 @@ cybergraph/
   seals/<root-hex-12>/             # archival root statement + signatures, one per seal
   exports/<link-cid>/              # bundles built by `bundle` (default --out)
   imported/<neuron-cid>/<link-cid>/ # foreign bundles, verified on import, kept intact
+  receipts/<link-cid>.receipt.json # custody receipts for imported links (+ frozen *.receipt.cert.json)
   multiproofs/                     # nu-multiproof machinery (manifest, pubkeys, OTS)
 ```
 
@@ -70,7 +71,11 @@ A sha256 git backend (`git init --object-format=sha256`) is recommended; the mer
 
 `bundle <link-cid>` assembles the portable artifact set in the layout nu-multiproof pins under "Verifying without the origin repo": the record at its `links/` path, the certificate, the birth seal's root statement + signatures, the signer pubkeys, and the OTS bundles committing to that root. Anyone verifies it offline with no access to the origin repo.
 
-`import <bundle>` verifies first (merkle structure, signature, record self-addressing, canonical pubkey form, neuron binding) and refuses invalid bundles loudly. A valid bundle lands intact under `imported/<neuron-cid>/<link-cid>/` — it remains the link's authority for authorship and birth time forever. Re-export is passing the directory along unchanged. Each importer's own `seal` then catalogues the imported files, adding a custody layer on top: "this repo held the bundle no later than block K" — provenance grows in layers without touching the original certificate.
+`import <bundle>` verifies first (merkle structure, signature, record self-addressing, canonical pubkey form, neuron binding, and every custody layer — below) and refuses invalid bundles loudly. A valid bundle lands intact under `imported/<neuron-cid>/<link-cid>/` — it remains the link's authority for authorship and birth time forever, and the copy is read-only: re-export passes it along unchanged. Import also writes a **custody receipt** at `receipts/<link-cid>.receipt.json`, outside the read-only copy: `{link, neuron, custodian, received_at, files, prev}`, where `files` is a path+sha256 manifest of the birth-bundle files as received and `prev` is the sha256 of the previous custody layer's receipt file (null for the first custodian). The next `seal` catalogues the receipt and freezes its inclusion proof as `receipts/<link-cid>.receipt.cert.json` — the same freeze rule as birth certificates: the first seal sets the earliest provable custody bound.
+
+`bundle` on an imported link **re-exports** it: the foreign bundle copied unchanged, plus this repo's custody layer appended under `custody/<n>-<neuron12>/`. A layer is a proof bundle in the birth layout — the receipt at its `receipts/` path, its frozen proof at the layer root, the sealing root statement + signatures + pubkeys + OTS — so the same machinery verifies it: structure, signature, custodian binding (the receipt's `custodian` must be the CID of a validly-signing pubkey), `files` against the actual birth bytes, and the `prev` chain with contiguous layer numbering. The chain is what makes a dissemination path provable *in order*: layer *i*'s receipt commits to layer *i−1*'s receipt, so a stranger holding only the bundle can check "A authored it, then B held it no later than block K_B, then C no later than K_C" — provenance grows in layers without touching the original certificate, and each receipt stays constant-size (re-listing prior layers would grow the chain quadratically).
+
+Two honest limits. The custody bounds are upper bounds: the chain proves each receipt existed before the next custodian's seal, not when a hop actually happened. And a receipt pins the birth files byte-for-byte, so mutating an imported copy — including running `ots upgrade` inside it — breaks the `files` commitment of every receipt taken over those bytes; upgrade stamps in your own repo's `multiproofs/`, never inside `imported/`.
 
 ## Dependencies
 
