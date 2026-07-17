@@ -6,6 +6,7 @@
 # newer roots and must not touch existing certificates.
 
 use _repo.nu graph-root
+use _layout.nu [links-dir certs-dir cert-path snapshot-dir LINKS_DIR CERTS_DIR SEALS_DIR IMPORTED_DIR]
 use _deps.nu [seal merkle]
 
 # `seal` in the body is nu-multiproof's seal; this wrapper stages the
@@ -53,7 +54,7 @@ export def main [
     # seal also attest the certificates issued so far (custody continuity).
     # imported/ is the custody layer itself: cataloguing a foreign bundle is
     # what proves "this neuron held the link no later than block K".
-    let stage = [links certs seals imported]
+    let stage = [$LINKS_DIR $CERTS_DIR $SEALS_DIR $IMPORTED_DIR]
         | each {|d| $root | path join $d }
         | where {|d| ($d | path exists) and (ls $d | is-not-empty) }
     if ($stage | is-not-empty) {
@@ -68,21 +69,18 @@ export def main [
     let root_hex = $sealed.merkle_root
 
     # Freeze birth certificates for links that don't have one yet.
-    let certs_dir = $root | path join certs
-    mkdir $certs_dir
-    let newborn = glob ($root | path join links *.json)
-        | where {|f|
-            not (($certs_dir | path join $"(($f | path parse).stem).cert.json") | path exists)
-        }
+    mkdir (certs-dir $root)
+    let newborn = glob (links-dir $root | path join *.json)
+        | where {|f| not ((cert-path $root (($f | path parse).stem)) | path exists) }
     for f in $newborn {
         let proof = merkle prove ($f | path relative-to $root) --repo $root
-        mv $proof ($certs_dir | path join $"(($f | path parse).stem).cert.json")
+        mv $proof (cert-path $root (($f | path parse).stem))
     }
 
     # Snapshot this seal's root statement + signatures. multiproofs/tree-root.txt
     # is overwritten by every seal, but certificates verify against the root
     # they were born under — the snapshot is what `bundle` exports later.
-    let snap = $root | path join seals ($root_hex | str substring 0..11)
+    let snap = snapshot-dir $root $root_hex
     if not ($snap | path exists) {
         mkdir $snap
         cp ($root | path join multiproofs tree-root.txt) $snap

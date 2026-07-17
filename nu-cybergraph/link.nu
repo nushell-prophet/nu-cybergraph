@@ -2,6 +2,7 @@
 
 use _repo.nu graph-root
 use _record.nu [link-bytes link-cid]
+use _layout.nu [links-dir link-path]
 use _deps.nu [cid-v0]
 
 # Derive the repo's own neuron identity: the CID of its registered pubkey.
@@ -36,8 +37,8 @@ export def add [
         })
     }
     let cid = link-cid $rec
-    mkdir ($root | path join links)
-    let out = $root | path join links $"($cid).json"
+    mkdir (links-dir $root)
+    let out = link-path $root $cid
     if ($out | path exists) {
         # Same CID = byte-identical record (same edge, author, and claimed_at)
         error make {msg: $"link already exists: ($out)"}

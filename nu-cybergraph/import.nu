@@ -4,6 +4,7 @@
 # number of re-exports (re-export = pass the directory along unchanged).
 
 use _repo.nu graph-root
+use _layout.nu [imported-dir]
 use _verify-helpers.nu [verify-bundle]
 
 export def main [
@@ -16,7 +17,7 @@ export def main [
         error make {msg: $"refusing to import: ($v.error)"}
     }
     let link_cid = $v.leaf.filepath | path parse | get stem
-    let dest = $root | path join imported $v.neuron.cid $link_cid
+    let dest = imported-dir $root | path join $v.neuron.cid $link_cid
     if ($dest | path exists) {
         error make {msg: $"already imported: ($dest)"}
     }

@@ -1,6 +1,7 @@
 # Bootstrap a neuron repo: multiproof machinery + the cybergraph directories.
 
 use _repo.nu [repo-root graph-root]
+use _layout.nu [links-dir certs-dir]
 use _deps.nu [init]
 
 # `init` here is nu-multiproof's init (pubkey registration in
@@ -18,6 +19,6 @@ export def main [
     } else {
         init --repo $root
     }
-    mkdir ($root | path join links) ($root | path join certs)
+    mkdir (links-dir $root) (certs-dir $root)
     print $"cybergraph layout ready: links/ certs/ in ($root)"
 }

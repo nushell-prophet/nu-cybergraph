@@ -6,6 +6,7 @@
 # for both cases, so callers never branch on where the link came from.
 
 use _repo.nu graph-root
+use _layout.nu [cert-path imported-dir]
 use _verify-helpers.nu [verify-bundle]
 use bundle.nu
 
@@ -14,7 +15,7 @@ export def main [
     --repo: path # Repo root (default: git root of current directory)
 ]: nothing -> table {
     let root = graph-root $repo
-    if (($root | path join certs $"($link_cid).cert.json") | path exists) {
+    if ((cert-path $root $link_cid) | path exists) {
         # Own link: one verification path for everything — materialize the
         # portable bundle and check that, so "verifies here" always means
         # "verifies anywhere".
@@ -38,7 +39,7 @@ export def main [
     } else {
         # The same link CID can arrive from several neurons (identical record,
         # identical CID) — verify every copy we hold.
-        let hits = glob ($root | path join imported * $link_cid)
+        let hits = glob (imported-dir $root | path join * $link_cid)
         if ($hits | is-empty) {
             error make {msg: $"unknown link: ($link_cid) — not in certs/ or imported/"}
         }

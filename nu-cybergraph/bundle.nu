@@ -3,6 +3,7 @@
 # "Verifying without the origin repo".
 
 use _repo.nu graph-root
+use _layout.nu [links-dir exports-dir cert-path cert-filename snapshot-dir]
 
 export def main [
     link_cid: string # CID of a link this repo authored (must have a certificate)
@@ -10,25 +11,25 @@ export def main [
     --out: path # Bundle destination (default: exports/<link_cid>)
 ]: nothing -> path {
     let root = graph-root $repo
-    let cert = $root | path join certs $"($link_cid).cert.json"
+    let cert = cert-path $root $link_cid
     if not ($cert | path exists) {
         error make {msg: $"no birth certificate for ($link_cid) — run `nu-cybergraph seal` first"}
     }
     let proof = open --raw $cert | from json
     let root_hex = $proof.root
-    let snap = $root | path join seals ($root_hex | str substring 0..11)
+    let snap = snapshot-dir $root $root_hex
     if not ($snap | path exists) {
         error make {msg: $"seal snapshot missing for root ($root_hex) — the certificate predates the seals/ convention?"}
     }
 
-    let out = if $out != null { $out | path expand } else { $root | path join exports $link_cid }
+    let out = if $out != null { $out | path expand } else { exports-dir $root | path join $link_cid }
     if ($out | path exists) {
         error make {msg: $"bundle destination already exists: ($out)"}
     }
-    mkdir ($out | path join links) ($out | path join multiproofs pubkeys)
+    mkdir (links-dir $out) ($out | path join multiproofs pubkeys)
 
-    cp ($root | path join $proof.leaf.filepath) ($out | path join links)
-    cp $cert ($out | path join $"($link_cid).cert.json")
+    cp ($root | path join $proof.leaf.filepath) (links-dir $out)
+    cp $cert ($out | path join (cert-filename $link_cid))
     glob ($snap | path join *) | each {|f| cp $f ($out | path join multiproofs) }
 
     # Signer pubkeys, derived from the snapshot's sig names (tree-root.txt.<name>.sig).
