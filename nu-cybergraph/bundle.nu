@@ -32,9 +32,11 @@ export def main [
     glob ($snap | path join *) | each {|f| cp $f ($out | path join multiproofs) }
 
     # Signer pubkeys, derived from the snapshot's sig names (tree-root.txt.<name>.sig).
+    # Anchored regex, greedy middle: a signer name may itself contain ".sig",
+    # which str replace's first-match semantics would mangle.
     let signers = glob ($snap | path join tree-root.txt.*.sig)
-        | each {|s| $s | path basename | str replace "tree-root.txt." "" | str replace ".sig" "" }
-        | where $it != ""
+        | each {|s| $s | path basename | parse --regex '^tree-root\.txt\.(?<name>.+)\.sig$' | get --optional 0.name }
+        | compact
     let copied = $signers | each {|name|
         let pub = $root | path join multiproofs pubkeys $"($name).pub"
         if ($pub | path exists) { cp $pub ($out | path join multiproofs pubkeys); $name } else { null }
