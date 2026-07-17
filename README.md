@@ -32,6 +32,7 @@ Pinned exactly (reference: `nu-cybergraph/_record.nu`; golden bytes and CID: `te
 - `cid_from`, `cid_to`, `neuron` are base58btc CID v0 (`Qm` + 44 chars). `neuron` is the CID of the author's SSH public key file. `claimed_at` is an RFC 3339 timestamp — the author's *claim*, see time semantics below.
 - **Canonical bytes**: keys in the order above, compact JSON (no whitespace), exactly one trailing `\n`. The constrained charsets mean no JSON escaping can occur, so the bytes are trivially reproducible.
 - **Self-addressing**: the file is stored as `links/<cid>.json` where `<cid>` is the CID v0 of the file's exact bytes. Readers reject a file whose raw bytes do not hash to its name — tampered or non-canonical files fail before any field is trusted.
+- **Triple guard**: `link add` refuses a record whose `(cid_from, cid_to, neuron)` triple already exists in `links/` — with `claimed_at` inside the record a repeat would be a new record, not a new vote; a deliberate re-assertion over time takes `--reassert`. Dedupe policy for readers is keep-earliest: the first record's certificate carries the edge's earliest provable time bound.
 
 Example (one line + `\n`, CID `QmZF4Nd4hAVHgLCW3YFEvtpDA52DX9z1vgX3CzH4L6yiwk`):
 

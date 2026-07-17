@@ -83,6 +83,29 @@ def "nested graph home: init puts everything under cybergraph/ by default" [] {
 }
 
 @test
+def "link add refuses a duplicate triple unless --reassert" [] {
+    let r = make-bare-repo $in.tmp_dir
+    init --repo $r.repo
+    let born = link add $P1 $P2 --repo $r.repo --claimed-at "2026-07-16T00:00:00+00:00"
+
+    # Fresh claimed_at, same triple: refused, names the existing record
+    let err = try { link add $P1 $P2 --repo $r.repo --claimed-at "2026-07-17T00:00:00+00:00"; null } catch {|e| $e.msg }
+    assert ($err != null) "duplicate triple was recorded"
+    assert ($err | str contains $born.cid)
+    assert ($err | str contains "--reassert")
+
+    # Deliberate re-assertion: a second record next to the first
+    let again = link add $P1 $P2 --repo $r.repo --claimed-at "2026-07-17T00:00:00+00:00" --reassert
+    assert ($again.cid != $born.cid)
+    assert equal (glob ($r.repo | path join cybergraph links *.json) | length) 2
+
+    # Byte-identical record stays refused even with --reassert
+    let same = try { link add $P1 $P2 --repo $r.repo --claimed-at "2026-07-16T00:00:00+00:00" --reassert; null } catch {|e| $e.msg }
+    assert ($same != null) "byte-identical record was recorded twice"
+    assert ($same | str contains "already exists")
+}
+
+@test
 def "seal with --key but no .pub next to it fails fast" [] {
     let r = make-bare-repo $in.tmp_dir
     init --repo $r.repo

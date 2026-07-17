@@ -25,6 +25,7 @@ export def add [
     cid_to: string # CID v0 of the target particle
     --neuron: string # Author's neuron CID (default: CID of the single registered pubkey)
     --claimed-at: string # RFC 3339 timestamp claimed by the author (default: now, UTC)
+    --reassert # Record the edge again although this neuron already asserted it
     --repo: path # Target repo root (default: git root of current directory)
 ]: nothing -> record {
     let root = graph-root $repo
@@ -38,6 +39,22 @@ export def add [
     }
     let cid = link-cid $rec
     mkdir (links-dir $root)
+    if not $reassert {
+        # The triple (cid_from, cid_to, neuron) is the graph's aggregation unit:
+        # with claimed_at inside the record a repeat is a new record, not a new
+        # vote. Why: uniqueness of the triple is a reading policy here, not a
+        # storage invariant (bostrom's consensus enforced it) — so accidental
+        # duplicates are refused at the one spot where records are born, and a
+        # deliberate re-assertion over time stays expressible via --reassert.
+        let dup = glob ((links-dir $root) | path join "*.json") | where {|f|
+            let r = open $f
+            $r.cid_from == $rec.cid_from and $r.cid_to == $rec.cid_to and $r.neuron == $rec.neuron
+        }
+        if ($dup | is-not-empty) {
+            let existing = $dup | first | path parse | get stem
+            error make {msg: $"neuron already asserted this edge: ($existing) — pass --reassert to record it again"}
+        }
+    }
     let out = link-path $root $cid
     if ($out | path exists) {
         # Same CID = byte-identical record (same edge, author, and claimed_at)
