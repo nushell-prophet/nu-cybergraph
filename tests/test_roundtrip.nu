@@ -297,3 +297,124 @@ def "tampered record in a bundle fails self-addressing" [] {
     open --raw $rec_file | str replace $P2 $P1 | save --raw --force $rec_file
     assert error {|| verify-bundle $bundle_dir }
 }
+
+const FAKE_SHA = "deadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef"
+
+# check-handoff's two defense paths, at the bundle root and in a custody
+# layer: the claims must match the link/holder/receipt the file travels
+# with, and the bytes must carry a valid signature by the `from` neuron.
+# Each scenario tampers exactly one thing on a fresh copy; the asserted
+# error fragment pins WHICH check fired, not its wording.
+@test
+def "a handoff that is tampered, unsigned, or misclaiming is refused" [] {
+    let tmp_dir = $in.tmp_dir
+    let a = make-neuron $tmp_dir "a"
+    let b = make-neuron $tmp_dir "b"
+    let born = link add $P1 $P2 --repo $a.repo --claimed-at "2026-07-16T00:00:00+00:00"
+    seal --repo $a.repo --no-stamp --no-root-cid | ignore
+    let a_out = bundle $born.cid --repo $a.repo --out ($tmp_dir | path join a-out) --to (neuron-cid $b.home)
+    let handoff_name = $"($born.cid).handoff.json"
+
+    # Tampered signed bytes: the claims stay coherent (handed_at is not a
+    # checked claim), only the signature no longer covers the file
+    let bad_sig = $tmp_dir | path join bad-sig
+    cp -r $a_out $bad_sig
+    let f = $bad_sig | path join $handoff_name
+    open --raw $f | str replace --regex '"handed_at":"\d{4}' '"handed_at":"2099' | save --raw --force $f
+    let v = verify-bundle $bad_sig
+    assert not $v.valid
+    assert not $v.handoff.valid
+    assert ($v.error | str contains "no valid signature")
+    # a handoff that fails verification must not name an addressee
+    assert equal $v.handed_to null
+    assert error {|| import $bad_sig --repo $b.repo }
+
+    # Signature stripped but the handoff kept: a claim without proof
+    let no_sig = $tmp_dir | path join no-sig
+    cp -r $a_out $no_sig
+    glob ($no_sig | path join $"($handoff_name).*.sig") | each {|s| rm $s }
+    let v2 = verify-bundle $no_sig
+    assert not $v2.valid
+    assert ($v2.error | str contains "no valid signature")
+
+    # `from` claims an identity other than the holder it travels with
+    let wrong_from = $tmp_dir | path join wrong-from
+    cp -r $a_out $wrong_from
+    let f3 = $wrong_from | path join $handoff_name
+    open --raw $f3 | str replace $born.record.neuron $P1 | save --raw --force $f3
+    let v3 = verify-bundle $wrong_from
+    assert not $v3.valid
+    assert ($v3.error | str contains "handoff claims do not match")
+
+    # The author's handoff must pin receipt null — a non-null hash mismatches
+    let wrong_receipt = $tmp_dir | path join wrong-receipt
+    cp -r $a_out $wrong_receipt
+    let f4 = $wrong_receipt | path join $handoff_name
+    open --raw $f4 | str replace '"receipt":null' $'"receipt":"($FAKE_SHA)"' | save --raw --force $f4
+    let v4 = verify-bundle $wrong_receipt
+    assert not $v4.valid
+    assert ($v4.error | str contains "handoff claims do not match")
+
+    # Same checks on a custody layer's outgoing handoff: B imports, seals,
+    # re-exports handed to C — then the layer handoff's `receipt` is edited
+    # to a hash that is not B's receipt
+    let c = make-neuron $tmp_dir "c"
+    import $a_out --repo $b.repo | ignore
+    seal --repo $b.repo --no-stamp --no-root-cid | ignore
+    let b_out = bundle $born.cid --repo $b.repo --out ($tmp_dir | path join b-out) --to (neuron-cid $c.home)
+    assert (verify-bundle $b_out | get valid)
+
+    let wrong_layer = $tmp_dir | path join wrong-layer
+    cp -r $b_out $wrong_layer
+    let lf = $wrong_layer | path join custody $"1-(neuron-cid $b.home | str substring 0..11)" $handoff_name
+    open --raw $lf | str replace --regex '"receipt":"[0-9a-f]{64}"' $'"receipt":"($FAKE_SHA)"' | save --raw --force $lf
+    let lv = verify-bundle $wrong_layer
+    assert not $lv.valid
+    assert not ($lv.custody | first | get handoff | get valid)
+    assert ($lv.error | str contains "handoff claims do not match")
+    assert equal $lv.handed_to null
+}
+
+# The layer dirname is transport only — verification must refuse whenever
+# the name and the verified receipt disagree, however the name was forged.
+@test
+def "custody layer names cannot lie — forged dirname, duplicated custodian, renumbered index" [] {
+    let tmp_dir = $in.tmp_dir
+    let a = make-neuron $tmp_dir "a"
+    let born = link add $P1 $P2 --repo $a.repo --claimed-at "2026-07-16T00:00:00+00:00"
+    seal --repo $a.repo --no-stamp --no-root-cid | ignore
+    let a_out = bundle $born.cid --repo $a.repo --out ($tmp_dir | path join a-out)
+    let b = make-neuron $tmp_dir "b"
+    import $a_out --repo $b.repo | ignore
+    seal --repo $b.repo --no-stamp --no-root-cid | ignore
+    let b_out = bundle $born.cid --repo $b.repo --out ($tmp_dir | path join b-out)
+    let a12 = neuron-cid $a.home | str substring 0..11
+    let b12 = neuron-cid $b.home | str substring 0..11
+
+    # Well-formed dirname claiming another neuron: dirname-vs-receipt throw
+    let forged = $tmp_dir | path join forged
+    cp -r $b_out $forged
+    mv ($forged | path join custody $"1-($b12)") ($forged | path join custody $"1-($a12)")
+    let err = try { verify-bundle $forged | ignore; null } catch {|e| $e.msg }
+    assert ($err != null and ($err | str contains "does not match its receipt's custodian"))
+
+    # Same custodian twice: layer 2 is a byte-copy of layer 1, so its name
+    # and binding check out — its receipt chains to nothing while the chain
+    # demands layer 1's hash. Refused by `prev`, not by naming.
+    let dup = $tmp_dir | path join dup
+    cp -r $b_out $dup
+    cp -r ($dup | path join custody $"1-($b12)") ($dup | path join custody $"2-($b12)")
+    let v = verify-bundle $dup
+    assert not $v.valid
+    assert ($v.custody | first | get valid)
+    assert (($v.custody | last | get error) | str contains "prev hash does not match")
+
+    # Renumbering the only layer: indices must be contiguous from 1 — this
+    # pins the non-strip contiguity case (the middle-strip case is covered
+    # in the custody chain test above)
+    let renum = $tmp_dir | path join renum
+    cp -r $b_out $renum
+    mv ($renum | path join custody $"1-($b12)") ($renum | path join custody $"2-($b12)")
+    let err2 = try { verify-bundle $renum | ignore; null } catch {|e| $e.msg }
+    assert ($err2 != null and ($err2 | str contains "not contiguous"))
+}
