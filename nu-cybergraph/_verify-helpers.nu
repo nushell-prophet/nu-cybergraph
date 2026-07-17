@@ -18,10 +18,14 @@ export def verify-bundle [bundle: path]: nothing -> record {
     # Neuron identity is the CID of the pubkey file bytes, so the spec pins one
     # encoding: `pubkey canonical` form. A non-canonical file is a malformed
     # bundle — reject it loudly, like read-link does for self-addressing.
-    for pub in (glob ($bundle | path join multiproofs pubkeys *.pub)) {
-        let raw = open --raw $pub | into string
+    # One read per pubkey: the canonical check and the binding hash must see
+    # the same bytes — a re-read could race with a file swap (check vs use).
+    let pubs = glob ($bundle | path join multiproofs pubkeys *.pub)
+        | each {|f| {path: $f name: ($f | path parse | get stem) bytes: (open --raw $f | into binary)} }
+    for pub in $pubs {
+        let raw = $pub.bytes | decode
         if $raw != (try { $raw | pubkey canonical }) {
-            error make {msg: $"non-canonical pubkey file: ($pub) — expected `<type> <base64>` + newline, no comment"}
+            error make {msg: $"non-canonical pubkey file: ($pub.path) — expected `<type> <base64>` + newline, no comment"}
         }
     }
     let v = merkle verify ($certs | first) --repo $bundle
@@ -30,8 +34,7 @@ export def verify-bundle [bundle: path]: nothing -> record {
     # never reach the binding check.
     let rec = read-link ($bundle | path join $v.leaf.filepath)
     let bound = $v.signatures | where valid | any {|s|
-        let pub = $bundle | path join multiproofs pubkeys $"($s.signer).pub"
-        ($pub | path exists) and ((open --raw $pub | into binary | cid-v0) == $rec.neuron)
+        $pubs | where name == $s.signer | any {|p| ($p.bytes | cid-v0) == $rec.neuron }
     }
     print $"neuron:    (if $bound { 'bound' } else { 'NOT BOUND \(no valid signature by the claimed neuron\)' })"
 

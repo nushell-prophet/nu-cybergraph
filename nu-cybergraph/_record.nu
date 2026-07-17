@@ -52,13 +52,16 @@ export def link-cid [rec: record]: nothing -> string {
 # Read + validate a record file, enforcing self-addressing: the CID of the
 # RAW bytes (not a re-serialization) must equal the filename stem, so any
 # tampering or non-canonical rewrite fails here before anything trusts it.
+# One read: hash and parse must see the same bytes — a second read could
+# race with a file swap, parsing bytes the CID check never covered.
 export def read-link [file: path]: nothing -> record {
-    let raw_cid = open --raw $file | into binary | cid-v0
+    let bytes = open --raw $file | into binary
+    let raw_cid = $bytes | cid-v0
     let stem = $file | path parse | get stem
     if $raw_cid != $stem {
         error make {msg: $"($file) does not match its content address: bytes hash to ($raw_cid)"}
     }
-    let rec = open --raw $file | from json
+    let rec = $bytes | decode | from json
     validate-link $rec
     $rec
 }
