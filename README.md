@@ -47,6 +47,7 @@ Why JSON and not CSV/NUON: JSON is readable by every language and tool (and nati
 ```
 cybergraph/
   links/<link-cid>.json            # link records, one per file, self-addressed
+  particles/<derived-cid>          # preimages of derived CIDs (convention sources), self-addressed
   certs/<link-cid>.cert.json       # birth certificates (frozen `merkle prove` output)
   seals/<root-hex-12>/             # archival root statement + signatures, one per seal
   exports/<link-cid>/              # bundles built by `bundle` (default --out)
@@ -58,6 +59,29 @@ cybergraph/
 A sha256 git backend (`git init --object-format=sha256`) is recommended; the merkle/certificate layer works on sha1 repos too. Note GitHub does not host sha256 repos — Codeberg and plain remotes do.
 
 **Graph home.** The graph home is always `<git-root>/cybergraph/` — `init` creates it, every command finds it. Particles are referenced by CID, not path, so they never need to live under the graph home — or in the repo at all. The seal manifest covers only the graph subtree; a particle outside it still gets time-anchored the moment a sealed link mentions its CID, because showing bytes that hash to an anchored CID extends the anchor to those bytes. (Attesting a whole repo's files is a different job — use nu-multiproof's `seal` directly for that.)
+
+## Conventions (bj002)
+
+The twelve conventions of `bostrom-journal` bj002 — confirm, deny, update, quote, agree, disagree, pro, con, question, answer, author, same — *encode* an instruction for processing the graph as an ordinary edge. Concept and rationale live in bj002; this section is the mechanics. `nu-cybergraph convention <verb>` writes the edge through the same record path as `link add` (triple guard, self-addressing, author/time resolution), so it takes the same `--neuron`/`--claimed-at`/`--repo`/`--reassert` controls.
+
+Every convention stands on one primitive, the journal's `hash(x, y, …)`: **`convention derive`** joins the argument CID strings with commas and takes the CID v0 of those exact bytes — no trailing newline (reproduce any with `printf '<preimage>' | ipfs add --cid-version=0`). The two special cases of the appendix fall out of the same call: the edge address is `derive <from> <to>`, the cyberlink's derived CID is `derive <from> <to> <neuron>`. This byte format is pinned by `tests/test_convention.nu`, same discipline as the record format — changing it breaks every derived CID.
+
+An instruction lives in the *source* of its edge — a derived CID such as `hash("deny")` or `hash("update", hash(A,B))` — so the source is opaque. To make it readable, every convention also publishes the **preimage** of each derived CID it mints (the string `"update,Qm…"`) as a self-addressed particle under `particles/`, so a reader can dereference the source and recognise the instruction (bj002 "Reading instructions"). Particles are not sealed directly: a sealed convention edge names its source CID, and showing bytes that hash to a sealed CID time-anchors them — the same rule that anchors any particle named by a sealed link.
+
+| verb | edge written |
+|---|---|
+| `confirm A B` | `A → B` (the plain edge repeated — no source, no preimage) |
+| `deny A B` / `deny A B N` | `hash("deny") → hash(A,B)` (edge) / `→ hash(A,B,N)` (a neuron's cyberlink) |
+| `update A B C` | `hash("update", hash(A,B)) → C` |
+| `quote A B` | `hash("quote", A) → B` |
+| `agree B` / `disagree B` | `hash("agree"\|"disagree") → B` |
+| `pro C B` / `con C B` | `hash("pro"\|"con", C) → B` |
+| `question B Q` | `hash("question", B) → Q` |
+| `answer B Q A` | `hash("answer", hash(hash("question",B), Q)) → A` |
+| `author B P` | `hash("author", B) → P` |
+| `same P1 P2` | `hash("same", P1) → P2` |
+
+Reading and aggregation — counting confirmations, weighing neurons, measuring consensus — are out of scope for now: one repo is one neuron, so there is nothing to aggregate locally yet. `derive` gives a reader the address to look up; the counting is a later, cross-neuron concern.
 
 ## Birth certificate
 

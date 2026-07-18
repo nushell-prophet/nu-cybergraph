@@ -5,6 +5,7 @@
 # they pin nu-multiproof's public layout, not ours.
 
 export const LINKS_DIR = "links"
+export const PARTICLES_DIR = "particles"
 export const CERTS_DIR = "certs"
 export const SEALS_DIR = "seals"
 export const EXPORTS_DIR = "exports"
@@ -15,6 +16,21 @@ export const CUSTODY_DIR = "custody"
 # <root>/links
 export def links-dir [root: path]: nothing -> path {
     $root | path join $LINKS_DIR
+}
+
+# <root>/particles — preimages of derived CIDs, published so a reader can
+# dereference an instruction edge (bj002 "Reading instructions"). Not in the
+# seal manifest: a particle is anchored the moment a sealed link names its CID
+# (README "Graph home"), and a convention edge always names its source here.
+export def particles-dir [root: path]: nothing -> path {
+    $root | path join $PARTICLES_DIR
+}
+
+# <root>/particles/<cid> — a preimage particle, self-addressed by the CID v0
+# of its exact bytes. No extension: the content is the raw preimage string,
+# not a document.
+export def particle-path [root: path cid: string]: nothing -> path {
+    particles-dir $root | path join $cid
 }
 
 # <root>/certs
