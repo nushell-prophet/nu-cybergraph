@@ -11,11 +11,14 @@
 # records: the edge address is `derive {cid_from: A, cid_to: B}`, the
 # cyberlink's derived CID is `derive {cid_from: A, cid_to: B, neuron: N}`.
 #
-# The link *file* record (_record.nu) keeps its own pinned key order —
-# cid_from, cid_to, neuron, claimed_at. Why: publication metadata never
-# enters a derived CID (bj002-1 «Основы» — acts are addressed by the double
-# and triple alone), so the file format stays an implementation pin and the
-# alphabet rule applies only here.
+# The link *file* record (_record.nu) is serialized by the same rule —
+# record-bytes is the one canon of the format. claimed_at still never enters
+# a derived CID (bj002-1 «Основы» — acts are addressed by the double and
+# triple alone); the file's self-address and the act's derived CID are
+# different records, one byte discipline.
+#
+# Alphabetical means byte order of the UTF-8 key bytes — locale-free and
+# case-sensitive; nushell's record `sort` matches it for these keys.
 
 use _deps/cid-v0.nu [cid-v0]
 

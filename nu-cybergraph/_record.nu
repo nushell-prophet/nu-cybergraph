@@ -3,14 +3,19 @@
 # tests/test_record.nu holds the golden bytes and CID.
 #
 # A record is content-addressed: the file is named by the CID v0 of its exact
-# bytes. Writers MUST emit canonical bytes (fixed key order, compact JSON, one
-# trailing newline) so independent writers of the same record produce the same
-# CID. Readers verify the raw file bytes against the filename, so a
-# non-canonical file still fails loudly instead of drifting.
+# bytes. Writers MUST emit canonical bytes (the one canon of _derive.nu:
+# alphabetical key order, compact JSON, one trailing newline) so independent
+# writers of the same record produce the same CID. Readers verify the raw file
+# bytes against the filename, so a non-canonical file still fails loudly
+# instead of drifting.
 
 use _deps/cid-v0.nu [cid-v0]
+use _derive.nu [record-bytes]
 
-export const LINK_KEYS = [cid_from cid_to neuron claimed_at]
+# Why alphabetical (not the semantic triple-first order): one serialization
+# rule for every record in the format — link files and derived records alike —
+# is simpler to explain and to port than a rule plus a pinned per-shape list.
+export const LINK_KEYS = [cid_from cid_to claimed_at neuron]
 
 # Exported for _receipt.nu — receipts reuse the record's field disciplines.
 export const CID_V0_RE = '^Qm[1-9A-HJ-NP-Za-km-z]{44}$'
@@ -41,10 +46,11 @@ export def validate-link [rec: record]: nothing -> nothing {
     }
 }
 
-# Canonical bytes: keys in LINK_KEYS order, compact JSON, one trailing "\n".
+# Canonical bytes: the shared canon — alphabetical keys, compact JSON, one
+# trailing "\n". validate-link pins the shape; record-bytes owns the bytes.
 export def link-bytes [rec: record]: nothing -> binary {
     validate-link $rec
-    ($rec | select ...$LINK_KEYS | to json --raw) + "\n" | into binary
+    record-bytes $rec
 }
 
 # The record's content address — what the file must be named.

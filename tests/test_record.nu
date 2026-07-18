@@ -14,11 +14,11 @@ def golden-record []: nothing -> record {
     }
 }
 
-const GOLDEN_BYTES = '{"cid_from":"QmUQUHEmv651XCBhiWUQpx2zf4PDts1aXL324ZFyV4QZPF","cid_to":"QmW9519sfmW2MvDb4TU4dKtiFAXm1UPDvE7JrMaBjprVHp","neuron":"QmddrVz92VH3LqT2i7uXeK4AVh6LyU7zjDiLbSdChPsULr","claimed_at":"2026-07-16T00:00:00+00:00"}'
-const GOLDEN_CID = "QmZF4Nd4hAVHgLCW3YFEvtpDA52DX9z1vgX3CzH4L6yiwk"
+const GOLDEN_BYTES = '{"cid_from":"QmUQUHEmv651XCBhiWUQpx2zf4PDts1aXL324ZFyV4QZPF","cid_to":"QmW9519sfmW2MvDb4TU4dKtiFAXm1UPDvE7JrMaBjprVHp","claimed_at":"2026-07-16T00:00:00+00:00","neuron":"QmddrVz92VH3LqT2i7uXeK4AVh6LyU7zjDiLbSdChPsULr"}'
+const GOLDEN_CID = "Qmeha3MmsWAhhT5AJFi8vWk9yHwNBMuaaUJmJCwztNU4cC"
 
 @test
-def "golden bytes: fixed key order, compact JSON, one trailing newline" [] {
+def "golden bytes: alphabetical key order, compact JSON, one trailing newline" [] {
     assert equal (link-bytes (golden-record) | decode) $"($GOLDEN_BYTES)\n"
     assert equal (link-cid (golden-record)) $GOLDEN_CID
 }
