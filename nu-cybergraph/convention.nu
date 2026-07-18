@@ -1,15 +1,29 @@
 # The twelve conventions of bj002 — encode an instruction for processing the
-# cybergraph as an ordinary edge. Every convention is the same move: build a
-# derived source CID with `derive`, then write the edge through `link add`, so
-# the triple guard, self-addressing, timestamps and neuron resolution all come
-# from one place. The verbs differ only in how they shape the source.
+# cybergraph as an ordinary edge. Every convention is one statement in a tiny
+# grammar, so they all compile to a single engine (`address` + `edge`); the
+# verbs below differ only in the shape they declare.
 #
-# Every derived CID this layer mints is also published as a preimage particle
-# under particles/ (bj002 "Reading instructions"): the string "update,Qm…" is
-# written to a file named by its own CID, so a reader who sees the opaque
-# source of an edge can dereference it and recognise the instruction. Nested
-# forms publish every link of the chain — for `answer`, the question address
-# and the question-edge address as well as the answer source.
+# The grammar has one atom and one constructor. An **address expression** is
+# either a leaf — a CID you supply or a literal tag word ("deny"), used
+# verbatim — or a compound `[x y …]` meaning `hash(x, y, …)` over its resolved
+# children. Resolving an expression walks the tree; every compound node it
+# passes through has its preimage published as a self-addressed particle under
+# particles/, so a reader can dereference the instruction (bj002 "Reading
+# instructions"). This recursion is the homoiconicity bj002 describes made
+# executable — an instruction is a tree of the same hashes and CIDs as the
+# graph it processes. The whole layer, as expressions:
+#
+#   confirm            A                          → B
+#   deny (edge)        [deny]                      → [A B]
+#   deny (cyberlink)   [deny]                      → [A B N]
+#   agree / disagree   [agree]                     → B
+#   quote              [quote A]                   → B
+#   pro / con          [pro C]                     → B
+#   question           [question B]                → Q
+#   author             [author B]                  → P
+#   same               [same P1]                   → P2
+#   update             [update [A B]]              → C
+#   answer             [answer [[question B] Q]]   → A
 #
 # Reading and aggregation (count confirms, weigh neurons, read consensus) are
 # deliberately out of scope: a local repo is a single neuron, so there is
@@ -39,22 +53,33 @@ def publish [root: path ...args: string]: nothing -> string {
     $cid
 }
 
-# Write the convention's edge. Thin pass-through to `link add` so every
-# convention shares one record path; forwards the author/time/repo controls.
-def emit [
-    source: string
-    target: string
+# Resolve an address expression to a CID. A leaf string is used verbatim (a CID
+# input or a tag); a list is hash() over its resolved children, publishing that
+# compound's preimage on the way. The one place the grammar is interpreted.
+def address [root: path expr: any]: nothing -> string {
+    if ($expr | describe) == "string" { return $expr }
+    publish $root ...($expr | each {|e| address $root $e })
+}
+
+# Write a convention's edge: resolve the source and target expressions, then
+# emit through `link add` so the triple guard, self-addressing and author/time
+# resolution all come from one place. The verbs forward their author/time/repo
+# controls here unchanged.
+def edge [
+    src: any # source address expression
+    tgt: any # target address expression
     neuron: any # author override or null
     claimed_at: any # claimed timestamp or null
     repo: any # target repo or null
     reassert: bool
 ]: nothing -> record {
-    link add $source $target --neuron $neuron --claimed-at $claimed_at --repo $repo --reassert=$reassert
+    let root = graph-root $repo
+    link add (address $root $src) (address $root $tgt) --neuron $neuron --claimed-at $claimed_at --repo $repo --reassert=$reassert
 }
 
-# Confirm an edge: simply repeat it. No special source and no preimage — a
-# plain edge is not an instruction; the repetition itself is what aggregation
-# counts (bj002 "Confirming an edge").
+# Confirm an edge: simply repeat it. Both endpoints are leaves — a plain edge
+# is not an instruction, and the repetition itself is what aggregation counts
+# (bj002 "Confirming an edge").
 @example "confirm the edge A → B" { convention confirm QmA… QmB… }
 export def confirm [
     cid_from: string # source particle of the edge being confirmed
@@ -64,7 +89,7 @@ export def confirm [
     --repo: path
     --reassert
 ]: nothing -> record {
-    emit $cid_from $cid_to $neuron $claimed_at $repo $reassert
+    edge $cid_from $cid_to $neuron $claimed_at $repo $reassert
 }
 
 # Deny an edge (`deny A B`) or a specific cyberlink (`deny A B N`). Source is
@@ -82,14 +107,8 @@ export def deny [
     --repo: path
     --reassert
 ]: nothing -> record {
-    let root = graph-root $repo
-    let source = publish $root "deny"
-    let target = if $disputed_neuron != null {
-        publish $root $cid_from $cid_to $disputed_neuron
-    } else {
-        publish $root $cid_from $cid_to
-    }
-    emit $source $target $neuron $claimed_at $repo $reassert
+    let target = if $disputed_neuron != null { [$cid_from $cid_to $disputed_neuron] } else { [$cid_from $cid_to] }
+    edge ["deny"] $target $neuron $claimed_at $repo $reassert
 }
 
 # Update an edge: hash("update", hash(A, B)) → C marks C as the new target of
@@ -105,10 +124,7 @@ export def update [
     --repo: path
     --reassert
 ]: nothing -> record {
-    let root = graph-root $repo
-    let edge = publish $root $cid_from $cid_to
-    let source = publish $root "update" $edge
-    emit $source $cid_new $neuron $claimed_at $repo $reassert
+    edge ["update" [$cid_from $cid_to]] $cid_new $neuron $claimed_at $repo $reassert
 }
 
 # Quote: hash("quote", A) → B states that B is a faithful excerpt of A
@@ -123,9 +139,7 @@ export def quote [
     --repo: path
     --reassert
 ]: nothing -> record {
-    let root = graph-root $repo
-    let source = publish $root "quote" $cid_from
-    emit $source $cid_to $neuron $claimed_at $repo $reassert
+    edge ["quote" $cid_from] $cid_to $neuron $claimed_at $repo $reassert
 }
 
 # Agree: hash("agree") → B — "claim B is true". Gives an opinion about
@@ -139,8 +153,7 @@ export def agree [
     --repo: path
     --reassert
 ]: nothing -> record {
-    let root = graph-root $repo
-    emit (publish $root "agree") $cid $neuron $claimed_at $repo $reassert
+    edge ["agree"] $cid $neuron $claimed_at $repo $reassert
 }
 
 # Disagree: hash("disagree") → B — "claim B is false". The other axis from
@@ -154,8 +167,7 @@ export def disagree [
     --repo: path
     --reassert
 ]: nothing -> record {
-    let root = graph-root $repo
-    emit (publish $root "disagree") $cid $neuron $claimed_at $repo $reassert
+    edge ["disagree"] $cid $neuron $claimed_at $repo $reassert
 }
 
 # Argument for: hash("pro", C) → B — "B is an argument for C". C is any CID:
@@ -170,8 +182,7 @@ export def pro [
     --repo: path
     --reassert
 ]: nothing -> record {
-    let root = graph-root $repo
-    emit (publish $root "pro" $target) $argument $neuron $claimed_at $repo $reassert
+    edge ["pro" $target] $argument $neuron $claimed_at $repo $reassert
 }
 
 # Argument against: hash("con", C) → B — "B is an argument against C". The
@@ -185,8 +196,7 @@ export def con [
     --repo: path
     --reassert
 ]: nothing -> record {
-    let root = graph-root $repo
-    emit (publish $root "con" $target) $argument $neuron $claimed_at $repo $reassert
+    edge ["con" $target] $argument $neuron $claimed_at $repo $reassert
 }
 
 # Question: hash("question", B) → Q — "Q is a question about B". B is any CID;
@@ -201,8 +211,7 @@ export def question [
     --repo: path
     --reassert
 ]: nothing -> record {
-    let root = graph-root $repo
-    emit (publish $root "question" $about) $question $neuron $claimed_at $repo $reassert
+    edge ["question" $about] $question $neuron $claimed_at $repo $reassert
 }
 
 # Answer: hash("answer", hash(hash("question", B), Q)) → A — "A answers the
@@ -219,11 +228,7 @@ export def answer [
     --repo: path
     --reassert
 ]: nothing -> record {
-    let root = graph-root $repo
-    let q_source = publish $root "question" $about
-    let q_edge = publish $root $q_source $question
-    let source = publish $root "answer" $q_edge
-    emit $source $answer $neuron $claimed_at $repo $reassert
+    edge ["answer" [["question" $about] $question]] $answer $neuron $claimed_at $repo $reassert
 }
 
 # Authorship: hash("author", B) → P — "the author of content B is P". The
@@ -239,8 +244,7 @@ export def author [
     --repo: path
     --reassert
 ]: nothing -> record {
-    let root = graph-root $repo
-    emit (publish $root "author" $content) $author_id $neuron $claimed_at $repo $reassert
+    edge ["author" $content] $author_id $neuron $claimed_at $repo $reassert
 }
 
 # Identity: hash("same", P1) → P2 — "P1 and P2 name one entity" (the analogue
@@ -255,6 +259,5 @@ export def same [
     --repo: path
     --reassert
 ]: nothing -> record {
-    let root = graph-root $repo
-    emit (publish $root "same" $name_from) $name_to $neuron $claimed_at $repo $reassert
+    edge ["same" $name_from] $name_to $neuron $claimed_at $repo $reassert
 }
