@@ -2,7 +2,11 @@
 
 A local cybergraph on a git backend: content-addressed link records between particles (files), with per-link authorship and birth-time proofs built on [nu-multiproof](https://codeberg.org/nushell-prophet/nu-multiproof/).
 
-🚧 Proof of concept, agent-written, barely tested — do not treat as secure. The concept it implements is developed in the `bostrom-journal` (bj003).
+🚧 Proof of concept, agent-written, barely tested — do not treat as secure.
+
+## Origins
+
+The concept of Cybergraph was first invented and implemented by @mastercyb and @cyborgshead in the Bostrom blockchain. Cyberlink, Particle and Neuron are their terms too. Initially I resisted using them, but after tons of iterations I came to the conclusion that they deserve their own names, due to the uniqueness and substantiality of Cybergraph.
 
 ## Concept
 
