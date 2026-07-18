@@ -68,6 +68,8 @@ Every convention stands on one primitive, the journal's `hash(x, y, …)`: **`co
 
 An instruction lives in the *source* of its edge — a derived CID such as `hash("deny")` or `hash("update", hash(A,B))` — so the source is opaque. To make it readable, every convention also publishes the **preimage** of each derived CID it mints (the string `"update,Qm…"`) as a self-addressed particle under `particles/`, so a reader can dereference the source and recognise the instruction (bj002 "Reading instructions"). Particles are not sealed directly: a sealed convention edge names its source CID, and showing bytes that hash to a sealed CID time-anchors them — the same rule that anchors any particle named by a sealed link.
 
+This table is the spec of the twelve shapes. The header of `nu-cybergraph/convention.nu` restates it in the implementation's address-expression notation (`[x y …]` = `hash(x, y, …)`) — same facts, second notation; if a shape ever changes, both move together.
+
 | verb | edge written |
 |---|---|
 | `confirm A B` | `A → B` (the plain edge repeated — no source, no preimage) |

@@ -13,7 +13,7 @@
 # executable — an instruction is a tree of the same hashes and CIDs as the
 # graph it processes. The whole layer, as expressions:
 #
-#   confirm            A                          → B
+#   confirm            A                           → B
 #   deny (edge)        [deny]                      → [A B]
 #   deny (cyberlink)   [deny]                      → [A B N]
 #   agree / disagree   [agree]                     → B
