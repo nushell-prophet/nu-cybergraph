@@ -418,3 +418,46 @@ def "custody layer names cannot lie — forged dirname, duplicated custodian, re
     let err2 = try { verify-bundle $renum | ignore; null } catch {|e| $e.msg }
     assert ($err2 != null and ($err2 | str contains "not contiguous"))
 }
+
+# The signing key resolves before the destination dir is created: a key error
+# after assembly used to leave a complete-looking bundle whose handoff was
+# unsigned, and the retry with --key was blocked by "destination already exists".
+@test
+def "bundle --to without a signing key fails before writing anything" [] {
+    let tmp_dir = $in.tmp_dir
+    let a = make-neuron $tmp_dir "a"
+    let born = link add $P1 $P2 --repo $a.repo --claimed-at "2026-07-16T00:00:00+00:00"
+    seal --repo $a.repo --no-stamp --no-root-cid | ignore
+
+    ^git -C $a.repo config --unset user.signingKey
+    let dest = $tmp_dir | path join out
+    assert error {|| bundle $born.cid --repo $a.repo --out $dest --to $P1 }
+    assert not ($dest | path exists)
+
+    # ...so the retry with an explicit --key finds the destination free
+    let out = bundle $born.cid --repo $a.repo --out $dest --to $P1 --key $a.key
+    assert (($out | path join $"($born.cid).handoff.json") | path exists)
+    assert ((glob ($out | path join $"($born.cid).handoff.json.*.sig") | length) == 1)
+}
+
+# The writer's exit self-check: whatever breaks assembly (the observed case
+# was an interior `cp -r` error printed but not raised), a bundle without its
+# root certificate must error and be removed, not ship with exit 0.
+@test
+def "a re-export that comes out without a root certificate is refused and removed" [] {
+    let tmp_dir = $in.tmp_dir
+    let a = make-neuron $tmp_dir "a"
+    let born = link add $P1 $P2 --repo $a.repo --claimed-at "2026-07-16T00:00:00+00:00"
+    seal --repo $a.repo --no-stamp --no-root-cid | ignore
+    let a_out = bundle $born.cid --repo $a.repo --out ($tmp_dir | path join a-out)
+    let b = make-neuron $tmp_dir "b"
+    import $a_out --repo $b.repo | ignore
+    seal --repo $b.repo --no-stamp --no-root-cid | ignore
+
+    # Corrupt the source copy so assembly produces a certless bundle root
+    rm ($b.home | path join imported $born.record.neuron $born.cid $"($born.cid).cert.json")
+    let dest = $tmp_dir | path join b-out
+    let err = try { bundle $born.cid --repo $b.repo --out $dest | ignore; null } catch {|e| $e.msg }
+    assert ($err != null and ($err | str contains "incomplete"))
+    assert not ($dest | path exists)
+}

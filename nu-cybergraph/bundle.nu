@@ -63,11 +63,30 @@ def assemble-seal-artifacts [root: path out: path root_hex: string] {
     }
 }
 
+# Resolve and validate the handoff signing key: --key, else git config
+# user.signingKey. main runs this BEFORE the destination dir is created —
+# same discipline as seal's pre-checks: a key error after assembly leaves a
+# complete-looking bundle whose handoff is unsigned, and the retry is then
+# blocked by "bundle destination already exists".
+def resolve-handoff-key [root: path key: any]: nothing -> path {
+    let resolved = if $key != null { $key } else {
+        let k = ^git -C $root config user.signingKey | complete
+        if $k.exit_code != 0 or ($k.stdout | str trim | is-empty) {
+            error make {msg: "handoff needs a signing key: set git config user.signingKey or pass --key"}
+        }
+        $k.stdout | str trim | path expand
+    }
+    if not ($resolved | path exists) {
+        error make {msg: $"handoff signing key not found: ($resolved)"}
+    }
+    $resolved
+}
+
 # Write and sign the sender's handoff into a proof dir. Signed directly with
 # the repo's key, not through a seal: the bundle leaves at export time,
 # before any later seal could catalogue the handoff — a detached signature
 # is the only immediate, local authentication available.
-def write-handoff [root: path dir: path link_cid: string to: string receipt_hash: any key: any] {
+def write-handoff [root: path dir: path link_cid: string to: string receipt_hash: any key: path] {
     let handoff = {
         link: $link_cid
         from: (own-neuron $root)
@@ -77,14 +96,21 @@ def write-handoff [root: path dir: path link_cid: string to: string receipt_hash
     }
     let file = $dir | path join (handoff-filename $link_cid)
     handoff-bytes $handoff | save --raw $file
-    let key = if $key != null { $key } else {
-        let k = ^git -C $root config user.signingKey | complete
-        if $k.exit_code != 0 or ($k.stdout | str trim | is-empty) {
-            error make {msg: "handoff needs a signing key: set git config user.signingKey or pass --key"}
-        }
-        $k.stdout | str trim | path expand
-    }
     ssh-sign sign $file --key $key --pubkeys-dir ($root | path join multiproofs pubkeys) --namespace $HANDOFF_NAMESPACE
+}
+
+# The writer's own exit check — the same root-cert test import runs first.
+# Observed once: an interior `cp -r` error was printed but not raised, and a
+# custody re-export shipped with the birth bundle missing entirely, exit 0.
+# Whatever the cause, a partial bundle must not leave the repo with exit 0 —
+# and must not stay on disk looking complete, so it is removed before erroring.
+def assert-complete-bundle [out: path]: nothing -> path {
+    let certs = glob ($out | path join *.cert.json)
+    if ($certs | length) != 1 {
+        rm --recursive --force $out
+        error make {msg: $"bundle came out incomplete: ($certs | length) *.cert.json at the root instead of 1 — partial bundle removed, re-run the export"}
+    }
+    $out
 }
 
 # Export a link as a portable, offline-verifiable bundle: the birth bundle
@@ -101,6 +127,7 @@ export def main [
     if $to != null and $to !~ $CID_V0_RE {
         error make {msg: $"--to must be a neuron CID \(base58btc CID v0\): ($to)"}
     }
+    let key = if $to == null { null } else { resolve-handoff-key $root $key }
     let out = if $out != null { $out | path expand } else { exports-dir $root | path join $link_cid }
     if ($out | path exists) {
         error make {msg: $"bundle destination already exists: ($out)"}
@@ -118,7 +145,7 @@ export def main [
             # The author has no receipt — their handoff pins nothing but the link
             write-handoff $root $out $link_cid $to null $key
         }
-        return $out
+        return (assert-complete-bundle $out)
     }
 
     # Imported link: re-export with this repo's custody layer appended
@@ -145,5 +172,5 @@ export def main [
         let receipt_hash = open --raw ($root | path join (receipt-relpath $link_cid)) | hash sha256
         write-handoff $root $layer $link_cid $to $receipt_hash $key
     }
-    $out
+    assert-complete-bundle $out
 }
