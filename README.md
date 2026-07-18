@@ -34,10 +34,10 @@ Pinned exactly (reference: `nu-cybergraph/_record.nu`; golden bytes and CID: `te
 - **Self-addressing**: the file is stored as `links/<cid>.json` where `<cid>` is the CID v0 of the file's exact bytes. Readers reject a file whose raw bytes do not hash to its name — tampered or non-canonical files fail before any field is trusted.
 - **Triple guard**: `link add` refuses a record whose `(cid_from, cid_to, neuron)` triple already exists in `links/` — with `claimed_at` inside the record a repeat would be a new record, not a new vote; a deliberate re-assertion over time takes `--reassert`. Dedupe policy for readers is keep-earliest: the first record's certificate carries the edge's earliest provable time bound.
 
-Example (one line + `\n`, CID `QmZF4Nd4hAVHgLCW3YFEvtpDA52DX9z1vgX3CzH4L6yiwk`):
+Example (one line + `\n`, CID `QmYzHh4HXjzeJ87SwRHS5GovKGcqAyUimwgiZNSxjfGfCa`):
 
 ```json
-{"cid_from":"QmUQUHEmv651XCBhiWUQpx2zf4PDts1aXL324ZFyV4QZPF","cid_to":"QmW9519sfmW2MvDb4TU4dKtiFAXm1UPDvE7JrMaBjprVHp","neuron":"QmddrVz92VH3LqT2i7uXeK4AVh6LyU7zjDiLbSdChPsULr","claimed_at":"2026-07-16T00:00:00+00:00"}
+{"cid_from":"QmQXupHE6VPzpoBTivNXAAGwigJE68n4TeVUSxYnFL78GV","cid_to":"Qmc9pm5gQqDwJMiFTmFEuTxRhSy5Cn2yt7NZh1LrxmMhSi","neuron":"QmddrVz92VH3LqT2i7uXeK4AVh6LyU7zjDiLbSdChPsULr","claimed_at":"2026-07-16T00:00:00+00:00"}
 ```
 
 Why JSON and not CSV/NUON: JSON is readable by every language and tool (and natively by nushell); CSV quoting is not canonical (the same reason nu-multiproof's merkle leaves hash parsed fields, not raw lines). Certificates are JSON too, for the same reach — nu-multiproof's `merkle prove`/`verify` speak JSON natively.
