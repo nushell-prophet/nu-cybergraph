@@ -16,7 +16,8 @@ The design goal is cheap per-link portability: one neuron can hand a single link
 use nu-cybergraph/
 
 nu-cybergraph init                       # multiproof init + links/ certs/ under <repo>/cybergraph/
-nu-cybergraph link add Qm…from Qm…to     # write links/<cid>.json
+nu-cybergraph particle add "any text"    # publish content as particles/<cid>, get the CID
+nu-cybergraph link add Qm…from Qm…to     # write links/<cid>.json (non-CID args are published as particles first)
 nu-cybergraph seal                       # sign + stamp the root, freeze new certificates
 nu-cybergraph bundle Qm…link             # portable bundle → exports/<cid>/ (imported link: re-export + custody layer)
 nu-cybergraph bundle Qm…link --to Qm…neuron # …plus a signed handoff naming the recipient
@@ -42,12 +43,18 @@ Example (one line + `\n`, CID `QmYzHh4HXjzeJ87SwRHS5GovKGcqAyUimwgiZNSxjfGfCa`):
 
 Why JSON and not CSV/NUON: JSON is readable by every language and tool (and natively by nushell); CSV quoting is not canonical (the same reason nu-multiproof's merkle leaves hash parsed fields, not raw lines). Certificates are JSON too, for the same reach — nu-multiproof's `merkle prove`/`verify` speak JSON natively.
 
+## Particles and text arguments
+
+`particle add` publishes arbitrary content as a self-addressed particle: a string argument or piped content (string or raw bytes — `open --raw doc.md | particle add`) is stored as `particles/<cid>` with its exact bytes, and the CID comes back. Idempotent: identical content is one particle.
+
+Every particle argument of a write command (`link add`, all convention verbs) accepts either a CID v0 or content: a CID passes through untouched, anything else goes through the same store first and its CID is used. So `convention question Qm… "who reviews this?"` publishes the question text and writes the edge in one call. The one ambiguity — content that itself looks like a CID — has a composable escape hatch instead of a flag: publish it explicitly with `particle add` (which never treats input as an address) and pass the returned CID.
+
 ## Neuron repo layout
 
 ```
 cybergraph/
   links/<link-cid>.json            # link records, one per file, self-addressed
-  particles/<derived-cid>          # preimages of derived CIDs (convention sources), self-addressed
+  particles/<cid>                  # self-addressed particles: derived-CID preimages and published content
   certs/<link-cid>.cert.json       # birth certificates (frozen `merkle prove` output)
   seals/<root-hex-12>/             # archival root statement + signatures, one per seal
   exports/<link-cid>/              # bundles built by `bundle` (default --out)

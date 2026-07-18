@@ -6,7 +6,10 @@
 # The grammar has one atom and one constructor. An **address expression** is
 # either a leaf — a CID you supply or a literal tag word ("deny"), used
 # verbatim — or a compound `[x y …]` meaning `hash(x, y, …)` over its resolved
-# children. Resolving an expression walks the tree; every compound node it
+# children. A verb's positional arguments accept content as well as CIDs: each
+# verb passes them through `resolve-particle` first (a CID is used as-is, any
+# other text is published as a content particle and replaced by its CID), so
+# by the time an expression is built every leaf is a CID or a tag word. Resolving an expression walks the tree; every compound node it
 # passes through has its preimage published as a self-addressed particle under
 # particles/, so a reader can dereference the instruction (bj002 "Reading
 # instructions"). This recursion is the homoiconicity bj002 describes made
@@ -31,8 +34,8 @@
 # up; the counting is a later, cross-neuron concern.
 
 use _repo.nu graph-root
-use _layout.nu [particles-dir particle-path]
-use _derive.nu [derive preimage]
+use _derive.nu [preimage]
+use _particle.nu [particle-store resolve-particle]
 use link.nu
 
 # Re-exported so a reader can compute any address by hand: the edge address
@@ -40,17 +43,11 @@ use link.nu
 # or a candidate instruction source (bj002 appendix, "Reading instructions").
 export use _derive.nu [derive]
 
-# Publish the preimage of a derived CID as a self-addressed particle and return
-# the CID. Idempotent: identical content is one particle (same CID = same
-# bytes), so an already-present file is left untouched rather than rewritten.
+# Publish the preimage of a derived CID as a self-addressed particle and
+# return the CID — storing the preimage bytes is the same job as storing any
+# content particle, so the store primitive is shared.
 def publish [root: path ...args: string]: nothing -> string {
-    let cid = derive ...$args
-    mkdir (particles-dir $root)
-    let out = particle-path $root $cid
-    if not ($out | path exists) {
-        preimage ...$args | into binary | save --raw $out
-    }
-    $cid
+    preimage ...$args | into binary | particle-store $root
 }
 
 # Resolve an address expression to a CID. A leaf string is used verbatim (a CID
@@ -89,6 +86,9 @@ export def confirm [
     --repo: path
     --reassert
 ]: nothing -> record {
+    let root = graph-root $repo
+    let cid_from = resolve-particle $root $cid_from
+    let cid_to = resolve-particle $root $cid_to
     edge $cid_from $cid_to $neuron $claimed_at $repo $reassert
 }
 
@@ -107,7 +107,10 @@ export def deny [
     --repo: path
     --reassert
 ]: nothing -> record {
-    let target = if $disputed_neuron != null { [$cid_from $cid_to $disputed_neuron] } else { [$cid_from $cid_to] }
+    let root = graph-root $repo
+    let target = [$cid_from $cid_to $disputed_neuron]
+        | compact
+        | each {|a| resolve-particle $root $a }
     edge ["deny"] $target $neuron $claimed_at $repo $reassert
 }
 
@@ -124,7 +127,10 @@ export def update [
     --repo: path
     --reassert
 ]: nothing -> record {
-    edge ["update" [$cid_from $cid_to]] $cid_new $neuron $claimed_at $repo $reassert
+    let root = graph-root $repo
+    let cid_from = resolve-particle $root $cid_from
+    let cid_to = resolve-particle $root $cid_to
+    edge ["update" [$cid_from $cid_to]] (resolve-particle $root $cid_new) $neuron $claimed_at $repo $reassert
 }
 
 # Quote: hash("quote", A) → B states that B is a faithful excerpt of A
@@ -139,7 +145,8 @@ export def quote [
     --repo: path
     --reassert
 ]: nothing -> record {
-    edge ["quote" $cid_from] $cid_to $neuron $claimed_at $repo $reassert
+    let root = graph-root $repo
+    edge ["quote" (resolve-particle $root $cid_from)] (resolve-particle $root $cid_to) $neuron $claimed_at $repo $reassert
 }
 
 # Agree: hash("agree") → B — "claim B is true". Gives an opinion about
@@ -153,7 +160,7 @@ export def agree [
     --repo: path
     --reassert
 ]: nothing -> record {
-    edge ["agree"] $cid $neuron $claimed_at $repo $reassert
+    edge ["agree"] (resolve-particle (graph-root $repo) $cid) $neuron $claimed_at $repo $reassert
 }
 
 # Disagree: hash("disagree") → B — "claim B is false". The other axis from
@@ -167,7 +174,7 @@ export def disagree [
     --repo: path
     --reassert
 ]: nothing -> record {
-    edge ["disagree"] $cid $neuron $claimed_at $repo $reassert
+    edge ["disagree"] (resolve-particle (graph-root $repo) $cid) $neuron $claimed_at $repo $reassert
 }
 
 # Argument for: hash("pro", C) → B — "B is an argument for C". C is any CID:
@@ -182,7 +189,8 @@ export def pro [
     --repo: path
     --reassert
 ]: nothing -> record {
-    edge ["pro" $target] $argument $neuron $claimed_at $repo $reassert
+    let root = graph-root $repo
+    edge ["pro" (resolve-particle $root $target)] (resolve-particle $root $argument) $neuron $claimed_at $repo $reassert
 }
 
 # Argument against: hash("con", C) → B — "B is an argument against C". The
@@ -196,7 +204,8 @@ export def con [
     --repo: path
     --reassert
 ]: nothing -> record {
-    edge ["con" $target] $argument $neuron $claimed_at $repo $reassert
+    let root = graph-root $repo
+    edge ["con" (resolve-particle $root $target)] (resolve-particle $root $argument) $neuron $claimed_at $repo $reassert
 }
 
 # Question: hash("question", B) → Q — "Q is a question about B". B is any CID;
@@ -211,7 +220,8 @@ export def question [
     --repo: path
     --reassert
 ]: nothing -> record {
-    edge ["question" $about] $question $neuron $claimed_at $repo $reassert
+    let root = graph-root $repo
+    edge ["question" (resolve-particle $root $about)] (resolve-particle $root $question) $neuron $claimed_at $repo $reassert
 }
 
 # Answer: hash("answer", hash(hash("question", B), Q)) → A — "A answers the
@@ -228,7 +238,10 @@ export def answer [
     --repo: path
     --reassert
 ]: nothing -> record {
-    edge ["answer" [["question" $about] $question]] $answer $neuron $claimed_at $repo $reassert
+    let root = graph-root $repo
+    let about = resolve-particle $root $about
+    let question = resolve-particle $root $question
+    edge ["answer" [["question" $about] $question]] (resolve-particle $root $answer) $neuron $claimed_at $repo $reassert
 }
 
 # Authorship: hash("author", B) → P — "the author of content B is P". The
@@ -244,7 +257,8 @@ export def author [
     --repo: path
     --reassert
 ]: nothing -> record {
-    edge ["author" $content] $author_id $neuron $claimed_at $repo $reassert
+    let root = graph-root $repo
+    edge ["author" (resolve-particle $root $content)] (resolve-particle $root $author_id) $neuron $claimed_at $repo $reassert
 }
 
 # Identity: hash("same", P1) → P2 — "P1 and P2 name one entity" (the analogue
@@ -259,5 +273,6 @@ export def same [
     --repo: path
     --reassert
 ]: nothing -> record {
-    edge ["same" $name_from] $name_to $neuron $claimed_at $repo $reassert
+    let root = graph-root $repo
+    edge ["same" (resolve-particle $root $name_from)] (resolve-particle $root $name_to) $neuron $claimed_at $repo $reassert
 }

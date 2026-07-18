@@ -3,6 +3,7 @@
 use _repo.nu graph-root
 use _record.nu [link-bytes link-cid]
 use _layout.nu [links-dir link-path]
+use _particle.nu [resolve-particle]
 use _deps/cid-v0.nu [cid-v0]
 
 # Derive the repo's own neuron identity: the CID of its registered pubkey.
@@ -17,12 +18,14 @@ def own-neuron-cid [root: path]: nothing -> string {
 }
 
 # Write a new link record to links/<cid>.json, named by its own content address.
-# A particle is any content-addressed file; its CID is the CID v0 of its bytes
-# (compute one with nu-multiproof: `open --raw file.md | nu-multiproof cid-v0`).
+# A particle is any content-addressed file; its CID is the CID v0 of its bytes.
+# Both endpoints accept a CID or content: a non-CID argument is published as a
+# content particle under particles/ and its CID is linked (see _particle.nu).
 @example "link two particles by the CIDs of their bytes" { link add QmUQUHEmv651XCBhiWUQpx2zf4PDts1aXL324ZFyV4QZPF QmW9519sfmW2MvDb4TU4dKtiFAXm1UPDvE7JrMaBjprVHp }
+@example "publish two texts as particles and link them" { link add "cyber" "bostrom" }
 export def add [
-    cid_from: string # CID v0 of the source particle
-    cid_to: string # CID v0 of the target particle
+    cid_from: string # source particle: a CID v0, or content to publish as one
+    cid_to: string # target particle: a CID v0, or content to publish as one
     --neuron: string # Author's neuron CID (default: CID of the single registered pubkey)
     --claimed-at: string # RFC 3339 timestamp claimed by the author (default: now, UTC)
     --reassert # Record the edge again although this neuron already asserted it
@@ -30,8 +33,8 @@ export def add [
 ]: nothing -> record {
     let root = graph-root $repo
     let rec = {
-        cid_from: $cid_from
-        cid_to: $cid_to
+        cid_from: (resolve-particle $root $cid_from)
+        cid_to: (resolve-particle $root $cid_to)
         neuron: (if $neuron != null { $neuron } else { own-neuron-cid $root })
         claimed_at: (if $claimed_at != null { $claimed_at } else {
             date now | date to-timezone UTC | format date "%+"

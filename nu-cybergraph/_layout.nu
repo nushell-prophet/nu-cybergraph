@@ -18,17 +18,17 @@ export def links-dir [root: path]: nothing -> path {
     $root | path join $LINKS_DIR
 }
 
-# <root>/particles — preimages of derived CIDs, published so a reader can
-# dereference an instruction edge (bj002 "Reading instructions"). Not in the
-# seal manifest: a particle is anchored the moment a sealed link names its CID
-# (README "Graph home"), and a convention edge always names its source here.
+# <root>/particles — any self-addressed particle: preimages of derived CIDs
+# (published so a reader can dereference an instruction edge, bj002 "Reading
+# instructions") and content published by `particle add` or by a text argument
+# to a write command. Not in the seal manifest: a particle is anchored the
+# moment a sealed link names its CID (README "Graph home").
 export def particles-dir [root: path]: nothing -> path {
     $root | path join $PARTICLES_DIR
 }
 
-# <root>/particles/<cid> — a preimage particle, self-addressed by the CID v0
-# of its exact bytes. No extension: the content is the raw preimage string,
-# not a document.
+# <root>/particles/<cid> — one particle, self-addressed by the CID v0 of its
+# exact bytes. No extension: the content is raw bytes, not a document.
 export def particle-path [root: path cid: string]: nothing -> path {
     particles-dir $root | path join $cid
 }
