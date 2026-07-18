@@ -9,7 +9,7 @@
 # proof bundle in the same layout, over the receipt instead of the record,
 # so the same verification machinery covers both.
 
-use _deps.nu [ssh-sign]
+use _deps/ssh-sign.nu [ssh-sign]
 use _repo.nu graph-root
 use _layout.nu [
     links-dir exports-dir cert-path cert-filename snapshot-dir imported-dir

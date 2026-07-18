@@ -4,7 +4,7 @@ use std/testing *
 use ../nu-cybergraph/convention.nu
 use ../nu-cybergraph/_derive.nu [derive preimage]
 use ../nu-cybergraph/_layout.nu [particles-dir particle-path]
-use ../nu-cybergraph/_deps.nu [cid-v0]
+use ../nu-cybergraph/_deps/cid-v0.nu [cid-v0]
 
 # Same particle/neuron CIDs as the record golden and the bj003 smoke run.
 const A = "QmQXupHE6VPzpoBTivNXAAGwigJE68n4TeVUSxYnFL78GV"

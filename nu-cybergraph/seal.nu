@@ -7,7 +7,8 @@
 
 use _repo.nu graph-root
 use _layout.nu [links-dir certs-dir cert-path snapshot-dir receipts-dir receipt-cert-path LINKS_DIR CERTS_DIR SEALS_DIR IMPORTED_DIR RECEIPTS_DIR]
-use _deps.nu [seal merkle]
+use _deps/seal.nu [seal]
+use _deps/merkle.nu [merkle]
 
 # `seal` in the body is nu-multiproof's seal; this wrapper stages the
 # cybergraph files, runs it, then freezes certificates and the root snapshot.

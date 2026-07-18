@@ -11,7 +11,7 @@
 #   proves order transitively while every receipt stays constant-size —
 #   re-listing all prior layers would grow the chain quadratically.
 
-use _deps.nu [cid-v0]
+use _deps/cid-v0.nu [cid-v0]
 use _record.nu [CID_V0_RE RFC3339_RE]
 use _layout.nu [CUSTODY_DIR custody-dir]
 

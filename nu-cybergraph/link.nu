@@ -3,7 +3,7 @@
 use _repo.nu graph-root
 use _record.nu [link-bytes link-cid]
 use _layout.nu [links-dir link-path]
-use _deps.nu [cid-v0]
+use _deps/cid-v0.nu [cid-v0]
 
 # Derive the repo's own neuron identity: the CID of its registered pubkey.
 # With several pubkeys registered the choice is the author's — require --neuron.

@@ -2,7 +2,7 @@
 
 use _repo.nu [repo-root graph-root]
 use _layout.nu [links-dir certs-dir]
-use _deps.nu [init]
+use _deps/init.nu [init]
 
 # `init` here is nu-multiproof's init (pubkey registration in
 # multiproofs/pubkeys/); this wrapper adds the cybergraph layout on top.

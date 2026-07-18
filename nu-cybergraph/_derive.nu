@@ -11,7 +11,7 @@
 # fall out of the same call: the edge address is `derive $from $to`, the
 # cyberlink's derived CID is `derive $from $to $neuron`.
 
-use _deps.nu [cid-v0]
+use _deps/cid-v0.nu [cid-v0]
 
 # The preimage hash() operates on: the arguments joined with commas. Published
 # as a particle so a reader can dereference a derived CID back to its parts

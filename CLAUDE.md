@@ -8,13 +8,13 @@ All the code in alfa testing stage. No need to support backwards compability or 
 
 ## Conventions (shared with nu-multiproof)
 
-- `nu-cybergraph/mod.nu` re-exports the non-`_` submodules wholesale; `_*.nu` files are internal, imported by explicit named lists (`use _deps.nu [merkle cid-v0]`). Never `use foo *`.
+- `nu-cybergraph/mod.nu` re-exports the non-`_` submodules wholesale; `_*.nu` files are internal, imported by explicit named lists (`use _record.nu [link-bytes link-cid]`). Never `use foo *`.
 - Spec-critical byte formats (link record canonicalization, self-addressing) live in `_record.nu` and are pinned by golden tests in `tests/test_record.nu`. Changing them breaks every existing CID — treat as a format version bump, not an edit.
 - Prose in git: one paragraph per line, no hard wrapping.
 
 ## Dependencies are live sibling checkouts
 
-`_deps.nu` is the single resolution point for nu-multiproof (`../../ai-sandbox-dev-container/nu-multiproof`); toolkit.nu resolves nutest the same way. No pinning — the repos are co-developed. If an interface change in nu-multiproof breaks this repo, fix it here in the same session, or park a note in `todo/`.
+`_deps/` is the single resolution point for nu-multiproof (`../../ai-sandbox-dev-container/nu-multiproof`) — one shim file per dependency, so a `use` site parses only the subtree it needs (nushell re-parses a module at every use site; a single-file facade charged every importer for all six deps). toolkit.nu resolves nutest the same way. No pinning — the repos are co-developed. If an interface change in nu-multiproof breaks this repo, fix it here in the same session, or park a note in `todo/`.
 
 ## Key invariants
 

@@ -1,7 +1,10 @@
 # Bundle verification = nu-multiproof's merkle verify + the cybergraph-specific
 # neuron binding + the custody chain. Shared by import.nu and verify.nu.
 
-use _deps.nu [merkle cid-v0 pubkey ssh-sign]
+use _deps/merkle.nu [merkle]
+use _deps/cid-v0.nu [cid-v0]
+use _deps/pubkey.nu [pubkey]
+use _deps/ssh-sign.nu [ssh-sign]
 use _record.nu [read-link]
 use _receipt.nu [read-receipt bundle-manifest custody-layers]
 use _handoff.nu [read-handoff HANDOFF_NAMESPACE]

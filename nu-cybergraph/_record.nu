@@ -8,7 +8,7 @@
 # CID. Readers verify the raw file bytes against the filename, so a
 # non-canonical file still fails loudly instead of drifting.
 
-use _deps.nu [cid-v0]
+use _deps/cid-v0.nu [cid-v0]
 
 export const LINK_KEYS = [cid_from cid_to neuron claimed_at]
 

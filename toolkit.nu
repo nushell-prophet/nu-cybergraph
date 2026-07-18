@@ -2,7 +2,7 @@
 export def main [] { }
 
 # Requires a nutest checkout at ../../ai-sandbox-dev-container/nutest — the
-# same live-sibling convention as the nu-multiproof dependency (_deps.nu).
+# same live-sibling convention as the nu-multiproof dependency (_deps/).
 export def 'main test' [--fail] {
     use ../../ai-sandbox-dev-container/nutest/nutest
 

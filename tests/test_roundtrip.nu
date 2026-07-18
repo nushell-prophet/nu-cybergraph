@@ -12,7 +12,7 @@ use ../nu-cybergraph/bundle.nu
 use ../nu-cybergraph/import.nu
 use ../nu-cybergraph/verify.nu
 use ../nu-cybergraph/_verify-helpers.nu [verify-bundle]
-use ../nu-cybergraph/_deps.nu [cid-v0]
+use ../nu-cybergraph/_deps/cid-v0.nu [cid-v0]
 
 const P1 = "QmUQUHEmv651XCBhiWUQpx2zf4PDts1aXL324ZFyV4QZPF"
 const P2 = "QmW9519sfmW2MvDb4TU4dKtiFAXm1UPDvE7JrMaBjprVHp"
