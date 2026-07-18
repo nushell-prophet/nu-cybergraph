@@ -1,27 +1,40 @@
-# The derived-CID primitive of bj002 — the one operation every convention
+# The derived-CID primitive of bj002-1 — the one operation every convention
 # stands on. Spec-critical byte format, pinned by golden tests in
-# tests/test_convention.nu; same discipline as _record.nu. Changing the join
-# or the byte encoding breaks every derived CID — treat as a format version
-# bump, not an edit.
+# tests/test_convention.nu; same discipline as _record.nu. Changing the
+# serialization breaks every derived CID — treat as a format version bump,
+# not an edit.
 #
-# `hash(x, y, …)` from the journal: join the argument strings with commas and
-# take the CID v0 of the resulting bytes. No trailing newline — the spec says
-# "the CID of the string of arguments joined with commas", so the preimage is
-# exactly that string and nothing more. The two special cases of the appendix
-# fall out of the same call: the edge address is `derive $from $to`, the
-# cyberlink's derived CID is `derive $from $to $neuron`.
+# bj002-1 replaced bj002's comma-join: a derived CID is the CID v0 of a
+# *canonical record* — compact JSON, keys in alphabetical order, values
+# strings only (no nesting: a reference to another record is its CID),
+# exactly one trailing "\n". The two special cases of the appendix are just
+# records: the edge address is `derive {cid_from: A, cid_to: B}`, the
+# cyberlink's derived CID is `derive {cid_from: A, cid_to: B, neuron: N}`.
+#
+# The link *file* record (_record.nu) keeps its own pinned key order —
+# cid_from, cid_to, neuron, claimed_at. Why: publication metadata never
+# enters a derived CID (bj002-1 «Основы» — acts are addressed by the double
+# and triple alone), so the file format stays an implementation pin and the
+# alphabet rule applies only here.
 
 use _deps/cid-v0.nu [cid-v0]
 
-# The preimage hash() operates on: the arguments joined with commas. Published
-# as a particle so a reader can dereference a derived CID back to its parts
-# (bj002 "Reading instructions"). One definition of the join, shared by
-# `derive` and by the convention layer that publishes it.
-export def preimage [...args: string]: nothing -> string {
-    $args | str join ","
+# Canonical bytes of a record: keys sorted alphabetically, compact JSON, one
+# trailing "\n". Values must be strings — flatness is the spec, not a
+# convenience: one structure, one byte string, one CID. Published as a
+# particle by the convention layer, the record is its own preimage
+# (bj002-1 "Reading instructions").
+export def record-bytes [rec: record]: nothing -> binary {
+    for key in ($rec | columns) {
+        let kind = $rec | get $key | describe
+        if $kind != "string" {
+            error make {msg: $"canonical record values must be strings — ($key) is ($kind); a reference to another record is its CID"}
+        }
+    }
+    ($rec | sort | to json --raw) + "\n" | into binary
 }
 
-# hash(...args): the CID v0 of the preimage bytes — a derived CID.
-export def derive [...args: string]: nothing -> string {
-    preimage ...$args | into binary | cid-v0
+# The CID v0 of the record's canonical bytes — a derived CID.
+export def derive [rec: record]: nothing -> string {
+    record-bytes $rec | cid-v0
 }

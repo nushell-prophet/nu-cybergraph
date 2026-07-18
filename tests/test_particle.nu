@@ -78,7 +78,7 @@ def "link add passes CID endpoints through without publishing anything" [] {
 @test
 def "convention verbs resolve text arguments before hashing" [] {
     let q = convention question $A "why?" --repo $in.tmp --neuron $N --claimed-at $T | get record
-    assert equal $q.cid_from (derive "question" $A)
+    assert equal $q.cid_from (derive {about: $A, op: "question"})
     assert equal $q.cid_to ("why?" | into binary | cid-v0)
     assert equal (open --raw (particle-path $in.root $q.cid_to)) "why?"
 }
@@ -87,6 +87,6 @@ def "convention verbs resolve text arguments before hashing" [] {
 def "convention verbs resolve args embedded in derived sources" [] {
     let q = convention quote "source text" "text" --repo $in.tmp --neuron $N --claimed-at $T | get record
     let src_cid = "source text" | into binary | cid-v0
-    assert equal $q.cid_from (derive "quote" $src_cid)
+    assert equal $q.cid_from (derive {about: $src_cid, op: "quote"})
     assert equal (open --raw (particle-path $in.root $src_cid)) "source text"
 }

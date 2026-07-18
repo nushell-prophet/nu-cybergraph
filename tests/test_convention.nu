@@ -2,7 +2,7 @@ use std/assert
 use std/testing *
 
 use ../nu-cybergraph/convention.nu
-use ../nu-cybergraph/_derive.nu [derive preimage]
+use ../nu-cybergraph/_derive.nu [derive record-bytes]
 use ../nu-cybergraph/_layout.nu [particles-dir particle-path]
 use ../nu-cybergraph/_deps/cid-v0.nu [cid-v0]
 
@@ -13,31 +13,37 @@ const C = "QmW9519sfmW2MvDb4TU4dKtiFAXm1UPDvE7JrMaBjprVHp"
 const N = "QmddrVz92VH3LqT2i7uXeK4AVh6LyU7zjDiLbSdChPsULr"
 
 # --- The byte-format pin -----------------------------------------------------
-# hash() = CID v0 of the argument string joined with commas, NO trailing
-# newline. Reproduce any of these with `printf '<preimage>' | ipfs add
-# --only-hash --cid-version=0`; the empty-arg cases were cross-checked against
-# ipfs. Changing the join or the byte encoding breaks every derived CID — this
-# test is the pin, same role as test_record.nu's GOLDEN_CID.
-const DENY = "QmZPK9aVYGNvbqp3vwEkANcqMY1eTkJHjE1VC9iSfU9SRL"
-const AGREE = "QmTqtCbUfyZE8PgaFCHRpt3EJgKYvcVjVBTofuiEAa893g"
-const DISAGREE = "QmQf6giQaTXvbyboXYBXaQLzrgtpXQxBN2hNH4rLjjqW49"
-const EDGE_AB = "QmeNVaUs7Xiog4yJsDrtD8QcDVFXPDc79kp96ZAqyB7kQK" # hash(A, B) — the edge address
-const CYBERLINK_ABN = "QmbvkzyS1eHxUoSJFaYJpvKjCpSiG2io8xogmenaC9zah6" # hash(A, B, N)
+# A derived CID is the CID v0 of a canonical record: compact JSON, keys in
+# alphabetical order, string values only, exactly one trailing "\n" (bj002-1
+# appendix). Reproduce any of these with
+# `printf '<record>\n' | ipfs add --only-hash --cid-version=0`. Changing the
+# serialization breaks every derived CID — this test is the pin, same role as
+# test_record.nu's GOLDEN_CID.
+const DENY = "QmU8kL28M7yecZ5iPGJZ3e89fytWFzLszU3QtKRj5hV2kK" # {"op":"deny"}
+const AGREE = "QmTswdDR4inURY4GeWGvmL9S8xrDZjfiGEyeUUZzUNRNYk" # {"op":"agree"}
+const DISAGREE = "QmbQUXxqMrFA6zGYmgjvbFKyywS7Gcbb3afb3wqG6s7r6J" # {"op":"disagree"}
+const EDGE_AB = "QmawrHuBDdcSRCPumzsKfsMi5FJne8xai9WNPAdr3NmLBV" # {"cid_from":A,"cid_to":B} — the edge address
+const CYBERLINK_ABN = "QmYAAKqmQ8Z1ZdQMX2iEZ4gkWak9vh6vyt7gtj1b54yXWq" # {"cid_from":A,"cid_to":B,"neuron":N}
 
 @test
-def "derive golden CIDs pin the byte format" [] {
-    assert equal (derive "deny") $DENY
-    assert equal (derive "agree") $AGREE
-    assert equal (derive "disagree") $DISAGREE
-    assert equal (derive $A $B) $EDGE_AB
-    assert equal (derive $A $B $N) $CYBERLINK_ABN
+def "derive golden CIDs pin the record canon" [] {
+    assert equal (derive {op: "deny"}) $DENY
+    assert equal (derive {op: "agree"}) $AGREE
+    assert equal (derive {op: "disagree"}) $DISAGREE
+    assert equal (derive {cid_from: $A, cid_to: $B}) $EDGE_AB
+    assert equal (derive {cid_from: $A, cid_to: $B, neuron: $N}) $CYBERLINK_ABN
 }
 
 @test
-def "preimage joins arguments with commas, nothing else" [] {
-    assert equal (preimage "deny") "deny"
-    assert equal (preimage $A $B) $"($A),($B)"
-    assert equal (preimage "update" (derive $A $B)) $"update,($EDGE_AB)"
+def "record-bytes emits alphabetical keys, compact JSON, one trailing newline" [] {
+    assert equal (record-bytes {op: "deny"} | decode) "{\"op\":\"deny\"}\n"
+    # Keys given out of canonical order come out alphabetical.
+    assert equal (record-bytes {op: "quote", about: $A} | decode) $"{\"about\":\"($A)\",\"op\":\"quote\"}\n"
+}
+
+@test
+def "record-bytes refuses non-string values" [] {
+    assert error { record-bytes {cid_to: $B, cid_from: {about: $A, op: "question"}, op: "answer"} }
 }
 
 # --- Each convention shapes the right edge -----------------------------------
@@ -79,9 +85,9 @@ def "deny targets the edge address, or the cyberlink CID with a neuron" [] {
 }
 
 @test
-def "update reissues from hash of update and the edge address" [] {
+def "update reissues from the record embedding the fields of the edge" [] {
     let r = convention update $A $B $C --repo $in.tmp --neuron $N --claimed-at $T | get record
-    assert equal $r.cid_from (derive "update" (derive $A $B))
+    assert equal $r.cid_from (derive {cid_from: $A, cid_to: $B, op: "update"})
     assert equal $r.cid_to $C
 }
 
@@ -89,24 +95,24 @@ def "update reissues from hash of update and the edge address" [] {
 def "operand-embedding conventions put the operand in the source" [] {
     let tmp = $in.tmp
     let q = convention quote $A $B --repo $tmp --neuron $N --claimed-at $T | get record
-    assert equal $q.cid_from (derive "quote" $A)
+    assert equal $q.cid_from (derive {about: $A, op: "quote"})
     assert equal $q.cid_to $B
 
     let pro = convention pro $C $B --repo $tmp --neuron $N --claimed-at $T | get record
-    assert equal $pro.cid_from (derive "pro" $C)
+    assert equal $pro.cid_from (derive {about: $C, op: "pro"})
     assert equal $pro.cid_to $B
 
     let con = convention con $C $B --repo $tmp --neuron $N --claimed-at $T | get record
-    assert equal $con.cid_from (derive "con" $C)
+    assert equal $con.cid_from (derive {about: $C, op: "con"})
 
     let qn = convention question $A $B --repo $tmp --neuron $N --claimed-at $T | get record
-    assert equal $qn.cid_from (derive "question" $A)
+    assert equal $qn.cid_from (derive {about: $A, op: "question"})
 
     let au = convention author $A $B --repo $tmp --neuron $N --claimed-at $T | get record
-    assert equal $au.cid_from (derive "author" $A)
+    assert equal $au.cid_from (derive {about: $A, op: "author"})
 
     let sm = convention same $A $B --repo $tmp --neuron $N --claimed-at $T | get record
-    assert equal $sm.cid_from (derive "same" $A)
+    assert equal $sm.cid_from (derive {about: $A, op: "same"})
     assert equal $sm.cid_to $B
 }
 
@@ -124,14 +130,14 @@ def "agree and disagree use the fixed source, target is the content" [] {
 @test
 def "answer attaches to the question-in-context, not the bare question" [] {
     let r = convention answer $A $B $C --repo $in.tmp --neuron $N --claimed-at $T | get record
-    let q_edge = derive (derive "question" $A) $B
-    assert equal $r.cid_from (derive "answer" $q_edge)
+    let q_src = derive {about: $A, op: "question"}
+    assert equal $r.cid_from (derive {cid_from: $q_src, cid_to: $B, op: "answer"})
     assert equal $r.cid_to $C
 }
 
-# --- Preimages are published and self-addressed ------------------------------
+# --- Records are published as self-addressed particles -----------------------
 @test
-def "every convention publishes self-addressed preimage particles" [] {
+def "every convention publishes its records as self-addressed particles" [] {
     let tmp = $in.tmp
     convention deny $A $B --repo $tmp --neuron $N --claimed-at $T | ignore
     convention answer $A $B $C --repo $tmp --neuron $N --claimed-at $T | ignore
@@ -143,11 +149,14 @@ def "every convention publishes self-addressed preimage particles" [] {
     }
     assert equal ($misaddressed | length) 0
 
-    # The instruction source is dereferenceable: hash("deny") holds "deny".
-    assert equal (open --raw (particle-path ($tmp | path join cybergraph) $DENY)) "deny"
-    # answer publishes the whole chain: question source, question edge, answer source.
-    let q_edge = derive (derive "question" $A) $B
-    for cid in [(derive "question" $A) $q_edge (derive "answer" $q_edge)] {
-        assert ((particle-path ($tmp | path join cybergraph) $cid) | path exists) $"missing preimage ($cid)"
+    # The record is its own preimage: dereferencing the source of a deny edge
+    # yields the canonical record bytes.
+    assert equal (open --raw (particle-path ($tmp | path join cybergraph) $DENY)) "{\"op\":\"deny\"}\n"
+    # deny publishes the address record it targets.
+    assert ((particle-path ($tmp | path join cybergraph) $EDGE_AB) | path exists) $"missing address record ($EDGE_AB)"
+    # answer publishes the whole chain: the question record and the answer record.
+    let q_src = derive {about: $A, op: "question"}
+    for cid in [$q_src (derive {cid_from: $q_src, cid_to: $B, op: "answer"})] {
+        assert ((particle-path ($tmp | path join cybergraph) $cid) | path exists) $"missing record ($cid)"
     }
 }

@@ -1,32 +1,35 @@
-# The twelve conventions of bj002 — encode an instruction for processing the
+# The twelve conventions of bj002-1 — encode an instruction for processing the
 # cybergraph as an ordinary edge. Every convention is one statement in a tiny
 # grammar, so they all compile to a single engine (`address` + `edge`); the
 # verbs below differ only in the shape they declare.
 #
 # The grammar has one atom and one constructor. An **address expression** is
-# either a leaf — a CID you supply or a literal tag word ("deny"), used
-# verbatim — or a compound `[x y …]` meaning `hash(x, y, …)` over its resolved
-# children. A verb's positional arguments accept content as well as CIDs: each
-# verb passes them through `resolve-particle` first (a CID is used as-is, any
-# other text is published as a content particle and replaced by its CID), so
-# by the time an expression is built every leaf is a CID or a tag word. Resolving an expression walks the tree; every compound node it
-# passes through has its preimage published as a self-addressed particle under
-# particles/, so a reader can dereference the instruction (bj002 "Reading
-# instructions"). This recursion is the homoiconicity bj002 describes made
-# executable — an instruction is a tree of the same hashes and CIDs as the
-# graph it processes. The whole layer, as expressions:
+# either a leaf — a CID you supply or an op word ("deny"), used verbatim — or
+# a record whose values are themselves expressions: a nested record resolves
+# to its derived CID, so the final record is flat, and its canonical bytes
+# (see _derive.nu) give the CID. A verb's positional arguments accept content
+# as well as CIDs: each verb passes them through `resolve-particle` first (a
+# CID is used as-is, any other text is published as a content particle and
+# replaced by its CID), so by the time an expression is built every leaf is a
+# CID or an op word. Resolving an expression walks the tree; every record it
+# passes through is published as a self-addressed particle under particles/ —
+# the record is its own preimage, dereferencing the CID yields named fields
+# with the real operand CIDs (bj002-1 "Reading instructions"). This recursion
+# is the homoiconicity bj002-1 describes made executable — an instruction is
+# built of the same fields as the cyberlink itself. The whole layer, as
+# expressions:
 #
-#   confirm            A                           → B
-#   deny (edge)        [deny]                      → [A B]
-#   deny (cyberlink)   [deny]                      → [A B N]
-#   agree / disagree   [agree]                     → B
-#   quote              [quote A]                   → B
-#   pro / con          [pro C]                     → B
-#   question           [question B]                → Q
-#   author             [author B]                  → P
-#   same               [same P1]                   → P2
-#   update             [update [A B]]              → C
-#   answer             [answer [[question B] Q]]   → A
+#   confirm            A                                             → B
+#   deny (edge)        {op: deny}                                    → {cid_from: A, cid_to: B}
+#   deny (cyberlink)   {op: deny}                                    → {cid_from: A, cid_to: B, neuron: N}
+#   agree / disagree   {op: agree}                                   → B
+#   quote              {about: A, op: quote}                         → B
+#   pro / con          {about: C, op: pro}                           → B
+#   question           {about: B, op: question}                      → Q
+#   author             {about: B, op: author}                        → P
+#   same               {about: P1, op: same}                         → P2
+#   update             {cid_from: A, cid_to: B, op: update}          → C
+#   answer             {cid_from: {about: B, op: question}, cid_to: Q, op: answer} → A
 #
 # Reading and aggregation (count confirms, weigh neurons, read consensus) are
 # deliberately out of scope: a local repo is a single neuron, so there is
@@ -34,28 +37,27 @@
 # up; the counting is a later, cross-neuron concern.
 
 use _repo.nu graph-root
-use _derive.nu [preimage]
+use _derive.nu [record-bytes]
 use _particle.nu [particle-store resolve-particle]
 use link.nu
 
 # Re-exported so a reader can compute any address by hand: the edge address
-# `derive $from $to`, the cyberlink's derived CID `derive $from $to $neuron`,
-# or a candidate instruction source (bj002 appendix, "Reading instructions").
+# `derive {cid_from: A, cid_to: B}`, the cyberlink's derived CID
+# `derive {cid_from: A, cid_to: B, neuron: N}`, or a candidate instruction
+# source (bj002-1 appendix, "Reading instructions").
 export use _derive.nu [derive]
 
-# Publish the preimage of a derived CID as a self-addressed particle and
-# return the CID — storing the preimage bytes is the same job as storing any
-# content particle, so the store primitive is shared.
-def publish [root: path ...args: string]: nothing -> string {
-    preimage ...$args | into binary | particle-store $root
-}
-
-# Resolve an address expression to a CID. A leaf string is used verbatim (a CID
-# input or a tag); a list is hash() over its resolved children, publishing that
-# compound's preimage on the way. The one place the grammar is interpreted.
+# Resolve an address expression to a CID. A leaf string is used verbatim (a
+# CID input or an op word); a record has its values resolved first — a nested
+# record becomes its CID — then its canonical bytes are published as a
+# self-addressed particle and the particle's CID returned. The one place the
+# grammar is interpreted.
 def address [root: path expr: any]: nothing -> string {
     if ($expr | describe) == "string" { return $expr }
-    publish $root ...($expr | each {|e| address $root $e })
+    let resolved = $expr | columns | reduce --fold {} {|key acc|
+        $acc | insert $key (address $root ($expr | get $key))
+    }
+    record-bytes $resolved | particle-store $root
 }
 
 # Write a convention's edge: resolve the source and target expressions, then
@@ -76,7 +78,7 @@ def edge [
 
 # Confirm an edge: simply repeat it. Both endpoints are leaves — a plain edge
 # is not an instruction, and the repetition itself is what aggregation counts
-# (bj002 "Confirming an edge").
+# (bj002-1 "Confirming an edge").
 @example "confirm the edge A → B" { convention confirm QmA… QmB… }
 export def confirm [
     cid_from: string # source particle of the edge being confirmed
@@ -93,9 +95,9 @@ export def confirm [
 }
 
 # Deny an edge (`deny A B`) or a specific cyberlink (`deny A B N`). Source is
-# the fixed CID hash("deny"); the target is what is disputed — the edge address
-# hash(A,B), or the cyberlink's derived CID hash(A,B,N) when a disputed neuron
-# is given (bj002 "Denying an edge and a cyberlink").
+# the fixed record {op: deny}; the target is what is disputed — an address
+# record carrying the real fields of the disputed edge, plus its neuron when a
+# cyberlink is disputed (bj002-1 "Denying an edge and a cyberlink").
 @example "deny the edge A → B" { convention deny QmA… QmB… }
 @example "deny neuron N's cyberlink A → B" { convention deny QmA… QmB… QmN… }
 export def deny [
@@ -108,15 +110,20 @@ export def deny [
     --reassert
 ]: nothing -> record {
     let root = graph-root $repo
-    let target = [$cid_from $cid_to $disputed_neuron]
-        | compact
-        | each {|a| resolve-particle $root $a }
-    edge ["deny"] $target $neuron $claimed_at $repo $reassert
+    let disputed = {
+        cid_from: (resolve-particle $root $cid_from)
+        cid_to: (resolve-particle $root $cid_to)
+    }
+    let target = if $disputed_neuron == null { $disputed } else {
+        $disputed | insert neuron (resolve-particle $root $disputed_neuron)
+    }
+    edge {op: "deny"} $target $neuron $claimed_at $repo $reassert
 }
 
-# Update an edge: hash("update", hash(A, B)) → C marks C as the new target of
-# the edge A → B. Updates reissue from the same source, so the latest is the
-# current version (bj002 "Updating a previously published edge").
+# Update an edge: {cid_from: A, cid_to: B, op: update} → C marks C as the new
+# target of the edge A → B. The record embeds the edge's own fields; updates
+# reissue from the same source, so the latest is the current version
+# (bj002-1 "Updating a previously published edge").
 @example "update edge A → B to point at C" { convention update QmA… QmB… QmC… }
 export def update [
     cid_from: string # source of the original edge
@@ -128,30 +135,33 @@ export def update [
     --reassert
 ]: nothing -> record {
     let root = graph-root $repo
-    let cid_from = resolve-particle $root $cid_from
-    let cid_to = resolve-particle $root $cid_to
-    edge ["update" [$cid_from $cid_to]] (resolve-particle $root $cid_new) $neuron $claimed_at $repo $reassert
+    let src = {
+        cid_from: (resolve-particle $root $cid_from)
+        cid_to: (resolve-particle $root $cid_to)
+        op: "update"
+    }
+    edge $src (resolve-particle $root $cid_new) $neuron $claimed_at $repo $reassert
 }
 
-# Quote: hash("quote", A) → B states that B is a faithful excerpt of A
+# Quote: {about: A, op: quote} → B states that B is a faithful excerpt of A
 # (content(B) is a substring of content(A), independently verifiable — this
-# layer does not check it) (bj002 "Quotes").
+# layer does not check it) (bj002-1 "Quotes").
 @example "B is an excerpt of A" { convention quote QmA… QmB… }
 export def quote [
-    cid_from: string # the quoted source
-    cid_to: string # the excerpt
+    about: string # the quoted source
+    excerpt: string # the excerpt
     --neuron: string
     --claimed-at: string
     --repo: path
     --reassert
 ]: nothing -> record {
     let root = graph-root $repo
-    edge ["quote" (resolve-particle $root $cid_from)] (resolve-particle $root $cid_to) $neuron $claimed_at $repo $reassert
+    edge {about: (resolve-particle $root $about), op: "quote"} (resolve-particle $root $excerpt) $neuron $claimed_at $repo $reassert
 }
 
-# Agree: hash("agree") → B — "claim B is true". Gives an opinion about
+# Agree: {op: agree} → B — "claim B is true". Gives an opinion about
 # standalone content an edge of its own, so it aggregates like any other
-# (bj002 "Agreement and disagreement with content").
+# (bj002-1 "Agreement and disagreement with content").
 @example "agree with claim B" { convention agree QmB… }
 export def agree [
     cid: string # the content being agreed with
@@ -160,12 +170,12 @@ export def agree [
     --repo: path
     --reassert
 ]: nothing -> record {
-    edge ["agree"] (resolve-particle (graph-root $repo) $cid) $neuron $claimed_at $repo $reassert
+    edge {op: "agree"} (resolve-particle (graph-root $repo) $cid) $neuron $claimed_at $repo $reassert
 }
 
-# Disagree: hash("disagree") → B — "claim B is false". The other axis from
+# Disagree: {op: disagree} → B — "claim B is false". The other axis from
 # deny: this speaks about the content, deny about the statement or the record
-# (bj002 "Agreement and disagreement with content").
+# (bj002-1 "Agreement and disagreement with content").
 @example "disagree with claim B" { convention disagree QmB… }
 export def disagree [
     cid: string # the content being disagreed with
@@ -174,12 +184,12 @@ export def disagree [
     --repo: path
     --reassert
 ]: nothing -> record {
-    edge ["disagree"] (resolve-particle (graph-root $repo) $cid) $neuron $claimed_at $repo $reassert
+    edge {op: "disagree"} (resolve-particle (graph-root $repo) $cid) $neuron $claimed_at $repo $reassert
 }
 
-# Argument for: hash("pro", C) → B — "B is an argument for C". C is any CID:
-# content, an edge, or a cyberlink; the level of argumentation is the
-# out-degree of hash("pro", C) (bj002 "Argument for and against").
+# Argument for: {about: C, op: pro} → B — "B is an argument for C". C is any
+# CID: content, an edge, or a cyberlink; the level of argumentation is the
+# out-degree of the source (bj002-1 "Argument for and against").
 @example "B argues for C" { convention pro QmC… QmB… }
 export def pro [
     target: string # what the argument is for (any CID)
@@ -190,11 +200,11 @@ export def pro [
     --reassert
 ]: nothing -> record {
     let root = graph-root $repo
-    edge ["pro" (resolve-particle $root $target)] (resolve-particle $root $argument) $neuron $claimed_at $repo $reassert
+    edge {about: (resolve-particle $root $target), op: "pro"} (resolve-particle $root $argument) $neuron $claimed_at $repo $reassert
 }
 
-# Argument against: hash("con", C) → B — "B is an argument against C". The
-# mirror of `pro` (bj002 "Argument for and against").
+# Argument against: {about: C, op: con} → B — "B is an argument against C".
+# The mirror of `pro` (bj002-1 "Argument for and against").
 @example "B argues against C" { convention con QmC… QmB… }
 export def con [
     target: string # what the argument is against (any CID)
@@ -205,12 +215,12 @@ export def con [
     --reassert
 ]: nothing -> record {
     let root = graph-root $repo
-    edge ["con" (resolve-particle $root $target)] (resolve-particle $root $argument) $neuron $claimed_at $repo $reassert
+    edge {about: (resolve-particle $root $target), op: "con"} (resolve-particle $root $argument) $neuron $claimed_at $repo $reassert
 }
 
-# Question: hash("question", B) → Q — "Q is a question about B". B is any CID;
-# that Q is a question is visible from its content, so no separate mark
-# (bj002 "Question and answer").
+# Question: {about: B, op: question} → Q — "Q is a question about B". B is any
+# CID; that Q is a question is visible from its content, so no separate mark
+# (bj002-1 "Question and answer").
 @example "Q is a question about B" { convention question QmB… QmQ… }
 export def question [
     about: string # what the question is about (any CID)
@@ -221,13 +231,14 @@ export def question [
     --reassert
 ]: nothing -> record {
     let root = graph-root $repo
-    edge ["question" (resolve-particle $root $about)] (resolve-particle $root $question) $neuron $claimed_at $repo $reassert
+    edge {about: (resolve-particle $root $about), op: "question"} (resolve-particle $root $question) $neuron $claimed_at $repo $reassert
 }
 
-# Answer: hash("answer", hash(hash("question", B), Q)) → A — "A answers the
-# question Q about B". The answer attaches to the question-in-context (the
-# question edge's address), not the bare Q, so one Q asked about different Bs
-# does not glue answers together (bj002 "Question and answer").
+# Answer: {cid_from: {about: B, op: question}, cid_to: Q, op: answer} → A —
+# "A answers the question Q about B". The record embeds the question edge's
+# fields (the same move as update), so the answer attaches to the
+# question-in-context, not the bare Q — one Q asked about different Bs does
+# not glue answers together (bj002-1 "Question and answer").
 @example "A answers question Q about B" { convention answer QmB… QmQ… QmA… }
 export def answer [
     about: string # what the question is about
@@ -239,15 +250,18 @@ export def answer [
     --reassert
 ]: nothing -> record {
     let root = graph-root $repo
-    let about = resolve-particle $root $about
-    let question = resolve-particle $root $question
-    edge ["answer" [["question" $about] $question]] (resolve-particle $root $answer) $neuron $claimed_at $repo $reassert
+    let src = {
+        cid_from: {about: (resolve-particle $root $about), op: "question"}
+        cid_to: (resolve-particle $root $question)
+        op: "answer"
+    }
+    edge $src (resolve-particle $root $answer) $neuron $claimed_at $repo $reassert
 }
 
-# Authorship: hash("author", B) → P — "the author of content B is P". The
+# Authorship: {about: B, op: author} → P — "the author of content B is P". The
 # neuron of the edge is the one who ports it (the archivist), which need not be
 # the author P; the signature certifies the porting, not the authorship
-# (bj002 "Authorship: porting from other mediums").
+# (bj002-1 "Authorship: porting from other mediums").
 @example "the author of B is P" { convention author QmB… QmP… }
 export def author [
     content: string # the ported content
@@ -258,12 +272,12 @@ export def author [
     --reassert
 ]: nothing -> record {
     let root = graph-root $repo
-    edge ["author" (resolve-particle $root $content)] (resolve-particle $root $author_id) $neuron $claimed_at $repo $reassert
+    edge {about: (resolve-particle $root $content), op: "author"} (resolve-particle $root $author_id) $neuron $claimed_at $repo $reassert
 }
 
-# Identity: hash("same", P1) → P2 — "P1 and P2 name one entity" (the analogue
-# of owl:sameAs). Directed: the mirror edge is a different pair, counted
-# separately; folding directions is a read policy (bj002 "Identity").
+# Identity: {about: P1, op: same} → P2 — "P1 and P2 name one entity" (the
+# analogue of owl:sameAs). Directed: the mirror edge is a different pair,
+# counted separately; folding directions is a read policy (bj002-1 "Identity").
 @example "P1 and P2 are the same entity" { convention same QmP1… QmP2… }
 export def same [
     name_from: string # one name of the entity
@@ -274,5 +288,5 @@ export def same [
     --reassert
 ]: nothing -> record {
     let root = graph-root $repo
-    edge ["same" (resolve-particle $root $name_from)] (resolve-particle $root $name_to) $neuron $claimed_at $repo $reassert
+    edge {about: (resolve-particle $root $name_from), op: "same"} (resolve-particle $root $name_to) $neuron $claimed_at $repo $reassert
 }

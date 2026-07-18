@@ -18,8 +18,8 @@ export def links-dir [root: path]: nothing -> path {
     $root | path join $LINKS_DIR
 }
 
-# <root>/particles — any self-addressed particle: preimages of derived CIDs
-# (published so a reader can dereference an instruction edge, bj002 "Reading
+# <root>/particles — any self-addressed particle: instruction/address records
+# (published so a reader can dereference an instruction edge, bj002-1 "Reading
 # instructions") and content published by `particle add` or by a text argument
 # to a write command. Not in the seal manifest: a particle is anchored the
 # moment a sealed link names its CID (README "Graph home").
