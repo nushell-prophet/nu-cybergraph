@@ -24,7 +24,7 @@ def "golden bytes: alphabetical key order, compact JSON, one trailing newline" [
 }
 
 # The record is exactly the triple, so the file's self-address IS the act's
-# derived CID (bj002-1): the link file is the preimage of the cyberlink's
+# derived CID: the link file is the preimage of the cyberlink's
 # address, for every neuron alike.
 @test
 def "link file CID equals the derived cyberlink CID" [] {

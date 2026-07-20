@@ -14,8 +14,8 @@ const N = "QmddrVz92VH3LqT2i7uXeK4AVh6LyU7zjDiLbSdChPsULr"
 
 # --- The byte-format pin -----------------------------------------------------
 # A derived CID is the CID v0 of a canonical record: compact JSON, keys in
-# alphabetical order, string values only, exactly one trailing "\n" (bj002-1
-# appendix). Reproduce any of these with
+# alphabetical order, string values only, exactly one trailing "\n" — this
+# repo's record form of bj002's appendix. Reproduce any of these with
 # `printf '<record>\n' | ipfs add --only-hash --cid-version=0`. Changing the
 # serialization breaks every derived CID — this test is the pin, same role as
 # test_record.nu's GOLDEN_CID.

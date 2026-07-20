@@ -17,7 +17,8 @@ use _derive.nu [record-bytes]
 # is simpler to explain and to port than a rule plus a pinned per-shape list.
 #
 # Why no claimed_at: the record is exactly the triple, so its self-address
-# equals the act's derived CID (bj002-1) — the same cyberlink recorded by
+# equals the act's derived CID (under the record form of `derive`, _derive.nu)
+# — the same cyberlink recorded by
 # anyone, at any time, is one file under one CID. Time is not the record's
 # business: the provable bound comes from the birth seal, and an author's
 # *claimed* time is a convention edge over the graph (`convention claimed-at`).

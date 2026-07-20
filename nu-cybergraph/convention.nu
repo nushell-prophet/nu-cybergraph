@@ -1,4 +1,4 @@
-# The twelve conventions of bj002-1 — encode an instruction for processing the
+# The twelve conventions of bj002 — encode an instruction for processing the
 # cybergraph as an ordinary edge. Every convention is one statement in a tiny
 # grammar, so they all compile to a single engine (`address` + `edge`); the
 # verbs below differ only in the shape they declare.
@@ -14,10 +14,11 @@
 # CID or an op word. Resolving an expression walks the tree; every record it
 # passes through is published as a self-addressed particle under particles/ —
 # the record is its own preimage, dereferencing the CID yields named fields
-# with the real operand CIDs (bj002-1 "Reading instructions"). This recursion
-# is the homoiconicity bj002-1 describes made executable — an instruction is
-# built of the same fields as the cyberlink itself. The whole layer, as
-# expressions:
+# with the real operand CIDs (bj002 "Reading instructions"). This recursion
+# is homoiconicity made executable — an instruction is built of the same
+# fields as the cyberlink itself. It rests on the record form of `derive`,
+# this repo's experiment (see _derive.nu), not on bj002's comma-join. The
+# whole layer, as expressions:
 #
 #   confirm            A                                             → B
 #   deny (edge)        {op: deny}                                    → {cid_from: A, cid_to: B}
@@ -32,7 +33,7 @@
 #   answer             {cid_from: {about: B, op: question}, cid_to: Q, op: answer} → A
 #   claimed-at         {about: X, op: claimed_at}                    → T
 #
-# claimed-at is this repo's extension, not one of bj002-1's twelve: it took
+# claimed-at is this repo's extension, not one of bj002's twelve: it took
 # over the claimed_at field removed from the link record, so a time claim is
 # an ordinary optional edge instead of a fixture of every record.
 #
@@ -50,7 +51,7 @@ use link.nu
 # Re-exported so a reader can compute any address by hand: the edge address
 # `derive {cid_from: A, cid_to: B}`, the cyberlink's derived CID
 # `derive {cid_from: A, cid_to: B, neuron: N}`, or a candidate instruction
-# source (bj002-1 appendix, "Reading instructions").
+# source (bj002 appendix, "Reading instructions").
 export use _derive.nu [derive]
 
 # Resolve an address expression to a CID. A leaf string is used verbatim (a
@@ -82,7 +83,7 @@ def edge [
 
 # Confirm an edge: simply repeat it. Both endpoints are leaves — a plain edge
 # is not an instruction, and the repetition itself is what aggregation counts
-# (bj002-1 "Confirming an edge").
+# (bj002 "Confirming an edge").
 @example "confirm the edge A → B" { convention confirm QmA… QmB… }
 export def confirm [
     cid_from: string # source particle of the edge being confirmed
@@ -99,7 +100,7 @@ export def confirm [
 # Deny an edge (`deny A B`) or a specific cyberlink (`deny A B N`). Source is
 # the fixed record {op: deny}; the target is what is disputed — an address
 # record carrying the real fields of the disputed edge, plus its neuron when a
-# cyberlink is disputed (bj002-1 "Denying an edge and a cyberlink").
+# cyberlink is disputed (bj002 "Denying an edge and a cyberlink").
 @example "deny the edge A → B" { convention deny QmA… QmB… }
 @example "deny neuron N's cyberlink A → B" { convention deny QmA… QmB… QmN… }
 export def deny [
@@ -123,7 +124,7 @@ export def deny [
 # Update an edge: {cid_from: A, cid_to: B, op: update} → C marks C as the new
 # target of the edge A → B. The record embeds the edge's own fields; updates
 # reissue from the same source, so the latest is the current version
-# (bj002-1 "Updating a previously published edge").
+# (bj002 "Updating a previously published edge").
 @example "update edge A → B to point at C" { convention update QmA… QmB… QmC… }
 export def update [
     cid_from: string # source of the original edge
@@ -143,7 +144,7 @@ export def update [
 
 # Quote: {about: A, op: quote} → B states that B is a faithful excerpt of A
 # (content(B) is a substring of content(A), independently verifiable — this
-# layer does not check it) (bj002-1 "Quotes").
+# layer does not check it) (bj002 "Quotes").
 @example "B is an excerpt of A" { convention quote QmA… QmB… }
 export def quote [
     about: string # the quoted source
@@ -157,7 +158,7 @@ export def quote [
 
 # Agree: {op: agree} → B — "claim B is true". Gives an opinion about
 # standalone content an edge of its own, so it aggregates like any other
-# (bj002-1 "Agreement and disagreement with content").
+# (bj002 "Agreement and disagreement with content").
 @example "agree with claim B" { convention agree QmB… }
 export def agree [
     cid: string # the content being agreed with
@@ -169,7 +170,7 @@ export def agree [
 
 # Disagree: {op: disagree} → B — "claim B is false". The other axis from
 # deny: this speaks about the content, deny about the statement or the record
-# (bj002-1 "Agreement and disagreement with content").
+# (bj002 "Agreement and disagreement with content").
 @example "disagree with claim B" { convention disagree QmB… }
 export def disagree [
     cid: string # the content being disagreed with
@@ -181,7 +182,7 @@ export def disagree [
 
 # Argument for: {about: C, op: pro} → B — "B is an argument for C". C is any
 # CID: content, an edge, or a cyberlink; the level of argumentation is the
-# out-degree of the source (bj002-1 "Argument for and against").
+# out-degree of the source (bj002 "Argument for and against").
 @example "B argues for C" { convention pro QmC… QmB… }
 export def pro [
     target: string # what the argument is for (any CID)
@@ -194,7 +195,7 @@ export def pro [
 }
 
 # Argument against: {about: C, op: con} → B — "B is an argument against C".
-# The mirror of `pro` (bj002-1 "Argument for and against").
+# The mirror of `pro` (bj002 "Argument for and against").
 @example "B argues against C" { convention con QmC… QmB… }
 export def con [
     target: string # what the argument is against (any CID)
@@ -208,7 +209,7 @@ export def con [
 
 # Question: {about: B, op: question} → Q — "Q is a question about B". B is any
 # CID; that Q is a question is visible from its content, so no separate mark
-# (bj002-1 "Question and answer").
+# (bj002 "Question and answer").
 @example "Q is a question about B" { convention question QmB… QmQ… }
 export def question [
     about: string # what the question is about (any CID)
@@ -224,7 +225,7 @@ export def question [
 # "A answers the question Q about B". The record embeds the question edge's
 # fields (the same move as update), so the answer attaches to the
 # question-in-context, not the bare Q — one Q asked about different Bs does
-# not glue answers together (bj002-1 "Question and answer").
+# not glue answers together (bj002 "Question and answer").
 @example "A answers question Q about B" { convention answer QmB… QmQ… QmA… }
 export def answer [
     about: string # what the question is about
@@ -245,7 +246,7 @@ export def answer [
 # Authorship: {about: B, op: author} → P — "the author of content B is P". The
 # neuron of the edge is the one who ports it (the archivist), which need not be
 # the author P; the signature certifies the porting, not the authorship
-# (bj002-1 "Authorship: porting from other mediums").
+# (bj002 "Authorship: porting from other mediums").
 @example "the author of B is P" { convention author QmB… QmP… }
 export def author [
     content: string # the ported content
@@ -259,7 +260,7 @@ export def author [
 
 # Identity: {about: P1, op: same} → P2 — "P1 and P2 name one entity" (the
 # analogue of owl:sameAs). Directed: the mirror edge is a different pair,
-# counted separately; folding directions is a read policy (bj002-1 "Identity").
+# counted separately; folding directions is a read policy (bj002 "Identity").
 @example "P1 and P2 are the same entity" { convention same QmP1… QmP2… }
 export def same [
     name_from: string # one name of the entity

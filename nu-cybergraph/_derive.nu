@@ -1,20 +1,24 @@
-# The derived-CID primitive of bj002-1 — the one operation every convention
-# stands on. Spec-critical byte format, pinned by golden tests in
+# The derived-CID primitive — the one operation every convention stands on.
+# Spec-critical byte format, pinned by golden tests in
 # tests/test_convention.nu; same discipline as _record.nu. Changing the
 # serialization breaks every derived CID — treat as a format version bump,
 # not an edit.
 #
-# bj002-1 replaced bj002's comma-join: a derived CID is the CID v0 of a
+# Canonical records are THIS REPO'S EXPERIMENT, not journal canon. bj002's
+# appendix defines `hash(x, y, …)` as the CID of the arguments comma-joined;
+# the journal issue that proposed records instead (bj002-1) was withdrawn on
+# 2026-07-20 as a negative result — for the journal *text*, not for the code,
+# which keeps testing the record form. Here a derived CID is the CID v0 of a
 # *canonical record* — compact JSON, keys in alphabetical order, values
 # strings only (no nesting: a reference to another record is its CID),
-# exactly one trailing "\n". The two special cases of the appendix are just
+# exactly one trailing "\n". The appendix's two special cases are just
 # records: the edge address is `derive {cid_from: A, cid_to: B}`, the
 # cyberlink's derived CID is `derive {cid_from: A, cid_to: B, neuron: N}`.
 #
 # The link *file* record (_record.nu) is serialized by the same rule —
 # record-bytes is the one canon of the format. Since the file record is
 # exactly the triple, the file's self-address and the act's derived CID are
-# one CID: acts are addressed by the double and triple alone (bj002-1
+# one CID: acts are addressed by the double and triple alone (bj002
 # «Основы»), and the file in links/ is the published preimage of that address.
 #
 # Alphabetical means byte order of the UTF-8 key bytes — locale-free and
@@ -26,7 +30,7 @@ use _deps/cid-v0.nu [cid-v0]
 # trailing "\n". Values must be strings — flatness is the spec, not a
 # convenience: one structure, one byte string, one CID. Published as a
 # particle by the convention layer, the record is its own preimage
-# (bj002-1 "Reading instructions").
+# (bj002 "Reading instructions").
 export def record-bytes [rec: record]: nothing -> binary {
     for key in ($rec | columns) {
         let kind = $rec | get $key | describe
