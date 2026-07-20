@@ -7,9 +7,18 @@ use ../nu-cybergraph/init.nu
 use ../nu-cybergraph/seal.nu
 use ../nu-cybergraph/link.nu
 use ../nu-cybergraph/verify.nu
+use ../nu-cybergraph/_record.nu [link-bytes]
 
 const P1 = "QmUQUHEmv651XCBhiWUQpx2zf4PDts1aXL324ZFyV4QZPF"
 const P2 = "QmW9519sfmW2MvDb4TU4dKtiFAXm1UPDvE7JrMaBjprVHp"
+const P3 = "QmQXupHE6VPzpoBTivNXAAGwigJE68n4TeVUSxYnFL78GV"
+
+# Overwrite a link file with a DIFFERENT valid record, keeping the old name —
+# the tamper that self-addressing exists to catch: canonical, parseable, and
+# lying about which act it is.
+def swap-record [file: path rec: record] {
+    link-bytes $rec | save --force --raw $file
+}
 
 @before-each
 def setup []: nothing -> record {
@@ -94,6 +103,36 @@ def "link add refuses a repeat of the triple — one act, one file" [] {
     assert ($err != null) "duplicate triple was recorded"
     assert ($err | str contains $born.cid)
     assert equal (glob ($r.repo | path join cybergraph links *.json) | length) 1
+}
+
+@test
+def "seal refuses a link file that does not match its content address" [] {
+    let r = make-bare-repo $in.tmp_dir
+    init --repo $r.repo
+    let born = link add $P1 $P2 --repo $r.repo
+    swap-record $born.path (open --raw $born.path | from json | update cid_to $P3)
+
+    let err = try { seal --repo $r.repo --no-stamp --no-root-cid; null } catch {|e| $e.msg }
+    assert ($err != null) "seal signed a record that is not its own address"
+    assert ($err | str contains $born.cid) $"error should name the offending file: ($err)"
+    # Aborted before multiproof wrote anything — no manifest, no certificate
+    assert not (($r.repo | path join cybergraph multiproofs tree-hashes.csv) | path exists)
+    assert not (($r.repo | path join cybergraph certs $"($born.cid).cert.json") | path exists)
+}
+
+@test
+def "a record tampered after its birth seal aborts the next seal too" [] {
+    let r = make-bare-repo $in.tmp_dir
+    init --repo $r.repo
+    let born = link add $P1 $P2 --repo $r.repo
+    assert equal (seal --repo $r.repo --no-stamp --no-root-cid | get newborn) 1
+
+    # Every seal re-attests the whole catalogue, so the check covers links that
+    # already have a certificate — not just the newborns of this seal
+    swap-record $born.path (open --raw $born.path | from json | update cid_to $P3)
+    let err = try { seal --repo $r.repo --no-stamp --no-root-cid; null } catch {|e| $e.msg }
+    assert ($err != null) "a tampered record was re-attested by a later seal"
+    assert ($err | str contains $born.cid)
 }
 
 @test

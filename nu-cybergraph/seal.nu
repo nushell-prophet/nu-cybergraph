@@ -7,6 +7,7 @@
 
 use _repo.nu graph-root
 use _layout.nu [links-dir certs-dir cert-path snapshot-dir receipts-dir receipt-cert-path LINKS_DIR CERTS_DIR SEALS_DIR IMPORTED_DIR RECEIPTS_DIR]
+use _record.nu [read-link]
 use _deps/seal.nu [seal]
 use _deps/merkle.nu [merkle]
 
@@ -47,6 +48,22 @@ export def main [
         if not $known {
             error make {msg: $"($pub) is not registered in multiproofs/pubkeys/ — run `nu-cybergraph init --pubkey ($pub)` first"}
         }
+    }
+
+    # Self-addressing is the format's contract for every reader, but until now
+    # only verify/import enforced it. `seal` is where a file crosses from junk
+    # on disk to a statement signed by this neuron: a tampered or hand-written
+    # non-canonical record would get catalogued, signed, and frozen into a
+    # birth certificate that proves the neuron attested a file which is not its
+    # own address. Check here, at that boundary, and before multiproof's seal
+    # mutates anything — same reason as the pubkey block above.
+    #
+    # Every link, not just the newborns: each seal re-attests the whole
+    # catalogue, so a record tampered with after its birth seal must abort this
+    # one too. Cost is one sha256 per link per seal, against a seal that
+    # already signs and stamps.
+    for f in (glob (links-dir $root | path join *.json)) {
+        read-link $f
     }
 
     # Stage the cybergraph dirs: the manifest walks `git ls-files`, so an
