@@ -48,7 +48,7 @@ def "birth, seal, bundle, import, verify — the full link journey" [] {
     let a = make-neuron $tmp_dir "a"
 
     # Birth + seal: certificate frozen, root snapshot archived
-    let born = link add $P1 $P2 --repo $a.repo --claimed-at "2026-07-16T00:00:00+00:00"
+    let born = link add $P1 $P2 --repo $a.repo
     let sealed = seal --repo $a.repo --no-stamp --no-root-cid
     assert equal $sealed.newborn 1
     assert (($a.home | path join certs $"($born.cid).cert.json") | path exists)
@@ -89,7 +89,7 @@ def "birth, seal, bundle, import, verify — the full link journey" [] {
     # A second seal must not touch the frozen certificate (birth, not latest)
     let cert = $a.home | path join certs $"($born.cid).cert.json"
     let before = open --raw $cert | hash sha256
-    link add $P2 $P1 --repo $a.repo --claimed-at "2026-07-16T01:00:00+00:00"
+    link add $P2 $P1 --repo $a.repo
     let sealed2 = seal --repo $a.repo --no-stamp --no-root-cid
     assert equal $sealed2.newborn 1
     assert equal (open --raw $cert | hash sha256) $before
@@ -106,7 +106,7 @@ def neuron-cid [home: path]: nothing -> string {
 def "custody chain: each re-export appends a provable, ordered layer" [] {
     let tmp_dir = $in.tmp_dir
     let a = make-neuron $tmp_dir "a"
-    let born = link add $P1 $P2 --repo $a.repo --claimed-at "2026-07-16T00:00:00+00:00"
+    let born = link add $P1 $P2 --repo $a.repo
     seal --repo $a.repo --no-stamp --no-root-cid | ignore
     let a_out = bundle $born.cid --repo $a.repo --out ($tmp_dir | path join a-out)
 
@@ -180,7 +180,7 @@ def "handoff makes direction a signed claim, woven into the custody chain" [] {
     let b = make-neuron $tmp_dir "b"
     let c = make-neuron $tmp_dir "c"
 
-    let born = link add $P1 $P2 --repo $a.repo --claimed-at "2026-07-16T00:00:00+00:00"
+    let born = link add $P1 $P2 --repo $a.repo
     seal --repo $a.repo --no-stamp --no-root-cid | ignore
 
     # A hands the birth bundle to B by neuron CID: signed handoff at the root
@@ -255,7 +255,7 @@ def "forged authorship is refused: neuron CID of a key that never signed" [] {
     let mallory = $tmp_dir | path join key-mallory
     ^ssh-keygen -t ed25519 -f $mallory -N "" -C mallory -q
     let mallory_cid = open --raw $"($mallory).pub" | into binary | cid-v0
-    let born = link add $P1 $P2 --repo $a.repo --neuron $mallory_cid --claimed-at "2026-07-16T00:00:00+00:00"
+    let born = link add $P1 $P2 --repo $a.repo --neuron $mallory_cid
     seal --repo $a.repo --no-stamp --no-root-cid | ignore
 
     let bundle_dir = bundle $born.cid --repo $a.repo --out ($tmp_dir | path join out-bundle)
@@ -272,7 +272,7 @@ def "forged authorship is refused: neuron CID of a key that never signed" [] {
 def "non-canonical pubkey file in a bundle is refused" [] {
     let tmp_dir = $in.tmp_dir
     let a = make-neuron $tmp_dir "a"
-    let born = link add $P1 $P2 --repo $a.repo --claimed-at "2026-07-16T00:00:00+00:00"
+    let born = link add $P1 $P2 --repo $a.repo
     seal --repo $a.repo --no-stamp --no-root-cid | ignore
     let bundle_dir = bundle $born.cid --repo $a.repo --out ($tmp_dir | path join out-bundle)
 
@@ -289,7 +289,7 @@ def "non-canonical pubkey file in a bundle is refused" [] {
 def "tampered record in a bundle fails self-addressing" [] {
     let tmp_dir = $in.tmp_dir
     let a = make-neuron $tmp_dir "a"
-    let born = link add $P1 $P2 --repo $a.repo --claimed-at "2026-07-16T00:00:00+00:00"
+    let born = link add $P1 $P2 --repo $a.repo
     seal --repo $a.repo --no-stamp --no-root-cid | ignore
     let bundle_dir = bundle $born.cid --repo $a.repo --out ($tmp_dir | path join out-bundle)
 
@@ -310,7 +310,7 @@ def "a handoff that is tampered, unsigned, or misclaiming is refused" [] {
     let tmp_dir = $in.tmp_dir
     let a = make-neuron $tmp_dir "a"
     let b = make-neuron $tmp_dir "b"
-    let born = link add $P1 $P2 --repo $a.repo --claimed-at "2026-07-16T00:00:00+00:00"
+    let born = link add $P1 $P2 --repo $a.repo
     seal --repo $a.repo --no-stamp --no-root-cid | ignore
     let a_out = bundle $born.cid --repo $a.repo --out ($tmp_dir | path join a-out) --to (neuron-cid $b.home)
     let handoff_name = $"($born.cid).handoff.json"
@@ -381,7 +381,7 @@ def "a handoff that is tampered, unsigned, or misclaiming is refused" [] {
 def "custody layer names cannot lie — forged dirname, duplicated custodian, renumbered index" [] {
     let tmp_dir = $in.tmp_dir
     let a = make-neuron $tmp_dir "a"
-    let born = link add $P1 $P2 --repo $a.repo --claimed-at "2026-07-16T00:00:00+00:00"
+    let born = link add $P1 $P2 --repo $a.repo
     seal --repo $a.repo --no-stamp --no-root-cid | ignore
     let a_out = bundle $born.cid --repo $a.repo --out ($tmp_dir | path join a-out)
     let b = make-neuron $tmp_dir "b"
@@ -426,7 +426,7 @@ def "custody layer names cannot lie — forged dirname, duplicated custodian, re
 def "bundle --to without a signing key fails before writing anything" [] {
     let tmp_dir = $in.tmp_dir
     let a = make-neuron $tmp_dir "a"
-    let born = link add $P1 $P2 --repo $a.repo --claimed-at "2026-07-16T00:00:00+00:00"
+    let born = link add $P1 $P2 --repo $a.repo
     seal --repo $a.repo --no-stamp --no-root-cid | ignore
 
     ^git -C $a.repo config --unset user.signingKey
@@ -447,7 +447,7 @@ def "bundle --to without a signing key fails before writing anything" [] {
 def "a re-export that comes out without a root certificate is refused and removed" [] {
     let tmp_dir = $in.tmp_dir
     let a = make-neuron $tmp_dir "a"
-    let born = link add $P1 $P2 --repo $a.repo --claimed-at "2026-07-16T00:00:00+00:00"
+    let born = link add $P1 $P2 --repo $a.repo
     seal --repo $a.repo --no-stamp --no-root-cid | ignore
     let a_out = bundle $born.cid --repo $a.repo --out ($tmp_dir | path join a-out)
     let b = make-neuron $tmp_dir "b"

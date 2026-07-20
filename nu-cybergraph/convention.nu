@@ -30,6 +30,11 @@
 #   same               {about: P1, op: same}                         → P2
 #   update             {cid_from: A, cid_to: B, op: update}          → C
 #   answer             {cid_from: {about: B, op: question}, cid_to: Q, op: answer} → A
+#   claimed-at         {about: X, op: claimed_at}                    → T
+#
+# claimed-at is this repo's extension, not one of bj002-1's twelve: it took
+# over the claimed_at field removed from the link record, so a time claim is
+# an ordinary optional edge instead of a fixture of every record.
 #
 # Reading and aggregation (count confirms, weigh neurons, read consensus) are
 # deliberately out of scope: a local repo is a single neuron, so there is
@@ -39,6 +44,7 @@
 use _repo.nu graph-root
 use _derive.nu [record-bytes]
 use _particle.nu [particle-store resolve-particle]
+use _record.nu [RFC3339_RE]
 use link.nu
 
 # Re-exported so a reader can compute any address by hand: the edge address
@@ -61,19 +67,17 @@ def address [root: path expr: any]: nothing -> string {
 }
 
 # Write a convention's edge: resolve the source and target expressions, then
-# emit through `link add` so the triple guard, self-addressing and author/time
-# resolution all come from one place. The verbs forward their author/time/repo
+# emit through `link add` so the triple guard, self-addressing and author
+# resolution all come from one place. The verbs forward their author/repo
 # controls here unchanged.
 def edge [
     src: any # source address expression
     tgt: any # target address expression
     neuron: any # author override or null
-    claimed_at: any # claimed timestamp or null
     repo: any # target repo or null
-    reassert: bool
 ]: nothing -> record {
     let root = graph-root $repo
-    link add (address $root $src) (address $root $tgt) --neuron $neuron --claimed-at $claimed_at --repo $repo --reassert=$reassert
+    link add (address $root $src) (address $root $tgt) --neuron $neuron --repo $repo
 }
 
 # Confirm an edge: simply repeat it. Both endpoints are leaves — a plain edge
@@ -84,14 +88,12 @@ export def confirm [
     cid_from: string # source particle of the edge being confirmed
     cid_to: string # target particle of the edge being confirmed
     --neuron: string
-    --claimed-at: string
     --repo: path
-    --reassert
 ]: nothing -> record {
     let root = graph-root $repo
     let cid_from = resolve-particle $root $cid_from
     let cid_to = resolve-particle $root $cid_to
-    edge $cid_from $cid_to $neuron $claimed_at $repo $reassert
+    edge $cid_from $cid_to $neuron $repo
 }
 
 # Deny an edge (`deny A B`) or a specific cyberlink (`deny A B N`). Source is
@@ -105,9 +107,7 @@ export def deny [
     cid_to: string # target of the disputed edge
     disputed_neuron?: string # neuron of the disputed cyberlink; omit to deny the edge itself
     --neuron: string
-    --claimed-at: string
     --repo: path
-    --reassert
 ]: nothing -> record {
     let root = graph-root $repo
     let disputed = {
@@ -117,7 +117,7 @@ export def deny [
     let target = if $disputed_neuron == null { $disputed } else {
         $disputed | insert neuron (resolve-particle $root $disputed_neuron)
     }
-    edge {op: "deny"} $target $neuron $claimed_at $repo $reassert
+    edge {op: "deny"} $target $neuron $repo
 }
 
 # Update an edge: {cid_from: A, cid_to: B, op: update} → C marks C as the new
@@ -130,9 +130,7 @@ export def update [
     cid_to: string # original target being replaced
     cid_new: string # the new target
     --neuron: string
-    --claimed-at: string
     --repo: path
-    --reassert
 ]: nothing -> record {
     let root = graph-root $repo
     let src = {
@@ -140,7 +138,7 @@ export def update [
         cid_to: (resolve-particle $root $cid_to)
         op: "update"
     }
-    edge $src (resolve-particle $root $cid_new) $neuron $claimed_at $repo $reassert
+    edge $src (resolve-particle $root $cid_new) $neuron $repo
 }
 
 # Quote: {about: A, op: quote} → B states that B is a faithful excerpt of A
@@ -151,12 +149,10 @@ export def quote [
     about: string # the quoted source
     excerpt: string # the excerpt
     --neuron: string
-    --claimed-at: string
     --repo: path
-    --reassert
 ]: nothing -> record {
     let root = graph-root $repo
-    edge {about: (resolve-particle $root $about), op: "quote"} (resolve-particle $root $excerpt) $neuron $claimed_at $repo $reassert
+    edge {about: (resolve-particle $root $about), op: "quote"} (resolve-particle $root $excerpt) $neuron $repo
 }
 
 # Agree: {op: agree} → B — "claim B is true". Gives an opinion about
@@ -166,11 +162,9 @@ export def quote [
 export def agree [
     cid: string # the content being agreed with
     --neuron: string
-    --claimed-at: string
     --repo: path
-    --reassert
 ]: nothing -> record {
-    edge {op: "agree"} (resolve-particle (graph-root $repo) $cid) $neuron $claimed_at $repo $reassert
+    edge {op: "agree"} (resolve-particle (graph-root $repo) $cid) $neuron $repo
 }
 
 # Disagree: {op: disagree} → B — "claim B is false". The other axis from
@@ -180,11 +174,9 @@ export def agree [
 export def disagree [
     cid: string # the content being disagreed with
     --neuron: string
-    --claimed-at: string
     --repo: path
-    --reassert
 ]: nothing -> record {
-    edge {op: "disagree"} (resolve-particle (graph-root $repo) $cid) $neuron $claimed_at $repo $reassert
+    edge {op: "disagree"} (resolve-particle (graph-root $repo) $cid) $neuron $repo
 }
 
 # Argument for: {about: C, op: pro} → B — "B is an argument for C". C is any
@@ -195,12 +187,10 @@ export def pro [
     target: string # what the argument is for (any CID)
     argument: string # the argument content
     --neuron: string
-    --claimed-at: string
     --repo: path
-    --reassert
 ]: nothing -> record {
     let root = graph-root $repo
-    edge {about: (resolve-particle $root $target), op: "pro"} (resolve-particle $root $argument) $neuron $claimed_at $repo $reassert
+    edge {about: (resolve-particle $root $target), op: "pro"} (resolve-particle $root $argument) $neuron $repo
 }
 
 # Argument against: {about: C, op: con} → B — "B is an argument against C".
@@ -210,12 +200,10 @@ export def con [
     target: string # what the argument is against (any CID)
     argument: string # the argument content
     --neuron: string
-    --claimed-at: string
     --repo: path
-    --reassert
 ]: nothing -> record {
     let root = graph-root $repo
-    edge {about: (resolve-particle $root $target), op: "con"} (resolve-particle $root $argument) $neuron $claimed_at $repo $reassert
+    edge {about: (resolve-particle $root $target), op: "con"} (resolve-particle $root $argument) $neuron $repo
 }
 
 # Question: {about: B, op: question} → Q — "Q is a question about B". B is any
@@ -226,12 +214,10 @@ export def question [
     about: string # what the question is about (any CID)
     question: string # the question content
     --neuron: string
-    --claimed-at: string
     --repo: path
-    --reassert
 ]: nothing -> record {
     let root = graph-root $repo
-    edge {about: (resolve-particle $root $about), op: "question"} (resolve-particle $root $question) $neuron $claimed_at $repo $reassert
+    edge {about: (resolve-particle $root $about), op: "question"} (resolve-particle $root $question) $neuron $repo
 }
 
 # Answer: {cid_from: {about: B, op: question}, cid_to: Q, op: answer} → A —
@@ -245,9 +231,7 @@ export def answer [
     question: string # the question content
     answer: string # the answer content
     --neuron: string
-    --claimed-at: string
     --repo: path
-    --reassert
 ]: nothing -> record {
     let root = graph-root $repo
     let src = {
@@ -255,7 +239,7 @@ export def answer [
         cid_to: (resolve-particle $root $question)
         op: "answer"
     }
-    edge $src (resolve-particle $root $answer) $neuron $claimed_at $repo $reassert
+    edge $src (resolve-particle $root $answer) $neuron $repo
 }
 
 # Authorship: {about: B, op: author} → P — "the author of content B is P". The
@@ -267,12 +251,10 @@ export def author [
     content: string # the ported content
     author_id: string # CID of the author's identifier
     --neuron: string
-    --claimed-at: string
     --repo: path
-    --reassert
 ]: nothing -> record {
     let root = graph-root $repo
-    edge {about: (resolve-particle $root $content), op: "author"} (resolve-particle $root $author_id) $neuron $claimed_at $repo $reassert
+    edge {about: (resolve-particle $root $content), op: "author"} (resolve-particle $root $author_id) $neuron $repo
 }
 
 # Identity: {about: P1, op: same} → P2 — "P1 and P2 name one entity" (the
@@ -283,10 +265,39 @@ export def same [
     name_from: string # one name of the entity
     name_to: string # another name of the same entity
     --neuron: string
-    --claimed-at: string
     --repo: path
-    --reassert
 ]: nothing -> record {
     let root = graph-root $repo
-    edge {about: (resolve-particle $root $name_from), op: "same"} (resolve-particle $root $name_to) $neuron $claimed_at $repo $reassert
+    edge {about: (resolve-particle $root $name_from), op: "same"} (resolve-particle $root $name_to) $neuron $repo
+}
+
+# Claimed time: {about: X, op: claimed_at} → T — "I claim X's time is T". X is
+# any CID: a link file (= the triple), an edge or cyberlink derived CID, or a
+# particle. The heir of the claimed_at field removed from the link record: as
+# an edge the claim is optional and per-neuron, and the act itself keeps one
+# CID for everyone. Claimed or in-record, the time stays unproven either way —
+# the provable bound is the OTS anchor of the birth seal (README, time
+# semantics).
+@example "claim when an act happened" { convention claimed-at QmX… "2026-07-16T00:00:00+00:00" }
+export def claimed-at [
+    about: string # the CID whose time is claimed
+    timestamp?: string # RFC 3339 claimed time (default: now, UTC)
+    --neuron: string
+    --repo: path
+]: nothing -> record {
+    let t = if $timestamp != null { $timestamp } else {
+        date now | date to-timezone UTC | format date "%+"
+    }
+    # The discipline the link record used to enforce on the field, now at the
+    # one spot time claims are born: RFC 3339 shape (constrained charset — the
+    # particle stays escape-free), then a real calendar date (the regex admits
+    # month 13, `into datetime` rejects it).
+    if $t !~ $RFC3339_RE {
+        error make {msg: $"claimed time is not an RFC 3339 timestamp: ($t | to json)"}
+    }
+    try { $t | into datetime | ignore } catch {
+        error make {msg: $"claimed time is not a real calendar date: ($t | to json)"}
+    }
+    let root = graph-root $repo
+    edge {about: (resolve-particle $root $about), op: "claimed_at"} (resolve-particle $root $t) $neuron $repo
 }

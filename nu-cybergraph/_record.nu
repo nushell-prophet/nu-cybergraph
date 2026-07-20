@@ -15,34 +15,33 @@ use _derive.nu [record-bytes]
 # Why alphabetical (not the semantic triple-first order): one serialization
 # rule for every record in the format — link files and derived records alike —
 # is simpler to explain and to port than a rule plus a pinned per-shape list.
-export const LINK_KEYS = [cid_from cid_to claimed_at neuron]
+#
+# Why no claimed_at: the record is exactly the triple, so its self-address
+# equals the act's derived CID (bj002-1) — the same cyberlink recorded by
+# anyone, at any time, is one file under one CID. Time is not the record's
+# business: the provable bound comes from the birth seal, and an author's
+# *claimed* time is a convention edge over the graph (`convention claimed-at`).
+export const LINK_KEYS = [cid_from cid_to neuron]
 
-# Exported for _receipt.nu — receipts reuse the record's field disciplines.
+# Exported for _receipt.nu, _handoff.nu and convention.nu — they reuse the
+# record's field disciplines. RFC3339_RE guards timestamps that live OUTSIDE
+# link records (receipts, handoffs, claimed-at particles): a link record
+# itself carries no time.
 export const CID_V0_RE = '^Qm[1-9A-HJ-NP-Za-km-z]{44}$'
 
 export const RFC3339_RE = '^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?(Z|[+-]\d{2}:\d{2})$'
 
-# Enforce the record shape: exact LINK_KEYS set, CID v0 endpoints and neuron,
-# RFC 3339 claimed_at. Errors on the first violation, returns nothing on success.
+# Enforce the record shape: exact LINK_KEYS set, CID v0 values throughout.
+# Errors on the first violation, returns nothing on success.
 export def validate-link [rec: record]: nothing -> nothing {
     let cols = $rec | columns
     if ($cols | sort) != ($LINK_KEYS | sort) {
         error make {msg: $"link record must have exactly keys ($LINK_KEYS | str join ', ') — got ($cols | str join ', ')"}
     }
-    for key in [cid_from cid_to neuron] {
+    for key in $LINK_KEYS {
         if ($rec | get $key) !~ $CID_V0_RE {
             error make {msg: $"($key) must be a base58btc CID v0 \(Qm + 44 chars\): (($rec | get $key) | to json)"}
         }
-    }
-    # Shape first: the README pins RFC 3339, and the constrained charset is
-    # the explicit guard that keeps compact JSON escape-free (no `"` or `\`),
-    # so the canonical bytes stay trivially reproducible. Then parseability:
-    # the regex admits impossible dates (month 13), `into datetime` rejects them.
-    if $rec.claimed_at !~ $RFC3339_RE {
-        error make {msg: $"claimed_at is not an RFC 3339 timestamp: ($rec.claimed_at | to json)"}
-    }
-    try { $rec.claimed_at | into datetime | ignore } catch {
-        error make {msg: $"claimed_at is not a real calendar date: ($rec.claimed_at | to json)"}
     }
 }
 

@@ -48,7 +48,7 @@ def "record-bytes refuses non-string values" [] {
 
 # --- Each convention shapes the right edge -----------------------------------
 # Written to a plain directory: an existing --repo path needs no git/ssh/init
-# (link add mkdirs links/). Author and time are fixed so the run is offline and
+# (link add mkdirs links/). The author is fixed so the run is offline and
 # deterministic; the assertions are on cid_from/cid_to — the shape of the edge,
 # independent of who signs it.
 @before-each
@@ -61,13 +61,9 @@ def cleanup [] {
     rm --recursive --force $in.tmp
 }
 
-# Fixed author + time so the run is offline and deterministic; the assertions
-# are on cid_from/cid_to — the shape of the edge, not who signs it.
-const T = "2026-07-18T00:00:00+00:00"
-
 @test
 def "confirm repeats the plain edge, no instruction source" [] {
-    let r = convention confirm $A $B --repo $in.tmp --neuron $N --claimed-at $T | get record
+    let r = convention confirm $A $B --repo $in.tmp --neuron $N | get record
     assert equal $r.cid_from $A
     assert equal $r.cid_to $B
 }
@@ -75,18 +71,18 @@ def "confirm repeats the plain edge, no instruction source" [] {
 @test
 def "deny targets the edge address, or the cyberlink CID with a neuron" [] {
     let tmp = $in.tmp
-    let edge = convention deny $A $B --repo $tmp --neuron $N --claimed-at $T | get record
+    let edge = convention deny $A $B --repo $tmp --neuron $N | get record
     assert equal $edge.cid_from $DENY
     assert equal $edge.cid_to $EDGE_AB
 
-    let link = convention deny $A $B $N --repo $tmp --neuron $N --claimed-at $T | get record
+    let link = convention deny $A $B $N --repo $tmp --neuron $N | get record
     assert equal $link.cid_from $DENY
     assert equal $link.cid_to $CYBERLINK_ABN
 }
 
 @test
 def "update reissues from the record embedding the fields of the edge" [] {
-    let r = convention update $A $B $C --repo $in.tmp --neuron $N --claimed-at $T | get record
+    let r = convention update $A $B $C --repo $in.tmp --neuron $N | get record
     assert equal $r.cid_from (derive {cid_from: $A, cid_to: $B, op: "update"})
     assert equal $r.cid_to $C
 }
@@ -94,24 +90,24 @@ def "update reissues from the record embedding the fields of the edge" [] {
 @test
 def "operand-embedding conventions put the operand in the source" [] {
     let tmp = $in.tmp
-    let q = convention quote $A $B --repo $tmp --neuron $N --claimed-at $T | get record
+    let q = convention quote $A $B --repo $tmp --neuron $N | get record
     assert equal $q.cid_from (derive {about: $A, op: "quote"})
     assert equal $q.cid_to $B
 
-    let pro = convention pro $C $B --repo $tmp --neuron $N --claimed-at $T | get record
+    let pro = convention pro $C $B --repo $tmp --neuron $N | get record
     assert equal $pro.cid_from (derive {about: $C, op: "pro"})
     assert equal $pro.cid_to $B
 
-    let con = convention con $C $B --repo $tmp --neuron $N --claimed-at $T | get record
+    let con = convention con $C $B --repo $tmp --neuron $N | get record
     assert equal $con.cid_from (derive {about: $C, op: "con"})
 
-    let qn = convention question $A $B --repo $tmp --neuron $N --claimed-at $T | get record
+    let qn = convention question $A $B --repo $tmp --neuron $N | get record
     assert equal $qn.cid_from (derive {about: $A, op: "question"})
 
-    let au = convention author $A $B --repo $tmp --neuron $N --claimed-at $T | get record
+    let au = convention author $A $B --repo $tmp --neuron $N | get record
     assert equal $au.cid_from (derive {about: $A, op: "author"})
 
-    let sm = convention same $A $B --repo $tmp --neuron $N --claimed-at $T | get record
+    let sm = convention same $A $B --repo $tmp --neuron $N | get record
     assert equal $sm.cid_from (derive {about: $A, op: "same"})
     assert equal $sm.cid_to $B
 }
@@ -119,28 +115,47 @@ def "operand-embedding conventions put the operand in the source" [] {
 @test
 def "agree and disagree use the fixed source, target is the content" [] {
     let tmp = $in.tmp
-    let a = convention agree $B --repo $tmp --neuron $N --claimed-at $T | get record
+    let a = convention agree $B --repo $tmp --neuron $N | get record
     assert equal $a.cid_from $AGREE
     assert equal $a.cid_to $B
-    let d = convention disagree $B --repo $tmp --neuron $N --claimed-at $T | get record
+    let d = convention disagree $B --repo $tmp --neuron $N | get record
     assert equal $d.cid_from $DISAGREE
     assert equal $d.cid_to $B
 }
 
 @test
 def "answer attaches to the question-in-context, not the bare question" [] {
-    let r = convention answer $A $B $C --repo $in.tmp --neuron $N --claimed-at $T | get record
+    let r = convention answer $A $B $C --repo $in.tmp --neuron $N | get record
     let q_src = derive {about: $A, op: "question"}
     assert equal $r.cid_from (derive {cid_from: $q_src, cid_to: $B, op: "answer"})
     assert equal $r.cid_to $C
+}
+
+@test
+def "claimed-at publishes the timestamp as a particle and edges to it" [] {
+    let t = "2026-07-16T00:00:00+00:00"
+    let r = convention claimed-at $A $t --repo $in.tmp --neuron $N | get record
+    assert equal $r.cid_from (derive {about: $A, op: "claimed_at"})
+    assert equal $r.cid_to ($t | into binary | cid-v0)
+    assert equal (open --raw (particle-path ($in.tmp | path join cybergraph) $r.cid_to)) $t
+}
+
+@test
+def "claimed-at refuses a non-RFC-3339 or impossible time" [] {
+    let tmp = $in.tmp
+    assert error {|| convention claimed-at $A "yesterday-ish" --repo $tmp --neuron $N }
+    # Parseable but not RFC 3339 — the shape is pinned, not just parseability
+    assert error {|| convention claimed-at $A "2026-07-16" --repo $tmp --neuron $N }
+    # RFC 3339 shape but impossible date
+    assert error {|| convention claimed-at $A "2026-13-01T00:00:00+00:00" --repo $tmp --neuron $N }
 }
 
 # --- Records are published as self-addressed particles -----------------------
 @test
 def "every convention publishes its records as self-addressed particles" [] {
     let tmp = $in.tmp
-    convention deny $A $B --repo $tmp --neuron $N --claimed-at $T | ignore
-    convention answer $A $B $C --repo $tmp --neuron $N --claimed-at $T | ignore
+    convention deny $A $B --repo $tmp --neuron $N | ignore
+    convention answer $A $B $C --repo $tmp --neuron $N | ignore
 
     let particles = ls (particles-dir ($tmp | path join cybergraph))
     # Filename == CID v0 of the file's own bytes, for every particle written.

@@ -68,7 +68,7 @@ def "nested graph home: init puts everything under cybergraph/ by default" [] {
     "arbitrary user file\n" | save ($r.repo | path join notes.md)
     ^git -C $r.repo add -A
 
-    let born = link add $P1 $P2 --repo $r.repo --claimed-at "2026-07-16T00:00:00+00:00"
+    let born = link add $P1 $P2 --repo $r.repo
     assert ($born.path | str contains $"cybergraph(char path_sep)links")
     let sealed = seal --repo $r.repo --no-stamp --no-root-cid
     assert equal $sealed.newborn 1
@@ -83,26 +83,17 @@ def "nested graph home: init puts everything under cybergraph/ by default" [] {
 }
 
 @test
-def "link add refuses a duplicate triple unless --reassert" [] {
+def "link add refuses a repeat of the triple — one act, one file" [] {
     let r = make-bare-repo $in.tmp_dir
     init --repo $r.repo
-    let born = link add $P1 $P2 --repo $r.repo --claimed-at "2026-07-16T00:00:00+00:00"
+    let born = link add $P1 $P2 --repo $r.repo
 
-    # Fresh claimed_at, same triple: refused, names the existing record
-    let err = try { link add $P1 $P2 --repo $r.repo --claimed-at "2026-07-17T00:00:00+00:00"; null } catch {|e| $e.msg }
+    # The record IS the triple, so a repeat is byte-identical: refused by the
+    # file's existence, naming the existing CID
+    let err = try { link add $P1 $P2 --repo $r.repo; null } catch {|e| $e.msg }
     assert ($err != null) "duplicate triple was recorded"
     assert ($err | str contains $born.cid)
-    assert ($err | str contains "--reassert")
-
-    # Deliberate re-assertion: a second record next to the first
-    let again = link add $P1 $P2 --repo $r.repo --claimed-at "2026-07-17T00:00:00+00:00" --reassert
-    assert ($again.cid != $born.cid)
-    assert equal (glob ($r.repo | path join cybergraph links *.json) | length) 2
-
-    # Byte-identical record stays refused even with --reassert
-    let same = try { link add $P1 $P2 --repo $r.repo --claimed-at "2026-07-16T00:00:00+00:00" --reassert; null } catch {|e| $e.msg }
-    assert ($same != null) "byte-identical record was recorded twice"
-    assert ($same | str contains "already exists")
+    assert equal (glob ($r.repo | path join cybergraph links *.json) | length) 1
 }
 
 @test

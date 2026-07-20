@@ -27,8 +27,6 @@ export def add [
     cid_from: string # source particle: a CID v0, or content to publish as one
     cid_to: string # target particle: a CID v0, or content to publish as one
     --neuron: string # Author's neuron CID (default: CID of the single registered pubkey)
-    --claimed-at: string # RFC 3339 timestamp claimed by the author (default: now, UTC)
-    --reassert # Record the edge again although this neuron already asserted it
     --repo: path # Target repo root (default: git root of current directory)
 ]: nothing -> record {
     let root = graph-root $repo
@@ -36,32 +34,17 @@ export def add [
         cid_from: (resolve-particle $root $cid_from)
         cid_to: (resolve-particle $root $cid_to)
         neuron: (if $neuron != null { $neuron } else { own-neuron-cid $root })
-        claimed_at: (if $claimed_at != null { $claimed_at } else {
-            date now | date to-timezone UTC | format date "%+"
-        })
     }
     let cid = link-cid $rec
     mkdir (links-dir $root)
-    if not $reassert {
-        # The triple (cid_from, cid_to, neuron) is the graph's aggregation unit:
-        # with claimed_at inside the record a repeat is a new record, not a new
-        # vote. Why: uniqueness of the triple is a reading policy here, not a
-        # storage invariant (bostrom's consensus enforced it) — so accidental
-        # duplicates are refused at the one spot where records are born, and a
-        # deliberate re-assertion over time stays expressible via --reassert.
-        let dup = glob ((links-dir $root) | path join "*.json") | where {|f|
-            let r = open $f
-            $r.cid_from == $rec.cid_from and $r.cid_to == $rec.cid_to and $r.neuron == $rec.neuron
-        }
-        if ($dup | is-not-empty) {
-            let existing = $dup | first | path parse | get stem
-            error make {msg: $"neuron already asserted this edge: ($existing) — pass --reassert to record it again"}
-        }
-    }
     let out = link-path $root $cid
+    # The record IS the triple, so file existence IS the triple guard: one act,
+    # one CID, one file — mirroring bostrom's consensus, which rejected a repeat
+    # cyberlink. Why no --reassert: a repeat is byte-identical, so there is
+    # nothing new to store; re-assertion over time is a statement ABOUT the act
+    # (e.g. `convention claimed-at`), not a second copy of it.
     if ($out | path exists) {
-        # Same CID = byte-identical record (same edge, author, and claimed_at)
-        error make {msg: $"link already exists: ($out)"}
+        error make {msg: $"neuron already asserted this edge: ($cid)"}
     }
     link-bytes $rec | save --raw $out
     {cid: $cid path: $out record: $rec}

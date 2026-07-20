@@ -8,12 +8,11 @@ use ../nu-cybergraph/_derive.nu [derive]
 use ../nu-cybergraph/_layout.nu [particles-dir particle-path]
 use ../nu-cybergraph/_deps/cid-v0.nu [cid-v0]
 
-# Same fixture CIDs as test_convention.nu; plain --repo dir, fixed author and
-# time, so everything runs offline with no git/ssh/init.
+# Same fixture CIDs as test_convention.nu; plain --repo dir, fixed author,
+# so everything runs offline with no git/ssh/init.
 const A = "QmQXupHE6VPzpoBTivNXAAGwigJE68n4TeVUSxYnFL78GV"
 const B = "Qmc9pm5gQqDwJMiFTmFEuTxRhSy5Cn2yt7NZh1LrxmMhSi"
 const N = "QmddrVz92VH3LqT2i7uXeK4AVh6LyU7zjDiLbSdChPsULr"
-const T = "2026-07-18T00:00:00+00:00"
 
 @before-each
 def setup []: nothing -> record {
@@ -62,7 +61,7 @@ def "particle add publishes a CID-shaped string as content" [] {
 
 @test
 def "link add resolves text endpoints to published particles" [] {
-    let r = link add "cyber" "bostrom" --repo $in.tmp --neuron $N --claimed-at $T | get record
+    let r = link add "cyber" "bostrom" --repo $in.tmp --neuron $N | get record
     assert equal $r.cid_from ("cyber" | into binary | cid-v0)
     assert equal $r.cid_to ("bostrom" | into binary | cid-v0)
     assert equal (open --raw (particle-path $in.root $r.cid_to)) "bostrom"
@@ -70,14 +69,14 @@ def "link add resolves text endpoints to published particles" [] {
 
 @test
 def "link add passes CID endpoints through without publishing anything" [] {
-    link add $A $B --repo $in.tmp --neuron $N --claimed-at $T | ignore
+    link add $A $B --repo $in.tmp --neuron $N | ignore
     # only links/ was written: no particles dir means no particle was minted
     assert (not ((particles-dir $in.root) | path exists))
 }
 
 @test
 def "convention verbs resolve text arguments before hashing" [] {
-    let q = convention question $A "why?" --repo $in.tmp --neuron $N --claimed-at $T | get record
+    let q = convention question $A "why?" --repo $in.tmp --neuron $N | get record
     assert equal $q.cid_from (derive {about: $A, op: "question"})
     assert equal $q.cid_to ("why?" | into binary | cid-v0)
     assert equal (open --raw (particle-path $in.root $q.cid_to)) "why?"
@@ -85,7 +84,7 @@ def "convention verbs resolve text arguments before hashing" [] {
 
 @test
 def "convention verbs resolve args embedded in derived sources" [] {
-    let q = convention quote "source text" "text" --repo $in.tmp --neuron $N --claimed-at $T | get record
+    let q = convention quote "source text" "text" --repo $in.tmp --neuron $N | get record
     let src_cid = "source text" | into binary | cid-v0
     assert equal $q.cid_from (derive {about: $src_cid, op: "quote"})
     assert equal (open --raw (particle-path $in.root $src_cid)) "source text"
