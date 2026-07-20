@@ -12,10 +12,10 @@
 # cyberlink's derived CID is `derive {cid_from: A, cid_to: B, neuron: N}`.
 #
 # The link *file* record (_record.nu) is serialized by the same rule —
-# record-bytes is the one canon of the format. claimed_at still never enters
-# a derived CID (bj002-1 «Основы» — acts are addressed by the double and
-# triple alone); the file's self-address and the act's derived CID are
-# different records, one byte discipline.
+# record-bytes is the one canon of the format. Since the file record is
+# exactly the triple, the file's self-address and the act's derived CID are
+# one CID: acts are addressed by the double and triple alone (bj002-1
+# «Основы»), and the file in links/ is the published preimage of that address.
 #
 # Alphabetical means byte order of the UTF-8 key bytes — locale-free and
 # case-sensitive; nushell's record `sort` matches it for these keys.

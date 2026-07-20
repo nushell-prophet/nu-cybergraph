@@ -39,10 +39,10 @@ Pinned exactly (reference: `nu-cybergraph/_record.nu`; golden bytes and CID: `te
 - **Self-addressing**: the file is stored as `links/<cid>.json` where `<cid>` is the CID v0 of the file's exact bytes. Readers reject a file whose raw bytes do not hash to its name — tampered or non-canonical files fail before any field is trusted. Because the record is exactly the triple, this self-address **equals the cyberlink's derived CID** (bj002-1): the same act asserted by the same neuron is one CID for everyone, whenever it was recorded, and the file is the preimage of the act's address.
 - **Triple guard**: a repeat of the triple is byte-identical, so `link add` refuses it by the file's existence — one act, one file, mirroring bostrom's consensus, which rejected a duplicate cyberlink. Re-assertion over time is a statement *about* the act (e.g. `convention claimed-at`), not a second copy of it.
 
-Example (one line + `\n`, CID `QmYAAKqmQ8Z1ZdQMX2iEZ4gkWak9vh6vyt7gtj1b54yXWq`):
+Example — the golden record itself (one line + `\n`, CID `QmQoY7wbGV6797ErgTf39eMAeXuGbm5ZRHay4XTcoHMMvU`):
 
 ```json
-{"cid_from":"QmQXupHE6VPzpoBTivNXAAGwigJE68n4TeVUSxYnFL78GV","cid_to":"Qmc9pm5gQqDwJMiFTmFEuTxRhSy5Cn2yt7NZh1LrxmMhSi","neuron":"QmddrVz92VH3LqT2i7uXeK4AVh6LyU7zjDiLbSdChPsULr"}
+{"cid_from":"QmUQUHEmv651XCBhiWUQpx2zf4PDts1aXL324ZFyV4QZPF","cid_to":"QmW9519sfmW2MvDb4TU4dKtiFAXm1UPDvE7JrMaBjprVHp","neuron":"QmddrVz92VH3LqT2i7uXeK4AVh6LyU7zjDiLbSdChPsULr"}
 ```
 
 Why JSON and not CSV/NUON: JSON is readable by every language and tool (and natively by nushell); CSV quoting is not canonical (the same reason nu-multiproof's merkle leaves hash parsed fields, not raw lines). Certificates are JSON too, for the same reach — nu-multiproof's `merkle prove`/`verify` speak JSON natively.
@@ -79,7 +79,7 @@ Every convention stands on one primitive, bj002-1's canonical record: **`convent
 
 An instruction lives in the *source* of its edge — a derived CID such as the CID of `{"op":"deny"}` — so the source is opaque. To make it readable, every convention publishes each record it mints — the instruction and the address records it references — as self-addressed particles under `particles/`: the record is its own preimage, so dereferencing the CID yields named fields with the real operand CIDs, and a text search for an operand's CID finds every record it participates in (bj002-1 "Reading instructions"). Particles are not sealed directly: a sealed convention edge names its source CID, and showing bytes that hash to a sealed CID time-anchors them — the same rule that anchors any particle named by a sealed link.
 
-This table is the spec of the twelve shapes; a record in source or target position means the CID of its canonical bytes. The header of `nu-cybergraph/convention.nu` restates it in the implementation's address-expression notation — same facts, second notation; if a shape ever changes, both move together.
+This table is the spec of the thirteen shapes; a record in source or target position means the CID of its canonical bytes. The header of `nu-cybergraph/convention.nu` restates it in the implementation's address-expression notation — same facts, second notation; if a shape ever changes, both move together.
 
 | verb | edge written |
 |---|---|
@@ -99,7 +99,7 @@ Reading and aggregation — counting confirmations, weighing neurons, measuring 
 
 ## Birth certificate
 
-`seal` stages `links/ certs/ seals/ imported/`, runs nu-multiproof's `seal` (manifest → merkle root → SSH signature → OTS stamp), then for every link that has no certificate yet extracts its inclusion proof and freezes it as `certs/<cid>.cert.json`. The seal's root statement and signatures are snapshotted under `seals/<root12>/`, because `multiproofs/tree-root.txt` is overwritten by the next seal while certificates must verify against the root they were born under. Certificates are never regenerated: `verify` and `bundle` always use the birth seal, not the repo's current root.
+`seal` stages `links/ certs/ seals/ imported/ receipts/`, runs nu-multiproof's `seal` (manifest → merkle root → SSH signature → OTS stamp), then for every link that has no certificate yet extracts its inclusion proof and freezes it as `certs/<cid>.cert.json`. The seal's root statement and signatures are snapshotted under `seals/<root12>/`, because `multiproofs/tree-root.txt` is overwritten by the next seal while certificates must verify against the root they were born under. Certificates are never regenerated: `verify` and `bundle` always use the birth seal, not the repo's current root.
 
 **Time semantics.** The record carries no timestamp: a time inside the record would fork the same act into different CIDs per recording moment, and it would still prove nothing. The one provable time is the OTS anchor of the birth seal: "this record existed no later than Bitcoin block N". The earliest provable bound is set by the *first* seal, which is why certificates freeze — later seals only add newer roots. Provable granularity equals seal frequency, so seal on every append (a seal costs one signature plus one free OTS stamp for the whole batch). A fresh stamp reports `pending` until Bitcoin confirms (hours/days); any later seal in the origin repo upgrades it, but an already-exported bundle keeps its pending stamp until `ots upgrade` is run on it by hand. An author who wants to *claim* a time states it as an ordinary edge — `convention claimed-at <cid> <rfc3339>` — optional, per-neuron, and as unproven as the old in-record field was. A provable *lower* bound ("created no earlier than") would need a recent Bitcoin block hash embedded in the record — deliberately out of v1.
 

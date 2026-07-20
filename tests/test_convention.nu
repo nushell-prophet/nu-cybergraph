@@ -6,7 +6,7 @@ use ../nu-cybergraph/_derive.nu [derive record-bytes]
 use ../nu-cybergraph/_layout.nu [particles-dir particle-path]
 use ../nu-cybergraph/_deps/cid-v0.nu [cid-v0]
 
-# Same particle/neuron CIDs as the record golden and the bj003 smoke run.
+# Particle/neuron CIDs of the bj003 smoke run; N is the record golden's neuron.
 const A = "QmQXupHE6VPzpoBTivNXAAGwigJE68n4TeVUSxYnFL78GV"
 const B = "Qmc9pm5gQqDwJMiFTmFEuTxRhSy5Cn2yt7NZh1LrxmMhSi"
 const C = "QmW9519sfmW2MvDb4TU4dKtiFAXm1UPDvE7JrMaBjprVHp"
