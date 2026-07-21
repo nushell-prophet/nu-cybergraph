@@ -60,6 +60,73 @@ def "particle add publishes a CID-shaped string as content" [] {
 }
 
 @test
+def "particle add --ext stores under <cid>.md and returns the bare CID" [] {
+    let tmp = $in.tmp
+    let cid = particle add "# doc" --ext md --repo $tmp
+    assert equal $cid ("# doc" | into binary | cid-v0)
+    assert ((particle-path $in.root $cid --ext md) | path exists)
+}
+
+# One CID, one file: the extension is a name, not part of the address, so a
+# re-add under a different extension is a no-op and the first name wins.
+@test
+def "particle add is idempotent across extensions" [] {
+    let tmp = $in.tmp
+    let bare = particle add "cyber" --repo $tmp
+    assert equal (particle add "cyber" --ext md --repo $tmp) $bare
+    assert equal (ls (particles-dir $in.root) | length) 1
+    assert ((particle-path $in.root $bare) | path exists)
+}
+
+@test
+def "particle add rejects a malformed extension" [] {
+    let tmp = $in.tmp
+    assert error {|| particle add "x" --ext ".md" --repo $tmp }
+    assert error {|| particle add "x" --ext "m d" --repo $tmp }
+    assert error {|| particle add "x" --ext "a/b" --repo $tmp }
+}
+
+@test
+def "particle cat returns exact bytes by bare CID, whatever the extension" [] {
+    let tmp = $in.tmp
+    let bare = particle add "cyber" --repo $tmp
+    let ext = particle add "# doc" --ext md --repo $tmp
+    assert equal (particle cat $bare --repo $tmp) "cyber"
+    assert equal (particle cat $ext --repo $tmp) "# doc"
+}
+
+@test
+def "particle cat refuses anything but a bare CID" [] {
+    let tmp = $in.tmp
+    let cid = particle add "# doc" --ext md --repo $tmp
+    assert error {|| particle cat $"($cid).md" --repo $tmp }
+    assert error {|| particle cat ([particles $cid] | path join) --repo $tmp }
+}
+
+@test
+def "particle cat fails on a missing particle" [] {
+    assert error {|| particle cat $A --repo $in.tmp }
+}
+
+@test
+def "particle cat fails fast on a store with two files for one CID" [] {
+    let tmp = $in.tmp
+    let root = $in.root
+    let cid = particle add "cyber" --repo $tmp
+    "cyber" | save --raw (particle-path $root $cid --ext md)
+    assert error {|| particle cat $cid --repo $tmp }
+}
+
+@test
+def "particle cat rejects a tampered store file" [] {
+    let tmp = $in.tmp
+    let root = $in.root
+    let cid = particle add "cyber" --repo $tmp
+    "evil" | save --force --raw (particle-path $root $cid)
+    assert error {|| particle cat $cid --repo $tmp }
+}
+
+@test
 def "link add resolves text endpoints to published particles" [] {
     let r = link add "cyber" "bostrom" --repo $in.tmp --neuron $N | get record
     assert equal $r.cid_from ("cyber" | into binary | cid-v0)

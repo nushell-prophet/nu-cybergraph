@@ -27,10 +27,19 @@ export def particles-dir [root: path]: nothing -> path {
     $root | path join $PARTICLES_DIR
 }
 
+# Extension a particle filename may carry after the CID: dot-separated
+# alphanumeric segments ("md", "tar.gz"), no leading dot. One canon for the
+# write side (`particle-store --ext` validates against it) and the read side
+# (`particle-files` recognizes store files by it).
+export const PARTICLE_EXT_RE = '^[A-Za-z0-9]+(\.[A-Za-z0-9]+)*$'
+
 # <root>/particles/<cid> — one particle, self-addressed by the CID v0 of its
-# exact bytes. No extension: the content is raw bytes, not a document.
-export def particle-path [root: path cid: string]: nothing -> path {
-    particles-dir $root | path join $cid
+# exact bytes. `--ext` appends a filename extension (`<cid>.md`) — presentation
+# convenience only (e.g. a forge renders .md); the address is always the bare
+# CID, and readers resolve it whatever extension the file carries.
+export def particle-path [root: path cid: string --ext: string]: nothing -> path {
+    let name = if $ext == null { $cid } else { $"($cid).($ext)" }
+    particles-dir $root | path join $name
 }
 
 # <root>/certs

@@ -21,6 +21,7 @@ use nu-cybergraph/
 
 nu-cybergraph init                       # multiproof init + links/ certs/ under <repo>/cybergraph/
 nu-cybergraph particle add "any text"    # publish content as particles/<cid>, get the CID
+nu-cybergraph particle cat Qm…           # read a particle's exact bytes by its bare CID
 nu-cybergraph link add Qm…from Qm…to     # write links/<cid>.json (non-CID args are published as particles first)
 nu-cybergraph seal                       # sign + stamp the root, freeze new certificates
 nu-cybergraph bundle Qm…link             # portable bundle → exports/<cid>/ (imported link: re-export + custody layer)
@@ -51,6 +52,8 @@ Why JSON and not CSV/NUON: JSON is readable by every language and tool (and nati
 
 `particle add` publishes arbitrary content as a self-addressed particle: a string argument or piped content (string or raw bytes — `open --raw doc.md | particle add`) is stored as `particles/<cid>` with its exact bytes, and the CID comes back. Idempotent: identical content is one particle.
 
+`--ext` keeps a filename extension on the store file — `particle add --ext md` writes `particles/<cid>.md`, so a forge renders the particle as a document. The extension is presentation only, never part of the address: the CID is always the bare 46 characters, commands that read a particle accept only that (`particle cat Qm…` — a filename or path is refused) and resolve the store file whatever extension it carries. One CID, one file: a re-add of existing content under a different extension is a no-op (the first name wins), and a store holding two files for one CID fails fast on read. `particle cat` also verifies the bytes hash back to the CID before serving them, so a tampered store file fails instead of being returned.
+
 Every particle argument of a write command (`link add`, all convention verbs) accepts either a CID v0 or content: a CID passes through untouched, anything else goes through the same store first and its CID is used. So `convention question Qm… "who reviews this?"` publishes the question text and writes the edge in one call. The one ambiguity — content that itself looks like a CID — has a composable escape hatch instead of a flag: publish it explicitly with `particle add` (which never treats input as an address) and pass the returned CID.
 
 ## Neuron repo layout
@@ -58,7 +61,7 @@ Every particle argument of a write command (`link add`, all convention verbs) ac
 ```
 cybergraph/
   links/<link-cid>.json            # link records, one per file, self-addressed
-  particles/<cid>                  # self-addressed particles: instruction/address records and published content
+  particles/<cid>[.ext]            # self-addressed particles: instruction/address records and published content (extension optional, cosmetic)
   certs/<link-cid>.cert.json       # birth certificates (frozen `merkle prove` output)
   seals/<root-hex-12>/             # archival root statement + signatures, one per seal
   exports/<link-cid>/              # bundles built by `bundle` (default --out)
