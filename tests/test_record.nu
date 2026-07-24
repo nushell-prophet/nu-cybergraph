@@ -3,6 +3,7 @@ use std/testing *
 
 use ../nu-cybergraph/_record.nu [link-bytes link-cid validate-link read-link LINK_KEYS]
 use ../nu-cybergraph/_derive.nu [derive]
+use ../nu-cybergraph/_deps/cid-v0.nu [cid-v0]
 
 # Fixed record for golden pinning — same particle/neuron CIDs as the
 # bostrom-journal bj003 smoke experiment.
@@ -66,10 +67,37 @@ def "read-link enforces self-addressing on raw bytes" [] {
     link-bytes (golden-record) | save --raw $renamed
     assert error {|| read-link $renamed }
 
-    # Semantically equal but non-canonical bytes (pretty-printed): rejected —
-    # the CID covers bytes, not meaning
+    # Semantically equal but non-canonical bytes (pretty-printed) under the
+    # canonical name: rejected — the CID covers bytes, not meaning
     let pretty = $tmp | path join $"($GOLDEN_CID).json"
     (golden-record) | to json --indent 2 | save --raw --force $pretty
     assert error {|| read-link $pretty }
+    rm --recursive --force $tmp
+}
+
+@test
+def "read-link rejects non-canonical bytes even under their own address" [] {
+    let tmp = mktemp --directory
+    # Each of these is a valid triple, self-addressed by its OWN CID — so the
+    # filename check passes. Accepting them would give one act two addresses
+    # and break the file's identity with the cyberlink's derived CID.
+    let variants = [
+        # reordered keys
+        ((golden-record) | select neuron cid_to cid_from | to json --raw)
+        # added whitespace
+        $"($GOLDEN_BYTES | str replace '{' '{ ')"
+        # duplicate key: `from json` keeps the LAST, so the first value is a
+        # decoy no reader ever sees
+        ($GOLDEN_BYTES | str replace '{' $'{"cid_from":"($GOLDEN_CID)",')
+    ]
+    for bytes in $variants {
+        let body = $"($bytes)\n"
+        let file = $tmp | path join $"(($body | into binary | cid-v0)).json"
+        $body | save --raw --force $file
+        let err = try { read-link $file; null } catch {|e| $e.msg }
+        assert ($err != null) $"non-canonical bytes were accepted: ($bytes)"
+        assert ($err | str contains "is not canonical bytes")
+        assert ($err | str contains $GOLDEN_CID) "the error must name the act's one address"
+    }
     rm --recursive --force $tmp
 }

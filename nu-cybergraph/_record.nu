@@ -58,11 +58,11 @@ export def link-cid [rec: record]: nothing -> string {
     link-bytes $rec | cid-v0
 }
 
-# Read + validate a record file, enforcing self-addressing: the CID of the
-# RAW bytes (not a re-serialization) must equal the filename stem, so any
-# tampering or non-canonical rewrite fails here before anything trusts it.
-# One read: hash and parse must see the same bytes — a second read could
-# race with a file swap, parsing bytes the CID check never covered.
+# Read + validate a record file, enforcing BOTH addressing rules: the CID of
+# the RAW bytes (not a re-serialization) must equal the filename stem, and
+# those bytes must be the record's one canonical form. One read: hash and
+# parse must see the same bytes — a second read could race with a file swap,
+# parsing bytes the CID check never covered.
 export def read-link [file: path]: nothing -> record {
     let bytes = open --raw $file | into binary
     let raw_cid = $bytes | cid-v0
@@ -70,7 +70,20 @@ export def read-link [file: path]: nothing -> record {
     if $raw_cid != $stem {
         error make {msg: $"($file) does not match its content address: bytes hash to ($raw_cid)"}
     }
-    let rec = $bytes | decode | from json
+    # Explicit utf-8: bare `decode` GUESSES the encoding, so a UTF-16 file
+    # parsed back to the same triple under its own (different) CID.
+    let rec = $bytes | decode utf-8 | from json
     validate-link $rec
+    # Self-addressing alone only proves the bytes are named by their own hash.
+    # It does NOT pin them to the canon: reordered keys, added whitespace, or a
+    # duplicate key (`from json` keeps the last, so the discarded value never
+    # reaches a reader) each hash to some OTHER CID and pass the check above
+    # under that name. The act would then live at two addresses, and the file
+    # would stop being the preimage of the cyberlink's derived CID — the
+    # identity README "Link record format" is built on.
+    let canonical = record-bytes $rec
+    if $bytes != $canonical {
+        error make {msg: $"($file) is not canonical bytes for its record — one act has one address, and this record's is ($canonical | cid-v0)"}
+    }
     $rec
 }
