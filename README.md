@@ -125,7 +125,7 @@ Three honest limits. The custody bounds are upper bounds: the chain proves each 
 ## Dependencies
 
 - [nu-multiproof](https://codeberg.org/nushell-prophet/nu-multiproof/) as a live sibling checkout at `../../ai-sandbox-dev-container/nu-multiproof` — resolved in exactly one place, the `nu-cybergraph/_deps/` shims; edit them if your checkout lives elsewhere. Not a submodule: the two repos are co-developed and a pin would lag.
-- `git`, `ssh-keygen`; `ipfs` CLI only for root CIDs (`seal --no-root-cid` avoids it — per-file CIDs are computed in pure nushell).
+- `git` and `ssh-keygen`, nothing else: per-file, per-directory and root CIDs are all computed in pure nushell, so no `ipfs` CLI is needed.
 
 ## Testing
 
@@ -135,4 +135,4 @@ Requires [nutest](https://github.com/vyadh/nutest) at `../../ai-sandbox-dev-cont
 use toolkit.nu *; main test
 ```
 
-Tests run fully offline (`--no-stamp --no-root-cid`); OTS and IPFS paths are exercised by nu-multiproof's own suite.
+Tests run fully offline: `--no-stamp` is the only network the seal path has, and CIDs need no external call. The OTS path is exercised by nu-multiproof's own suite.

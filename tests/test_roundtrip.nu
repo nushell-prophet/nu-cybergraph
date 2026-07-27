@@ -1,6 +1,6 @@
 # End-to-end: neuron A births a link, seals, exports the bundle; neuron B
 # verifies and imports it offline. Ports the bostrom-journal bj003 smoke
-# experiment into a pinned test. All seals run --no-stamp --no-root-cid
+# experiment into a pinned test. All seals run --no-stamp
 # (offline); OTS is exercised by nu-multiproof's own suite.
 use std/assert
 use std/testing *
@@ -49,7 +49,7 @@ def "birth, seal, bundle, import, verify — the full link journey" [] {
 
     # Birth + seal: certificate frozen, root snapshot archived
     let born = link add $P1 $P2 --repo $a.repo
-    let sealed = seal --repo $a.repo --no-stamp --no-root-cid
+    let sealed = seal --repo $a.repo --no-stamp
     assert equal $sealed.newborn 1
     assert (($a.home | path join certs $"($born.cid).cert.json") | path exists)
     assert (($sealed.snapshot | path join tree-root.txt) | path exists)
@@ -80,7 +80,7 @@ def "birth, seal, bundle, import, verify — the full link journey" [] {
 
     # B's own seal catalogues the imported bundle — the custody layer:
     # "this neuron held the link no later than block K"
-    seal --repo $b.repo --no-stamp --no-root-cid | ignore
+    seal --repo $b.repo --no-stamp | ignore
     let b_manifest = open --raw ($b.home | path join multiproofs tree-hashes.csv)
         | from csv --no-infer
     let bundled_record = $"imported/($born.record.neuron)/($born.cid)/links/($born.cid).json"
@@ -90,7 +90,7 @@ def "birth, seal, bundle, import, verify — the full link journey" [] {
     let cert = $a.home | path join certs $"($born.cid).cert.json"
     let before = open --raw $cert | hash sha256
     link add $P2 $P1 --repo $a.repo
-    let sealed2 = seal --repo $a.repo --no-stamp --no-root-cid
+    let sealed2 = seal --repo $a.repo --no-stamp
     assert equal $sealed2.newborn 1
     assert equal (open --raw $cert | hash sha256) $before
     # ...and the old link still verifies against its archived root
@@ -107,7 +107,7 @@ def "custody chain: each re-export appends a provable, ordered layer" [] {
     let tmp_dir = $in.tmp_dir
     let a = make-neuron $tmp_dir "a"
     let born = link add $P1 $P2 --repo $a.repo
-    seal --repo $a.repo --no-stamp --no-root-cid | ignore
+    seal --repo $a.repo --no-stamp | ignore
     let a_out = bundle $born.cid --repo $a.repo --out ($tmp_dir | path join a-out)
 
     # B imports the birth bundle: receipt written, first custodian chains to nothing
@@ -121,7 +121,7 @@ def "custody chain: each re-export appends a provable, ordered layer" [] {
     # Re-export before sealing must refuse: custody is provable only once sealed
     assert error {|| bundle $born.cid --repo $b.repo --out ($tmp_dir | path join too-early) }
 
-    let sealed_b = seal --repo $b.repo --no-stamp --no-root-cid
+    let sealed_b = seal --repo $b.repo --no-stamp
     assert equal $sealed_b.receipts 1
     assert (($b.home | path join receipts $"($born.cid).receipt.cert.json") | path exists)
     let b_out = bundle $born.cid --repo $b.repo --out ($tmp_dir | path join b-out)
@@ -134,7 +134,7 @@ def "custody chain: each re-export appends a provable, ordered layer" [] {
     let b_layer_receipt = $b_out | path join custody $"1-($b_receipt.custodian | str substring 0..11)" receipts $"($born.cid).receipt.json"
     assert equal $c_receipt.prev (open --raw $b_layer_receipt | hash sha256)
 
-    seal --repo $c.repo --no-stamp --no-root-cid | ignore
+    seal --repo $c.repo --no-stamp | ignore
     let c_out = bundle $born.cid --repo $c.repo --out ($tmp_dir | path join c-out)
 
     # A stranger verifies the whole dissemination path offline: A authored,
@@ -181,7 +181,7 @@ def "handoff makes direction a signed claim, woven into the custody chain" [] {
     let c = make-neuron $tmp_dir "c"
 
     let born = link add $P1 $P2 --repo $a.repo
-    seal --repo $a.repo --no-stamp --no-root-cid | ignore
+    seal --repo $a.repo --no-stamp | ignore
 
     # A hands the birth bundle to B by neuron CID: signed handoff at the root
     let a_out = bundle $born.cid --repo $a.repo --out ($tmp_dir | path join a-out) --to (neuron-cid $b.home)
@@ -212,7 +212,7 @@ def "handoff makes direction a signed claim, woven into the custody chain" [] {
     open --raw $m_imported.receipt
     | str replace (neuron-cid $m.home) (neuron-cid $b.home)
     | save --raw --force $m_imported.receipt
-    seal --repo $m.repo --no-stamp --no-root-cid | ignore
+    seal --repo $m.repo --no-stamp | ignore
     let m_out = bundle $born.cid --repo $m.repo --out ($tmp_dir | path join m-out)
     let mv = verify-bundle $m_out
     assert not $mv.valid
@@ -223,11 +223,11 @@ def "handoff makes direction a signed claim, woven into the custody chain" [] {
     let b_receipt = open --raw $b_imported.receipt | from json
     assert equal $b_receipt.handoff (open --raw $root_handoff | hash sha256)
 
-    seal --repo $b.repo --no-stamp --no-root-cid | ignore
+    seal --repo $b.repo --no-stamp | ignore
     let b_out = bundle $born.cid --repo $b.repo --out ($tmp_dir | path join b-out) --to (neuron-cid $c.home)
 
     import $b_out --repo $c.repo | ignore
-    seal --repo $c.repo --no-stamp --no-root-cid | ignore
+    seal --repo $c.repo --no-stamp | ignore
     # C re-exports openly (no recipient): legal, the chain just ends unaddressed
     let c_out = bundle $born.cid --repo $c.repo --out ($tmp_dir | path join c-out)
 
@@ -256,7 +256,7 @@ def "forged authorship is refused: neuron CID of a key that never signed" [] {
     ^ssh-keygen -t ed25519 -f $mallory -N "" -C mallory -q
     let mallory_cid = open --raw $"($mallory).pub" | into binary | cid-v0
     let born = link add $P1 $P2 --repo $a.repo --neuron $mallory_cid
-    seal --repo $a.repo --no-stamp --no-root-cid | ignore
+    seal --repo $a.repo --no-stamp | ignore
 
     let bundle_dir = bundle $born.cid --repo $a.repo --out ($tmp_dir | path join out-bundle)
     let v = verify-bundle $bundle_dir
@@ -273,7 +273,7 @@ def "non-canonical pubkey file in a bundle is refused" [] {
     let tmp_dir = $in.tmp_dir
     let a = make-neuron $tmp_dir "a"
     let born = link add $P1 $P2 --repo $a.repo
-    seal --repo $a.repo --no-stamp --no-root-cid | ignore
+    seal --repo $a.repo --no-stamp | ignore
     let bundle_dir = bundle $born.cid --repo $a.repo --out ($tmp_dir | path join out-bundle)
 
     # Re-adding a comment keeps the key material — the signature would still
@@ -290,7 +290,7 @@ def "tampered record in a bundle fails self-addressing" [] {
     let tmp_dir = $in.tmp_dir
     let a = make-neuron $tmp_dir "a"
     let born = link add $P1 $P2 --repo $a.repo
-    seal --repo $a.repo --no-stamp --no-root-cid | ignore
+    seal --repo $a.repo --no-stamp | ignore
     let bundle_dir = bundle $born.cid --repo $a.repo --out ($tmp_dir | path join out-bundle)
 
     let rec_file = $bundle_dir | path join links $"($born.cid).json"
@@ -311,7 +311,7 @@ def "a handoff that is tampered, unsigned, or misclaiming is refused" [] {
     let a = make-neuron $tmp_dir "a"
     let b = make-neuron $tmp_dir "b"
     let born = link add $P1 $P2 --repo $a.repo
-    seal --repo $a.repo --no-stamp --no-root-cid | ignore
+    seal --repo $a.repo --no-stamp | ignore
     let a_out = bundle $born.cid --repo $a.repo --out ($tmp_dir | path join a-out) --to (neuron-cid $b.home)
     let handoff_name = $"($born.cid).handoff.json"
 
@@ -360,7 +360,7 @@ def "a handoff that is tampered, unsigned, or misclaiming is refused" [] {
     # to a hash that is not B's receipt
     let c = make-neuron $tmp_dir "c"
     import $a_out --repo $b.repo | ignore
-    seal --repo $b.repo --no-stamp --no-root-cid | ignore
+    seal --repo $b.repo --no-stamp | ignore
     let b_out = bundle $born.cid --repo $b.repo --out ($tmp_dir | path join b-out) --to (neuron-cid $c.home)
     assert (verify-bundle $b_out | get valid)
 
@@ -382,11 +382,11 @@ def "custody layer names cannot lie — forged dirname, duplicated custodian, re
     let tmp_dir = $in.tmp_dir
     let a = make-neuron $tmp_dir "a"
     let born = link add $P1 $P2 --repo $a.repo
-    seal --repo $a.repo --no-stamp --no-root-cid | ignore
+    seal --repo $a.repo --no-stamp | ignore
     let a_out = bundle $born.cid --repo $a.repo --out ($tmp_dir | path join a-out)
     let b = make-neuron $tmp_dir "b"
     import $a_out --repo $b.repo | ignore
-    seal --repo $b.repo --no-stamp --no-root-cid | ignore
+    seal --repo $b.repo --no-stamp | ignore
     let b_out = bundle $born.cid --repo $b.repo --out ($tmp_dir | path join b-out)
     let a12 = neuron-cid $a.home | str substring 0..11
     let b12 = neuron-cid $b.home | str substring 0..11
@@ -427,7 +427,7 @@ def "bundle --to without a signing key fails before writing anything" [] {
     let tmp_dir = $in.tmp_dir
     let a = make-neuron $tmp_dir "a"
     let born = link add $P1 $P2 --repo $a.repo
-    seal --repo $a.repo --no-stamp --no-root-cid | ignore
+    seal --repo $a.repo --no-stamp | ignore
 
     ^git -C $a.repo config --unset user.signingKey
     let dest = $tmp_dir | path join out
@@ -448,11 +448,11 @@ def "a re-export that comes out without a root certificate is refused and remove
     let tmp_dir = $in.tmp_dir
     let a = make-neuron $tmp_dir "a"
     let born = link add $P1 $P2 --repo $a.repo
-    seal --repo $a.repo --no-stamp --no-root-cid | ignore
+    seal --repo $a.repo --no-stamp | ignore
     let a_out = bundle $born.cid --repo $a.repo --out ($tmp_dir | path join a-out)
     let b = make-neuron $tmp_dir "b"
     import $a_out --repo $b.repo | ignore
-    seal --repo $b.repo --no-stamp --no-root-cid | ignore
+    seal --repo $b.repo --no-stamp | ignore
 
     # Corrupt the source copy so assembly produces a certless bundle root
     rm ($b.home | path join imported $born.record.neuron $born.cid $"($born.cid).cert.json")

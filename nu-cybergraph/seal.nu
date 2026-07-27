@@ -10,44 +10,65 @@ use _layout.nu [links-dir certs-dir cert-path snapshot-dir receipts-dir receipt-
 use _record.nu [read-link]
 use _deps/seal.nu [seal]
 use _deps/merkle.nu [merkle]
+use _deps/pubkey.nu [pubkey]
+
+# The public half of the key this repo's git config will sign with, plus how to
+# name it back to the operator. Both forms git allows: inline `key::<line>`
+# material, or a path whose `.pub` sibling holds the public half.
+#
+# Why resolved here rather than imported from nu-multiproof's _key-helpers.nu:
+# cross-repo imports of another project's `_`-internals carry no compatibility
+# promise — the same call _repo.nu made for repo-root.
+def signing-pubkey [root: path]: nothing -> record<line: string, desc: string, hint: string> {
+    let cfg = ^git -C $root config user.signingKey | complete
+    if $cfg.exit_code != 0 or ($cfg.stdout | str trim | is-empty) {
+        error make {msg: "no signing key configured — set git config user.signingKey in the repo seal targets"}
+    }
+    let raw = $cfg.stdout | str trim
+    if ($raw | str starts-with "key::") {
+        {line: ($raw | str replace "key::" "") desc: "the inline user.signingKey" hint: ""}
+    } else {
+        let expanded = $raw | path expand
+        let pub = if ($expanded | str ends-with ".pub") { $expanded } else { $"($expanded).pub" }
+        if not ($pub | path exists) {
+            error make {msg: $"the signing key's public half is not on disk: ($pub)"}
+        }
+        {line: (open --raw $pub) desc: $pub hint: $" --pubkey ($pub)"}
+    }
+}
 
 # `seal` in the body is nu-multiproof's seal; this wrapper stages the
 # cybergraph files, runs it, then freezes certificates and the root snapshot.
+#
+# No --key: the signing identity is the repo's, read from its git config, which
+# is where multiproof's seal reads it too.
 export def main [
     --repo: path # Target git repo root (default: git root of current directory)
-    --key: path # SSH private key (default: from git config user.signingKey)
     --no-stamp # Skip OTS timestamping (stamping is the point — tests only)
-    --no-root-cid # Skip IPFS root CID (per-file CIDs are still computed pure-nu)
 ]: nothing -> record {
     let root = graph-root $repo
 
-    # Fail fast BEFORE multiproof's seal mutates anything (it writes the
-    # manifest and root statement before signing): signing needs the signer's
-    # pubkey registered in multiproofs/pubkeys/. Registration is deliberate —
-    # it establishes the neuron identity — so seal points to init instead of
-    # registering as a side effect.
+    # Fail fast BEFORE multiproof's seal mutates anything: it rewrites the
+    # manifest and the root statement — and deletes signatures over bytes that
+    # changed — in its step 2, while its own registration check (`ssh-sign
+    # sign` → signing-principal) only fires in step 3, once that is done. Same
+    # invariant, asked before the damage instead of after; that ordering is the
+    # only reason this is not a duplicate of upstream's check. Registration is
+    # deliberate — it establishes the neuron identity — so seal points to init
+    # instead of registering as a side effect.
     let registered = glob ($root | path join multiproofs pubkeys *.pub)
     if ($registered | is-empty) {
-        let hint = if $key != null { $" --pubkey ($key)" } else { "" }
-        error make {msg: $"no pubkey registered in multiproofs/pubkeys/ — run `nu-cybergraph init($hint)` first"}
+        error make {msg: "no pubkey registered in multiproofs/pubkeys/ — run `nu-cybergraph init` first"}
     }
-    if $key != null {
-        let pub = if ($key | str ends-with ".pub") { $key } else { $"($key).pub" }
-        # A missing .pub must error, not skip: ssh-keygen signs with the
-        # private key alone, so skipping would let multiproof's seal write the
-        # manifest and sign with an unregistered key — the exact half-mutated
-        # state this fail-fast block exists to prevent.
-        if not ($pub | path exists) {
-            error make {msg: $"cannot check key registration: ($pub) does not exist"}
-        }
-        # Compare key material (type + base64), ignoring comments
-        let material = open --raw $pub | str trim | split row " " | first 2 | str join " "
-        let known = $registered | any {|f|
-            (open --raw $f | str trim | split row " " | first 2 | str join " ") == $material
-        }
-        if not $known {
-            error make {msg: $"($pub) is not registered in multiproofs/pubkeys/ — run `nu-cybergraph init --pubkey ($pub)` first"}
-        }
+    # Compare fingerprints, not `<type> <base64>` text: upstream a principal IS
+    # the key's own fingerprint, and `pubkey fingerprint` canonicalizes on the
+    # way in — so this asks the same question multiproof will ask, in the same
+    # terms, instead of a hand-rolled string compare that reads a padded copy of
+    # a registered key as a different key.
+    let signing = signing-pubkey $root
+    let known = $registered | each {|f| open --raw $f | pubkey fingerprint }
+    if ($signing.line | pubkey fingerprint) not-in $known {
+        error make {msg: $"($signing.desc) is not registered in multiproofs/pubkeys/ — run `nu-cybergraph init($signing.hint)` first"}
     }
 
     # Self-addressing is the format's contract for every reader, but until now
@@ -80,11 +101,7 @@ export def main [
         ^git -C $root add -- ...$stage
     }
 
-    let sealed = if $key != null {
-        seal --repo $root --key $key --no-stamp=$no_stamp --no-root-cid=$no_root_cid
-    } else {
-        seal --repo $root --no-stamp=$no_stamp --no-root-cid=$no_root_cid
-    }
+    let sealed = seal --repo $root --no-stamp=$no_stamp
     let root_hex = $sealed.merkle_root
 
     # Freeze birth certificates for links that don't have one yet.

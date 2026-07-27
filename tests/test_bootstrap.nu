@@ -58,7 +58,7 @@ def "seal before init fails fast, before anything is written" [] {
     "hi\n" | save ($r.repo | path join readme.md)
     ^git -C $r.repo add -A
 
-    let err = try { seal --repo $r.repo --no-stamp --no-root-cid; null } catch {|e| $e.msg }
+    let err = try { seal --repo $r.repo --no-stamp; null } catch {|e| $e.msg }
     assert ($err != null) "seal ran without a registered pubkey"
     assert ($err | str contains "nu-cybergraph init")
     # Nothing mutated: no manifest, no root statement
@@ -79,7 +79,7 @@ def "nested graph home: init puts everything under cybergraph/ by default" [] {
 
     let born = link add $P1 $P2 --repo $r.repo
     assert ($born.path | str contains $"cybergraph(char path_sep)links")
-    let sealed = seal --repo $r.repo --no-stamp --no-root-cid
+    let sealed = seal --repo $r.repo --no-stamp
     assert equal $sealed.newborn 1
     assert (($r.repo | path join cybergraph certs $"($born.cid).cert.json") | path exists)
     let manifest = open --raw ($r.repo | path join cybergraph multiproofs tree-hashes.csv)
@@ -112,7 +112,7 @@ def "seal refuses a link file that does not match its content address" [] {
     let born = link add $P1 $P2 --repo $r.repo
     swap-record $born.path (open --raw $born.path | from json | update cid_to $P3)
 
-    let err = try { seal --repo $r.repo --no-stamp --no-root-cid; null } catch {|e| $e.msg }
+    let err = try { seal --repo $r.repo --no-stamp; null } catch {|e| $e.msg }
     assert ($err != null) "seal signed a record that is not its own address"
     assert ($err | str contains $born.cid) $"error should name the offending file: ($err)"
     # Aborted before multiproof wrote anything — no manifest, no certificate
@@ -125,39 +125,45 @@ def "a record tampered after its birth seal aborts the next seal too" [] {
     let r = make-bare-repo $in.tmp_dir
     init --repo $r.repo
     let born = link add $P1 $P2 --repo $r.repo
-    assert equal (seal --repo $r.repo --no-stamp --no-root-cid | get newborn) 1
+    assert equal (seal --repo $r.repo --no-stamp | get newborn) 1
 
     # Every seal re-attests the whole catalogue, so the check covers links that
     # already have a certificate — not just the newborns of this seal
     swap-record $born.path (open --raw $born.path | from json | update cid_to $P3)
-    let err = try { seal --repo $r.repo --no-stamp --no-root-cid; null } catch {|e| $e.msg }
+    let err = try { seal --repo $r.repo --no-stamp; null } catch {|e| $e.msg }
     assert ($err != null) "a tampered record was re-attested by a later seal"
     assert ($err | str contains $born.cid)
 }
 
+# The signing identity is the repo's git config, so both key failures below are
+# reached by re-pointing user.signingKey after init — there is no --key to pass.
 @test
-def "seal with --key but no .pub next to it fails fast" [] {
+def "seal fails fast when the signing key's public half is missing" [] {
     let r = make-bare-repo $in.tmp_dir
     init --repo $r.repo
     let other = $in.tmp_dir | path join other-key
     ^ssh-keygen -t ed25519 -f $other -N "" -q
     rm $"($other).pub"
+    ^git -C $r.repo config user.signingKey $other
 
-    let err = try { seal --repo $r.repo --key $other --no-stamp --no-root-cid; null } catch {|e| $e.msg }
+    let err = try { seal --repo $r.repo --no-stamp; null } catch {|e| $e.msg }
     assert ($err != null) "seal ran without the public key present"
-    assert ($err | str contains $"($other).pub")
+    assert ($err | str contains $"($other | path expand).pub")
     assert not (($r.repo | path join cybergraph multiproofs tree-hashes.csv) | path exists)
 }
 
 @test
-def "seal with an unregistered --key names the fix" [] {
+def "seal with an unregistered signing key names the fix" [] {
     let r = make-bare-repo $in.tmp_dir
     init --repo $r.repo
     let other = $in.tmp_dir | path join other-key
     ^ssh-keygen -t ed25519 -f $other -N "" -q
+    ^git -C $r.repo config user.signingKey $other
 
-    let err = try { seal --repo $r.repo --key $other --no-stamp --no-root-cid; null } catch {|e| $e.msg }
+    let err = try { seal --repo $r.repo --no-stamp; null } catch {|e| $e.msg }
     assert ($err != null) "seal accepted a key that is not registered"
-    assert ($err | str contains $"init --pubkey ($other).pub")
+    assert ($err | str contains $"init --pubkey ($other | path expand).pub")
+    # multiproof's own check fires only after it has rewritten these
     assert not (($r.repo | path join cybergraph multiproofs tree-hashes.csv) | path exists)
+    assert not (($r.repo | path join cybergraph multiproofs tree-root.txt) | path exists)
 }
