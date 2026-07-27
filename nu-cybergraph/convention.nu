@@ -35,14 +35,17 @@
 #   author              {about: B, op: author}                        → P
 #   same                {about: P1, op: same}                         → P2
 #   update              {cid_from: A, cid_to: B, op: update}          → C
+#   update-file         {about: B, op: update}                        → C
 #   answer              {cid_from: {about: B, op: question}, cid_to: Q, op: answer} → A
 #   claimed-at          {about: X, op: claimed_at}                    → T
 #
-# Fourteen verbs, twelve conventions: repeat is bj002's edge repetition, which
-# is not one of them (no CID in the source), and claimed-at is this repo's
-# extension — it took over the claimed_at field removed from the link record,
-# so a time claim is an ordinary optional edge instead of a fixture of every
-# record. bj002's set of conventions is open, which is what permits it.
+# Fifteen verbs, twelve conventions: repeat is bj002's edge repetition, which
+# is not one of them (no CID in the source), and claimed-at and update-file are
+# this repo's extensions — claimed-at took over the claimed_at field removed from
+# the link record, so a time claim is an ordinary optional edge instead of a
+# fixture of every record; update-file is bj002's update act stated about a file
+# instead of an edge, which is what a version chain of files needs. bj002's set
+# of conventions is open, which is what permits both.
 #
 # Reading and aggregation (count the signals, weigh signers, read consensus)
 # are deliberately out of scope: a local repo is a single signer, so there is
@@ -183,6 +186,32 @@ export def update [
         op: "update"
     }
     edge $src (resolve-particle $root $cid_new) $signer $repo
+}
+
+# Update a file: {about: B, op: update} → C — "C is the version that replaces B".
+# bj002's `update` states the same act, "C replaces B", with A supplying the
+# context of an edge; this is that act about the file alone, so a version chain
+# of files gets an address of its own instead of being a plain edge no reader can
+# tell from any other. The operand sits in the source, like quote/pro/con/
+# question/author: reading B a reader computes one hash and reads outgoing edges,
+# competing replacements share one address, and a replacement is itself
+# replaceable — which is what makes the chain. Same op word as `update` because it
+# is the same act; the record shape carries the arity, so the two addresses cannot
+# collide. Not among bj002's twelve — an extension like `claimed-at`, which the
+# open set of conventions permits (bj002 "Updating a previously published edge").
+#
+# Direction: source is the version being replaced, not the newest one. A chain
+# written the other way round would need the reader to know the newest CID before
+# it could ask what came before — the opposite of the query this exists for.
+@example "C is the version that replaces B" { convention update-file QmB… QmC… }
+export def "update-file" [
+    superseded: string # the version being replaced
+    replacement: string # the version replacing it
+    --signer: string
+    --repo: path
+]: nothing -> record {
+    let root = graph-root $repo
+    edge {about: (resolve-particle $root $superseded), op: "update"} (resolve-particle $root $replacement) $signer $repo
 }
 
 # Quote: {about: A, op: quote} → B states that B is a faithful excerpt of A

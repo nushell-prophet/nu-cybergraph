@@ -102,6 +102,23 @@ def "update reissues from the record embedding the fields of the edge" [] {
 }
 
 @test
+def "update-file states the same act about a file, at a distinct address" [] {
+    let tmp = $in.tmp
+    let r = convention update-file $B $C --repo $tmp --signer $S | get record
+    assert equal $r.cid_from (derive {about: $B, op: "update"})
+    assert equal $r.cid_to $C
+
+    # Same op word, different arity — the record shape keeps the two addresses
+    # apart, which is what lets one verb family cover edges and files.
+    assert not equal $r.cid_from (derive {cid_from: $A, cid_to: $B, op: "update"})
+
+    # The source is the version being replaced, so a reader who holds B can
+    # compute one hash and ask what replaced it. A chain is updates of updates.
+    let next = convention update-file $C $A --repo $tmp --signer $S | get record
+    assert equal $next.cid_from (derive {about: $C, op: "update"})
+}
+
+@test
 def "operand-embedding conventions put the operand in the source" [] {
     let tmp = $in.tmp
     let q = convention quote $A $B --repo $tmp --signer $S | get record
