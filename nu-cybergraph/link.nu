@@ -1,6 +1,7 @@
 # Create link records in a neuron repo.
 
 use _repo.nu graph-root
+use _fs.nu list-files
 use _record.nu [link-bytes link-cid]
 use _layout.nu [links-dir link-path]
 use _particle.nu [resolve-particle]
@@ -9,7 +10,7 @@ use _deps/cid-v0.nu [cid-v0]
 # Derive the repo's own neuron identity: the CID of its registered pubkey.
 # With several pubkeys registered the choice is the author's — require --neuron.
 def own-neuron-cid [root: path]: nothing -> string {
-    let pubs = glob ($root | path join multiproofs pubkeys *.pub)
+    let pubs = list-files ($root | path join multiproofs pubkeys) --suffix ".pub"
     match ($pubs | length) {
         0 => (error make {msg: "no pubkey registered — run `nu-cybergraph init` first"})
         1 => (open --raw ($pubs | first) | into binary | cid-v0)

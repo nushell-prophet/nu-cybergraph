@@ -5,6 +5,7 @@ use _deps/merkle.nu [merkle]
 use _deps/cid-v0.nu [cid-v0]
 use _deps/pubkey.nu [pubkey]
 use _deps/ssh-sign.nu [ssh-sign]
+use _fs.nu list-files
 use _record.nu [read-link]
 use _receipt.nu [read-receipt bundle-manifest custody-layers]
 use _handoff.nu [read-handoff]
@@ -16,7 +17,7 @@ use _layout.nu [receipt-relpath custody-layer-dirname handoff-filename]
 # One read per pubkey: the canonical check and the binding hash must see
 # the same bytes — a re-read could race with a file swap (check vs use).
 def canonical-pubkeys [dir: path]: nothing -> table {
-    let pubs = glob ($dir | path join multiproofs pubkeys *.pub)
+    let pubs = list-files ($dir | path join multiproofs pubkeys) --suffix ".pub"
         | each {|f| {path: $f bytes: (open --raw $f | into binary)} }
     for pub in $pubs {
         let raw = $pub.bytes | decode
@@ -34,7 +35,7 @@ def canonical-pubkeys [dir: path]: nothing -> table {
 # single *.cert.json at the root, the leaf file at its manifest path, the
 # seal snapshot + pubkeys under multiproofs/.
 def verify-proof-dir [dir: path]: nothing -> record {
-    let certs = glob ($dir | path join *.cert.json)
+    let certs = list-files $dir --suffix ".cert.json"
     if ($certs | length) != 1 {
         error make {msg: $"expected exactly one *.cert.json at the root of ($dir), found ($certs | length)"}
     }

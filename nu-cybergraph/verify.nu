@@ -6,7 +6,7 @@
 # for both cases, so callers never branch on where the link came from.
 
 use _repo.nu graph-root
-use _layout.nu [cert-path imported-dir]
+use _layout.nu [cert-path imported-copies]
 use _verify-helpers.nu [verify-bundle]
 use bundle.nu
 
@@ -41,7 +41,7 @@ export def main [
     } else {
         # The same link CID can arrive from several neurons (identical record,
         # identical CID) — verify every copy we hold.
-        let hits = glob (imported-dir $root | path join * $link_cid)
+        let hits = imported-copies $root $link_cid
         if ($hits | is-empty) {
             error make {msg: $"unknown link: ($link_cid) — not in certs/ or imported/"}
         }

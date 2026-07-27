@@ -12,8 +12,9 @@
 use _deps/ssh-sign.nu [ssh-sign]
 use _deps/pubkey.nu [pubkey]
 use _repo.nu graph-root
+use _fs.nu [list-files list-dirs]
 use _layout.nu [
-    links-dir exports-dir cert-path cert-filename snapshot-dir imported-dir
+    links-dir exports-dir cert-path cert-filename snapshot-dir imported-copies
     receipt-relpath receipt-cert-path receipt-cert-filename custody-dir custody-layer-dirname
     handoff-filename
 ]
@@ -30,7 +31,7 @@ def assemble-seal-artifacts [root: path out: path root_hex: string] {
         error make {msg: $"seal snapshot missing for root ($root_hex) — the proof predates the seals/ convention?"}
     }
     mkdir ($out | path join multiproofs pubkeys)
-    glob ($snap | path join *) | each {|f| cp $f ($out | path join multiproofs) }
+    list-files $snap | each {|f| cp $f ($out | path join multiproofs) }
 
     # Signer pubkeys, found by KEY MATERIAL. The middle segment of a sig name is
     # the signer's fingerprint (nu-multiproof b6d7b11: `sig-path-for` names the
@@ -41,9 +42,9 @@ def assemble-seal-artifacts [root: path out: path root_hex: string] {
     # for any neuron who renamed the file `init` wrote.
     # Anchored regex, greedy middle: a fingerprint cannot contain ".sig", but
     # the bare `<file>.sig` form must not parse as one either.
-    let signers = glob ($snap | path join tree-root.txt.*.sig)
+    let signers = list-files $snap --suffix ".sig"
         | each {|s| $s | path basename | parse --regex '^tree-root\.txt\.(?<fp>.+)\.sig$' | get --optional 0.fp }
-    let registered = glob ($root | path join multiproofs pubkeys *.pub)
+    let registered = list-files ($root | path join multiproofs pubkeys) --suffix ".pub"
         | each {|f| {path: $f fingerprint: (open --raw $f | pubkey fingerprint)} }
     let copied = $signers | each {|fp|
         let hit = $registered | where fingerprint == $fp
@@ -59,7 +60,8 @@ def assemble-seal-artifacts [root: path out: path root_hex: string] {
     # OTS bundles committing to this root, matched by their frozen root
     # statement. Plain content match — discovery only; verify re-checks the
     # commitment cryptographically.
-    let ots_bundles = glob ($root | path join multiproofs ots-timestamps tree-root.*)
+    let ots_bundles = list-dirs ($root | path join multiproofs ots-timestamps)
+        | where {|d| $d | path basename | str starts-with "tree-root." }
         | where {|d|
             let frozen = $d | path join tree-root.txt
             ($frozen | path exists) and (open --raw $frozen | str contains $root_hex)
@@ -117,7 +119,7 @@ def write-handoff [root: path dir: path link_cid: string to: string receipt_hash
 # Whatever the cause, a partial bundle must not leave the repo with exit 0 —
 # and must not stay on disk looking complete, so it is removed before erroring.
 def assert-complete-bundle [out: path]: nothing -> path {
-    let certs = glob ($out | path join *.cert.json)
+    let certs = list-files $out --suffix ".cert.json"
     if ($certs | length) != 1 {
         rm --recursive --force $out
         error make {msg: $"bundle came out incomplete: ($certs | length) *.cert.json at the root instead of 1 — partial bundle removed, re-run the export"}
@@ -161,7 +163,7 @@ export def main [
     }
 
     # Imported link: re-export with this repo's custody layer appended
-    let hits = glob (imported-dir $root | path join * $link_cid)
+    let hits = imported-copies $root $link_cid
     if ($hits | is-empty) {
         error make {msg: $"unknown link: ($link_cid) — no birth certificate in certs/ and nothing in imported/"}
     }

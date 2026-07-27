@@ -98,9 +98,14 @@ def "birth, seal, bundle, import, verify — the full link journey" [] {
     assert (verify $born.cid --repo $a.repo | first | get valid)
 }
 
-# The repo's neuron identity: CID of its single registered (canonical) pubkey
+# The repo's neuron identity: CID of its single registered (canonical) pubkey.
+# `ls`, not `glob`: a test repo path may hold glob metacharacters on purpose.
 def neuron-cid [home: path]: nothing -> string {
-    open --raw (glob ($home | path join multiproofs pubkeys *.pub) | first) | into binary | cid-v0
+    let pub = ls ($home | path join multiproofs pubkeys)
+        | get name
+        | where {|f| $f | str ends-with ".pub" }
+        | first
+    open --raw $pub | into binary | cid-v0
 }
 
 @test
@@ -306,6 +311,33 @@ def "a pubkey filed under the fingerprint of another key cannot borrow its autho
     assert not $v.valid
     let c = make-neuron $tmp_dir "carol"
     assert error {|| import $out --repo $c.repo }
+}
+
+# A repo path is data, never a pattern. Every discovery site used to splice it
+# into a glob, so one `[` above the graph made the whole module silently see an
+# empty repo: `seal`'s pre-seal self-addressing sweep validated no record at
+# all, and verification found no pubkey, no certificate and no imported copy.
+# Silence is what makes it dangerous — nothing errors, the answers just go
+# empty. The metacharacters here are the ones nushell's glob reads.
+@test
+def "a repo path holding glob metacharacters still seals, exports and imports" [] {
+    let tmp_dir = $in.tmp_dir
+    let a = make-neuron $tmp_dir "a[v1]{x}"
+    let b = make-neuron $tmp_dir "b?[2]"
+
+    let born = link add $P1 $P2 --repo $a.repo
+    let sealed = seal --repo $a.repo --no-stamp
+    assert equal $sealed.newborn 1
+    # `ls`, not `glob`: the assertion must not repeat the bug it is pinning
+    assert equal (ls $sealed.snapshot | get name | where {|f| $f | str ends-with ".sig"} | length) 1
+
+    let out = bundle $born.cid --repo $a.repo --out ($tmp_dir | path join out) --to (neuron-cid $b.home)
+    assert (verify $born.cid --repo $a.repo | first | get valid)
+
+    let imported = import $out --repo $b.repo
+    assert (verify $born.cid --repo $b.repo | first | get valid)
+    # ...and the receipt's file manifest is the bundle, not an empty list
+    assert ((open --raw $imported.receipt | from json | get files | length) > 0)
 }
 
 # A pubkey file's name is decoration upstream — `mv` is how an operator sets

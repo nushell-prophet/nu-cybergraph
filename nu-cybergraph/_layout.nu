@@ -4,6 +4,8 @@
 # silently disagreeing. Paths into multiproofs/ stay inline at call sites —
 # they pin nu-multiproof's public layout, not ours.
 
+use _fs.nu list-dirs
+
 export const LINKS_DIR = "links"
 export const PARTICLES_DIR = "particles"
 export const CERTS_DIR = "certs"
@@ -65,6 +67,16 @@ export def imported-dir [root: path]: nothing -> path {
 # <root>/receipts
 export def receipts-dir [root: path]: nothing -> path {
     $root | path join $RECEIPTS_DIR
+}
+
+# Every copy of one link we hold: imported/<neuron>/<link>, over all neurons.
+# A two-level walk by listing, never `glob (… | path join * $link_cid)` — the
+# graph path is spliced into that pattern, so a `[` in it returns [] and the
+# caller reads "unknown link" for a link sitting right there.
+export def imported-copies [root: path link_cid: string]: nothing -> list<path> {
+    list-dirs (imported-dir $root)
+    | each {|neuron| $neuron | path join $link_cid }
+    | where {|d| $d | path exists }
 }
 
 # receipts/<cid>.receipt.json — the custody receipt's manifest path, relative

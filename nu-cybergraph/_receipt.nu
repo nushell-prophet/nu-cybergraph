@@ -12,6 +12,7 @@
 #   re-listing all prior layers would grow the chain quadratically.
 
 use _deps/cid-v0.nu [cid-v0]
+use _fs.nu [list-files list-dirs]
 use _record.nu [CID_V0_RE RFC3339_RE]
 use _layout.nu [CUSTODY_DIR custody-dir]
 
@@ -78,7 +79,7 @@ export def read-receipt [file: path]: nothing -> record {
 # recomputes to compare against it.
 export def bundle-manifest [bundle: path]: nothing -> table {
     let root = $bundle | path expand
-    glob --no-dir ($root | path join ** *)
+    list-files $root --recursive
     | path relative-to $root
     | where $it !~ $'^($CUSTODY_DIR)/'
     | sort
@@ -93,7 +94,7 @@ export def custody-layers [bundle: path]: nothing -> table {
     if not ($dir | path exists) {
         return []
     }
-    glob ($dir | path join *)
+    list-dirs $dir
     | each {|d|
         let idx = $d | path basename | parse --regex '^(?<index>\d+)-' | get --optional 0.index
         if $idx == null {
@@ -109,7 +110,7 @@ export def custody-layers [bundle: path]: nothing -> table {
 # canonical form — hash them directly. Ambiguity (several registered keys)
 # is an error: one keypair is one neuron, a custody claim needs exactly one.
 export def own-neuron [root: path]: nothing -> string {
-    let pubs = glob ($root | path join multiproofs pubkeys *.pub)
+    let pubs = list-files ($root | path join multiproofs pubkeys) --suffix ".pub"
     if ($pubs | length) != 1 {
         error make {msg: $"cannot derive the custodian neuron: expected exactly one pubkey in multiproofs/pubkeys/, found ($pubs | length)"}
     }

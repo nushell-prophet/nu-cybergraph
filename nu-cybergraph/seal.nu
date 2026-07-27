@@ -6,6 +6,7 @@
 # newer roots and must not touch existing certificates.
 
 use _repo.nu graph-root
+use _fs.nu list-files
 use _layout.nu [links-dir certs-dir cert-path snapshot-dir receipts-dir receipt-cert-path LINKS_DIR CERTS_DIR SEALS_DIR IMPORTED_DIR RECEIPTS_DIR]
 use _record.nu [read-link]
 use _deps/seal.nu [seal]
@@ -29,12 +30,7 @@ export def main [
     # pubkeys/ means `nu-cybergraph init` has not run, and registration is
     # deliberate — it establishes the neuron identity — so seal points there
     # instead of registering as a side effect.
-    # Not glob: a repo path holding `[ ] * ? {` reads as pattern syntax and
-    # silently returns [] (nu-multiproof's trap list).
-    let pubkeys_dir = $root | path join multiproofs pubkeys
-    let registered = if ($pubkeys_dir | path exists) {
-        ls --all $pubkeys_dir | where type == file | where ($it.name | str ends-with ".pub")
-    } else { [] }
+    let registered = list-files ($root | path join multiproofs pubkeys) --suffix ".pub"
     if ($registered | is-empty) {
         error make {msg: "no pubkey registered in multiproofs/pubkeys/ — run `nu-cybergraph init` first"}
     }
@@ -51,7 +47,7 @@ export def main [
     # catalogue, so a record tampered with after its birth seal must abort this
     # one too. Cost is one sha256 per link per seal, against a seal that
     # already signs and stamps.
-    for f in (glob (links-dir $root | path join *.json)) {
+    for f in (list-files (links-dir $root) --suffix ".json") {
         read-link $f
     }
 
@@ -74,7 +70,7 @@ export def main [
 
     # Freeze birth certificates for links that don't have one yet.
     mkdir (certs-dir $root)
-    let newborn = glob (links-dir $root | path join *.json)
+    let newborn = list-files (links-dir $root) --suffix ".json"
         | where {|f| not ((cert-path $root (($f | path parse).stem)) | path exists) }
     for f in $newborn {
         let proof = merkle prove ($f | path relative-to $root) --repo $root
@@ -84,8 +80,8 @@ export def main [
     # Same freeze rule for custody receipts: the FIRST seal that catalogues a
     # receipt sets its earliest provable custody bound, so its proof freezes
     # beside it and later seals must not touch it. (*.receipt.cert.json does
-    # not match *.receipt.json — the glob skips already-frozen proofs.)
-    let new_receipts = glob (receipts-dir $root | path join *.receipt.json)
+    # not end with .receipt.json — the suffix skips already-frozen proofs.)
+    let new_receipts = list-files (receipts-dir $root) --suffix ".receipt.json"
         | where {|f| not ((receipt-cert-path $root ($f | path basename | str replace ".receipt.json" "")) | path exists) }
     for f in $new_receipts {
         let proof = merkle prove ($f | path relative-to $root) --repo $root
@@ -99,7 +95,11 @@ export def main [
     if not ($snap | path exists) {
         mkdir $snap
         cp ($root | path join multiproofs tree-root.txt) $snap
-        glob ($root | path join multiproofs tree-root.txt.*sig) | each {|s| cp $s $snap }
+        # Both sig spellings nu-multiproof's _sig.nu knows: the named
+        # `<file>.<fingerprint>.sig` and the bare `<file>.sig`.
+        list-files ($root | path join multiproofs) --suffix ".sig"
+        | where {|s| $s | path basename | str starts-with "tree-root.txt." }
+        | each {|s| cp $s $snap }
     }
 
     {sealed: $sealed newborn: ($newborn | length) receipts: ($new_receipts | length) snapshot: $snap}
