@@ -1,5 +1,5 @@
 # Import a foreign link's bundle into this repo, verifying before anything
-# lands. The bundle stays intact under imported/<neuron-cid>/<link-cid>/ — it
+# lands. The bundle stays intact under imported/<signer-cid>/<link-cid>/ — it
 # remains the link's authority for authorship and birth time through any
 # number of re-exports.
 #
@@ -11,12 +11,12 @@
 
 use _repo.nu graph-root
 use _layout.nu [imported-dir receipts-dir receipt-relpath handoff-filename]
-use _receipt.nu [receipt-bytes bundle-manifest custody-layers own-neuron]
+use _receipt.nu [receipt-bytes bundle-manifest custody-layers own-signer]
 use _verify-helpers.nu [verify-bundle]
 
 # Verify a foreign bundle and land it read-only under imported/, writing this
 # repo's custody receipt for the next seal to freeze. Refuses on any
-# verification failure and on a handoff addressed to another neuron.
+# verification failure and on a handoff addressed to another signer.
 export def main [
     bundle: path # Portable bundle directory to import
     --repo: path # Destination repo root (default: git root of current directory)
@@ -26,15 +26,15 @@ export def main [
     if not $v.valid {
         error make {msg: $"refusing to import: ($v.error)"}
     }
-    let me = own-neuron $root
+    let me = own-signer $root
     # A bundle handed to someone else must not land here: this repo's custody
     # layer could never verify (the chain demands the previous holder's
     # handoff name THIS custodian), so fail before anything mutates.
     if $v.handed_to != null and $v.handed_to != $me {
-        error make {msg: $"refusing to import: bundle was handed to ($v.handed_to), not to this repo's neuron ($me)"}
+        error make {msg: $"refusing to import: bundle was handed to ($v.handed_to), not to this repo's signer ($me)"}
     }
     let link_cid = $v.leaf.filepath | path parse | get stem
-    let dest = imported-dir $root | path join $v.neuron.cid $link_cid
+    let dest = imported-dir $root | path join $v.signer.cid $link_cid
     if ($dest | path exists) {
         error make {msg: $"already imported: ($dest)"}
     }
@@ -55,7 +55,7 @@ export def main [
     }
     let receipt = {
         link: $link_cid
-        neuron: $v.neuron.cid
+        signer: $v.signer.cid
         custodian: $me
         received_at: (date now | format date "%+")
         files: (bundle-manifest $dest)
@@ -68,7 +68,7 @@ export def main [
 
     {
         link: $link_cid
-        neuron: $v.neuron.cid
+        signer: $v.signer.cid
         path: $dest
         receipt: $receipt_path
         custody: ($v.custody | length)

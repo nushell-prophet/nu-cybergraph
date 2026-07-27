@@ -1,4 +1,4 @@
-# Seal the neuron repo and freeze birth certificates for newborn links.
+# Seal the signer's repo and freeze birth certificates for newborn links.
 #
 # A birth certificate is the inclusion proof extracted from the FIRST seal
 # that catalogued the link, frozen in certs/ and never regenerated. Its OTS
@@ -28,7 +28,7 @@ export def main [
     # lived here — with its own copy of the signing-key resolution — is gone
     # with it. What stays is the bootstrap case upstream cannot name: an empty
     # pubkeys/ means `nu-cybergraph init` has not run, and registration is
-    # deliberate — it establishes the neuron identity — so seal points there
+    # deliberate — it establishes the signer identity — so seal points there
     # instead of registering as a side effect.
     let registered = list-files ($root | path join multiproofs pubkeys) --suffix ".pub"
     if ($registered | is-empty) {
@@ -37,9 +37,9 @@ export def main [
 
     # Self-addressing is the format's contract for every reader, but until now
     # only verify/import enforced it. `seal` is where a file crosses from junk
-    # on disk to a statement signed by this neuron: a tampered or hand-written
+    # on disk to a statement signed by this signer: a tampered or hand-written
     # non-canonical record would get catalogued, signed, and frozen into a
-    # birth certificate that proves the neuron attested a file which is not its
+    # birth certificate that proves the signer attested a file which is not its
     # own address. Check here, at that boundary, and before multiproof's seal
     # mutates anything.
     #
@@ -56,7 +56,7 @@ export def main [
     # seals/ hold artifacts of PREVIOUS seals — cataloguing them makes each
     # seal also attest the certificates issued so far (custody continuity).
     # imported/ is the custody layer itself: cataloguing a foreign bundle is
-    # what proves "this neuron held the link no later than block K"; receipts/
+    # what proves "this signer held the link no later than block K"; receipts/
     # is that claim made portable — the statement `bundle` re-exports.
     let stage = [$LINKS_DIR $CERTS_DIR $SEALS_DIR $IMPORTED_DIR $RECEIPTS_DIR]
         | each {|d| $root | path join $d }

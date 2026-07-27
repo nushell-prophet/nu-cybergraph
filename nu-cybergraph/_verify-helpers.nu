@@ -1,5 +1,5 @@
 # Bundle verification = nu-multiproof's merkle verify + the cybergraph-specific
-# neuron binding + the custody chain. Shared by import.nu and verify.nu.
+# signer binding + the custody chain. Shared by import.nu and verify.nu.
 
 use _deps/merkle.nu [merkle]
 use _deps/cid-v0.nu [cid-v0]
@@ -11,7 +11,7 @@ use _receipt.nu [read-receipt bundle-manifest custody-layers]
 use _handoff.nu [read-handoff]
 use _layout.nu [receipt-relpath custody-layer-dirname handoff-filename]
 
-# Neuron identity is the CID of the pubkey file bytes, so the spec pins one
+# Signer identity is the CID of the pubkey file bytes, so the spec pins one
 # encoding: `pubkey canonical` form. A non-canonical file is a malformed
 # bundle — reject it loudly, like read-link does for self-addressing.
 # One read per pubkey: the canonical check and the binding hash must see
@@ -55,7 +55,7 @@ def verify-proof-dir [dir: path]: nothing -> record {
     {v: (merkle verify ($certs | first) --repo $dir) pubs: $pubs}
 }
 
-# The binding check: does CLAIMED (a neuron CID) match a pubkey that validly
+# The binding check: does CLAIMED (a signer CID) match a pubkey that validly
 # signed these bytes? Without it, anyone could re-seal someone else's record —
 # or receipt — under their own key and the signature would still verify,
 # against the wrong identity.
@@ -68,7 +68,7 @@ def verify-proof-dir [dir: path]: nothing -> record {
 # it; a bundle is free to name its files anything. Filing the victim's key as
 # `<attacker-fingerprint>.pub` (with the attacker's own key beside it under any
 # other name, so the trust list still renders it and the signature still
-# validates) bound the attacker's signature to the victim's neuron CID:
+# validates) bound the attacker's signature to the victim's signer CID:
 # `valid: true`, `bound: true`, imported by a third repo as the victim's
 # authorship. Pinned by tests/test_roundtrip.nu "a pubkey filed under another
 # key's fingerprint cannot borrow its authorship".
@@ -81,7 +81,7 @@ def bound [sigs: table pubs: table claimed: string]: nothing -> bool {
 # (exporting without naming a recipient is legal). Checks the signed
 # direction claim: shape, the claims it travels with (this link, this
 # holder, the holder's exact receipt — null for the author), and a valid
-# signature by a pubkey whose CID IS `from` (the handoff twin of the neuron
+# signature by a pubkey whose CID IS `from` (the handoff twin of the signer
 # binding). Whether `to` matches the NEXT holder is the caller's chain check.
 # read-handoff requires the schema token byte-exact, so what keeps this
 # signature from being replayed as some other artifact is the signed bytes
@@ -96,7 +96,7 @@ def check-handoff [dir: path link_cid: string holder: string expected_receipt: a
     # No try/catch: `ssh-sign verify` throws only when it cannot form a verdict
     # at all — no signature file beside the handoff, no pubkey in the bundle,
     # ssh-keygen unusable. Swallowing those into an empty table turned every
-    # one of them into "no valid signature by the handoff's `from` neuron" —
+    # one of them into "no valid signature by the handoff's `from` signer" —
     # a handoff that COULD NOT be checked reading as a handoff that FAILED a
     # check, and a missing sig file reading as an accusation. A sig that is
     # present but bad is a verdict row (valid: false), which is what the
@@ -111,7 +111,7 @@ def check-handoff [dir: path link_cid: string holder: string expected_receipt: a
         error: (if not $claims_ok {
             "handoff claims do not match the link/holder/receipt it travels with"
         } else if not $signed {
-            "no valid signature by the handoff's `from` neuron"
+            "no valid signature by the handoff's `from` signer"
         } else { null })
     }
 }
@@ -120,7 +120,7 @@ def check-handoff [dir: path link_cid: string holder: string expected_receipt: a
 # On top of each layer's multiproof result (structure, signature, content,
 # OTS), the chain checks:
 # - the proven leaf IS this link's receipt at its pinned relative path
-# - custodian binding (the receipt-side twin of the neuron binding)
+# - custodian binding (the receipt-side twin of the signer binding)
 # - `files` — the receipt's manifest matches the birth files byte-for-byte
 # - `prev` — the receipt hashes the previous layer's receipt file (null for
 #   layer 1), which is what proves the order of custody transitively
@@ -154,7 +154,7 @@ def verify-custody [bundle: path link_cid: string author: string root_handoff: a
             error make {msg: $"custody layer ($layer.dir) proves ($v.leaf.filepath), not this link's receipt"}
         }
         let receipt = read-receipt ($layer.dir | path join $v.leaf.filepath)
-        if $receipt.link != $link_cid or $receipt.neuron != $author {
+        if $receipt.link != $link_cid or $receipt.signer != $author {
             error make {msg: $"custody layer ($layer.dir) receipt is for a different link or author"}
         }
         if ($layer.dir | path basename) != (custody-layer-dirname $layer.index $receipt.custodian) {
@@ -201,7 +201,7 @@ def verify-custody [bundle: path link_cid: string author: string root_handoff: a
 }
 
 # Verify a portable bundle directory: the birth proof (multiproof result +
-# NEURON BINDING — the record's `signer` must be the CID of a pubkey that
+# SIGNER BINDING — the record's `signer` must be the CID of a pubkey that
 # validly signed the root statement), then every custody layer on top.
 export def verify-bundle [bundle: path]: nothing -> record {
     let birth = verify-proof-dir $bundle
@@ -210,11 +210,11 @@ export def verify-bundle [bundle: path]: nothing -> record {
     # read-link throws on a record that fails self-addressing — tampered bytes
     # never reach the binding check.
     let rec = read-link ($bundle | path join $v.leaf.filepath)
-    let neuron_bound = bound $v.signatures $birth.pubs $rec.signer
+    let signer_bound = bound $v.signatures $birth.pubs $rec.signer
     # No `\(`: that is an escape only in `$"…"`. Inside the `'…'` here the
     # backslash is literal, and it printed as one. Parens need no escaping in a
     # single-quoted string — nothing interpolates there.
-    print $"neuron:    (if $neuron_bound { 'bound' } else { 'NOT BOUND (no valid signature by the claimed neuron)' })"
+    print $"signer:    (if $signer_bound { 'bound' } else { 'NOT BOUND (no valid signature by the claimed signer)' })"
 
     let link_cid = $v.leaf.filepath | path parse | get stem
     let root_handoff = check-handoff $bundle $link_cid $rec.signer null $birth.pubs
@@ -238,12 +238,12 @@ export def verify-bundle [bundle: path]: nothing -> record {
 
     $v
     | insert record $rec
-    | insert neuron {cid: $rec.signer bound: $neuron_bound}
+    | insert signer {cid: $rec.signer bound: $signer_bound}
     | insert handoff $root_handoff
     | insert custody $custody
     | insert handed_to $handed_to
-    | update valid ($v.valid and $neuron_bound and $root_handoff_ok and $custody_ok)
-    | update error (if $v.error != null { $v.error } else if not $neuron_bound {
+    | update valid ($v.valid and $signer_bound and $root_handoff_ok and $custody_ok)
+    | update error (if $v.error != null { $v.error } else if not $signer_bound {
         "record's signer CID matches no validly-signing pubkey in the bundle"
     } else if not $root_handoff_ok {
         $root_handoff.error

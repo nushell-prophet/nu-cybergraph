@@ -16,7 +16,7 @@ use _fs.nu [list-files list-dirs]
 use _record.nu [CID_V0_RE RFC3339_RE]
 use _layout.nu [CUSTODY_DIR custody-dir]
 
-export const RECEIPT_KEYS = [link neuron custodian received_at files prev handoff]
+export const RECEIPT_KEYS = [link signer custodian received_at files prev handoff]
 
 # Exported for _handoff.nu — same hash-field discipline.
 export const SHA256_RE = '^[0-9a-f]{64}$'
@@ -28,7 +28,7 @@ export def validate-receipt [rec: record]: nothing -> nothing {
     if ($cols | sort) != ($RECEIPT_KEYS | sort) {
         error make {msg: $"receipt must have exactly keys ($RECEIPT_KEYS | str join ', ') — got ($cols | str join ', ')"}
     }
-    for key in [link neuron custodian] {
+    for key in [link signer custodian] {
         if ($rec | get $key) !~ $CID_V0_RE {
             error make {msg: $"receipt ($key) must be a base58btc CID v0: (($rec | get $key) | to json)"}
         }
@@ -98,21 +98,21 @@ export def custody-layers [bundle: path]: nothing -> table {
     | each {|d|
         let idx = $d | path basename | parse --regex '^(?<index>\d+)-' | get --optional 0.index
         if $idx == null {
-            error make {msg: $"malformed custody layer name: ($d) — expected <index>-<neuron-prefix>"}
+            error make {msg: $"malformed custody layer name: ($d) — expected <index>-<signer-prefix>"}
         }
         {index: ($idx | into int) dir: $d}
     }
     | sort-by index
 }
 
-# The repo's own neuron identity: the CID of its single registered pubkey.
+# The repo's own signer identity: the CID of its single registered pubkey.
 # init canonicalizes the key at registration, so the file bytes ARE the
 # canonical form — hash them directly. Ambiguity (several registered keys)
-# is an error: one keypair is one neuron, a custody claim needs exactly one.
-export def own-neuron [root: path]: nothing -> string {
+# is an error: one keypair is one signer, a custody claim needs exactly one.
+export def own-signer [root: path]: nothing -> string {
     let pubs = list-files ($root | path join multiproofs pubkeys) --suffix ".pub"
     if ($pubs | length) != 1 {
-        error make {msg: $"cannot derive the custodian neuron: expected exactly one pubkey in multiproofs/pubkeys/, found ($pubs | length)"}
+        error make {msg: $"cannot derive the custodian signer: expected exactly one pubkey in multiproofs/pubkeys/, found ($pubs | length)"}
     }
     open --raw ($pubs | first) | into binary | cid-v0
 }

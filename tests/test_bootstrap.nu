@@ -1,5 +1,5 @@
 # Bootstrap contracts: init is idempotent; seal refuses to run half-way when
-# the neuron identity is not registered yet.
+# the signer identity is not registered yet.
 use std/assert
 use std/testing *
 

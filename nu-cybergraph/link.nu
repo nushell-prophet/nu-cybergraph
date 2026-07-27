@@ -1,4 +1,4 @@
-# Create link records in a neuron repo.
+# Create link records in a signer's repo.
 
 use _repo.nu graph-root
 use _fs.nu list-files
@@ -7,14 +7,14 @@ use _layout.nu [links-dir link-path]
 use _particle.nu [resolve-particle]
 use _deps/cid-v0.nu [cid-v0]
 
-# Derive the repo's own neuron identity: the CID of its registered pubkey.
-# With several pubkeys registered the choice is the author's — require --neuron.
-def own-neuron-cid [root: path]: nothing -> string {
+# Derive the repo's own signer identity: the CID of its registered pubkey.
+# With several pubkeys registered the choice is the author's — require --signer.
+def own-signer-cid [root: path]: nothing -> string {
     let pubs = list-files ($root | path join multiproofs pubkeys) --suffix ".pub"
     match ($pubs | length) {
         0 => (error make {msg: "no pubkey registered — run `nu-cybergraph init` first"})
         1 => (open --raw ($pubs | first) | into binary | cid-v0)
-        _ => (error make {msg: "multiple pubkeys registered — pass --neuron explicitly"})
+        _ => (error make {msg: "multiple pubkeys registered — pass --signer explicitly"})
     }
 }
 
@@ -27,14 +27,14 @@ def own-neuron-cid [root: path]: nothing -> string {
 export def add [
     cid_from: string # source particle: a CID v0, or content to publish as one
     cid_to: string # target particle: a CID v0, or content to publish as one
-    --neuron: string # Author's neuron CID (default: CID of the single registered pubkey)
+    --signer: string # Author's signer CID (default: CID of the single registered pubkey)
     --repo: path # Target repo root (default: git root of current directory)
 ]: nothing -> record {
     let root = graph-root $repo
     let rec = {
         cid_from: (resolve-particle $root $cid_from)
         cid_to: (resolve-particle $root $cid_to)
-        signer: (if $neuron != null { $neuron } else { own-neuron-cid $root })
+        signer: (if $signer != null { $signer } else { own-signer-cid $root })
     }
     let cid = link-cid $rec
     mkdir (links-dir $root)
@@ -45,7 +45,7 @@ export def add [
     # nothing new to store; re-assertion over time is a statement ABOUT the act
     # (e.g. `convention claimed-at`), not a second copy of it.
     if ($out | path exists) {
-        error make {msg: $"neuron already asserted this edge: ($cid)"}
+        error make {msg: $"signer already asserted this edge: ($cid)"}
     }
     link-bytes $rec | save --raw $out
     {cid: $cid path: $out record: $rec}

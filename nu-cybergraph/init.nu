@@ -1,4 +1,4 @@
-# Bootstrap a neuron repo: multiproof machinery + the cybergraph directories.
+# Bootstrap a signer's repo: multiproof machinery + the cybergraph directories.
 
 use _repo.nu [repo-root graph-root]
 use _layout.nu [links-dir certs-dir]

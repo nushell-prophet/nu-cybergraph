@@ -5,7 +5,7 @@
 # An OWN link (has a birth certificate in certs/) exports the birth bundle.
 # An IMPORTED link re-exports: the foreign bundle copied unchanged — it stays
 # the authority for authorship and birth time — plus this repo's custody
-# layer appended under custody/<n>-<neuron12>/. A custody layer is itself a
+# layer appended under custody/<n>-<signer12>/. A custody layer is itself a
 # proof bundle in the same layout, over the receipt instead of the record,
 # so the same verification machinery covers both.
 
@@ -19,7 +19,7 @@ use _layout.nu [
     handoff-filename
 ]
 use _record.nu [CID_V0_RE]
-use _receipt.nu [read-receipt custody-layers own-neuron]
+use _receipt.nu [read-receipt custody-layers own-signer]
 use _handoff.nu [handoff-bytes HANDOFF_SCHEMA]
 
 # Copy one seal's verification artifacts into a proof dir: the snapshot's
@@ -39,7 +39,7 @@ def assemble-seal-artifacts [root: path out: path root_hex: string] {
     # pubkey file's name is decoration — upstream pins that a key registered
     # under any name still signs and verifies. Joining the segment onto
     # `pubkeys/<name>.pub` therefore shipped a bundle with no signer key at all
-    # for any neuron who renamed the file `init` wrote.
+    # for any signer who renamed the file `init` wrote.
     # Anchored regex, greedy middle: a fingerprint cannot contain ".sig", but
     # the bare `<file>.sig` form must not parse as one either.
     let signers = list-files $snap --suffix ".sig"
@@ -103,7 +103,7 @@ def write-handoff [root: path dir: path link_cid: string to: string receipt_hash
     let handoff = {
         schema: $HANDOFF_SCHEMA
         link: $link_cid
-        from: (own-neuron $root)
+        from: (own-signer $root)
         to: $to
         receipt: $receipt_hash
         handed_at: (date now | format date "%+")
@@ -134,12 +134,12 @@ export def main [
     link_cid: string # CID of a link: authored here (certs/) or imported (imported/*/)
     --repo: path # Source repo root (default: git root of current directory)
     --out: path # Bundle destination (default: exports/<link_cid>)
-    --to: string # Recipient neuron CID — adds a signed handoff (default: none, an open export)
+    --to: string # Recipient signer CID — adds a signed handoff (default: none, an open export)
     --key: path # SSH private key for the handoff signature (default: from git config user.signingKey)
 ]: nothing -> path {
     let root = graph-root $repo
     if $to != null and $to !~ $CID_V0_RE {
-        error make {msg: $"--to must be a neuron CID \(base58btc CID v0\): ($to)"}
+        error make {msg: $"--to must be a signer CID \(base58btc CID v0\): ($to)"}
     }
     let key = if $to == null { null } else { resolve-handoff-key $root $key }
     let out = if $out != null { $out | path expand } else { exports-dir $root | path join $link_cid }

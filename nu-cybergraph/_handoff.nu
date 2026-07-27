@@ -1,5 +1,5 @@
 # The handoff — the sender's signed claim "I handed this link's bundle to
-# neuron `to`". Custody proves holding; the handoff adds DIRECTION as a
+# signer `to`". Custody proves holding; the handoff adds DIRECTION as a
 # signed statement instead of an inference from who held what. It remains a
 # claim of sending, not a proof of delivery.
 #

@@ -128,7 +128,7 @@ def "particle cat rejects a tampered store file" [] {
 
 @test
 def "link add resolves text endpoints to published particles" [] {
-    let r = link add "cyber" "bostrom" --repo $in.tmp --neuron $N | get record
+    let r = link add "cyber" "bostrom" --repo $in.tmp --signer $N | get record
     assert equal $r.cid_from ("cyber" | into binary | cid-v0)
     assert equal $r.cid_to ("bostrom" | into binary | cid-v0)
     assert equal (open --raw (particle-path $in.root $r.cid_to)) "bostrom"
@@ -136,14 +136,14 @@ def "link add resolves text endpoints to published particles" [] {
 
 @test
 def "link add passes CID endpoints through without publishing anything" [] {
-    link add $A $B --repo $in.tmp --neuron $N | ignore
+    link add $A $B --repo $in.tmp --signer $N | ignore
     # only links/ was written: no particles dir means no particle was minted
     assert (not ((particles-dir $in.root) | path exists))
 }
 
 @test
 def "convention verbs resolve text arguments before hashing" [] {
-    let q = convention question $A "why?" --repo $in.tmp --neuron $N | get record
+    let q = convention question $A "why?" --repo $in.tmp --signer $N | get record
     assert equal $q.cid_from (derive {about: $A, op: "question"})
     assert equal $q.cid_to ("why?" | into binary | cid-v0)
     assert equal (open --raw (particle-path $in.root $q.cid_to)) "why?"
@@ -151,7 +151,7 @@ def "convention verbs resolve text arguments before hashing" [] {
 
 @test
 def "convention verbs resolve args embedded in derived sources" [] {
-    let q = convention quote "source text" "text" --repo $in.tmp --neuron $N | get record
+    let q = convention quote "source text" "text" --repo $in.tmp --signer $N | get record
     let src_cid = "source text" | into binary | cid-v0
     assert equal $q.cid_from (derive {about: $src_cid, op: "quote"})
     assert equal (open --raw (particle-path $in.root $src_cid)) "source text"

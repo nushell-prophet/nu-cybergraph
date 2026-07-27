@@ -2,7 +2,7 @@
 # certificate and the seal it was born under, never the repo's current root.
 #
 # Returns a table, one row per verified copy: an own link has exactly one;
-# the same CID imported from several neurons yields one row each. One shape
+# the same CID imported from several signers yields one row each. One shape
 # for both cases, so callers never branch on where the link came from.
 
 use _repo.nu graph-root
@@ -11,7 +11,7 @@ use _verify-helpers.nu [verify-bundle]
 use bundle.nu
 
 # Verify a link — own or imported — against its birth seal, never the current
-# root. One row per verified copy: own links have one, imports one per neuron.
+# root. One row per verified copy: own links have one, imports one per signer.
 export def main [
     link_cid: string # Link CID: authored here (certs/) or imported (imported/*/)
     --repo: path # Repo root (default: git root of current directory)
@@ -39,7 +39,7 @@ export def main [
         rm -rf $tmp
         [$result]
     } else {
-        # The same link CID can arrive from several neurons (identical record,
+        # The same link CID can arrive from several signers (identical record,
         # identical CID) — verify every copy we hold.
         let hits = imported-copies $root $link_cid
         if ($hits | is-empty) {

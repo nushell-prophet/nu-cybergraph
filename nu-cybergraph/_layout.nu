@@ -69,13 +69,13 @@ export def receipts-dir [root: path]: nothing -> path {
     $root | path join $RECEIPTS_DIR
 }
 
-# Every copy of one link we hold: imported/<neuron>/<link>, over all neurons.
+# Every copy of one link we hold: imported/<signer>/<link>, over all signers.
 # A two-level walk by listing, never `glob (… | path join * $link_cid)` — the
 # graph path is spliced into that pattern, so a `[` in it returns [] and the
 # caller reads "unknown link" for a link sitting right there.
 export def imported-copies [root: path link_cid: string]: nothing -> list<path> {
     list-dirs (imported-dir $root)
-    | each {|neuron| $neuron | path join $link_cid }
+    | each {|signer| $signer | path join $link_cid }
     | where {|d| $d | path exists }
 }
 
@@ -101,11 +101,11 @@ export def custody-dir [bundle: path]: nothing -> path {
     $bundle | path join $CUSTODY_DIR
 }
 
-# custody/<index>-<neuron-cid-prefix> — one custody layer. The index makes the
+# custody/<index>-<signer-cid-prefix> — one custody layer. The index makes the
 # intended order readable; verification enforces it against the receipt chain,
 # so a renamed or renumbered layer fails instead of lying silently.
-export def custody-layer-dirname [index: int neuron_cid: string]: nothing -> string {
-    $"($index)-($neuron_cid | str substring 0..11)"
+export def custody-layer-dirname [index: int signer_cid: string]: nothing -> string {
+    $"($index)-($signer_cid | str substring 0..11)"
 }
 
 # <cid>.handoff.json — the sender's signed handoff, at the root of the proof
