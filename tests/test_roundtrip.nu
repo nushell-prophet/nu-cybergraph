@@ -575,3 +575,35 @@ def "a re-export that comes out without a root certificate is refused and remove
     assert ($err != null and ($err | str contains "incomplete"))
     assert not ($dest | path exists)
 }
+
+# The same rule one layer over: what makes a key usable is upstream's to
+# decide, and it narrowed (nu-multiproof b6d7b11 — `ssh-sign sign` now always
+# demands the key be registered). A local pre-check that only asked "does the
+# file exist" therefore let assembly finish, and the refusal landed after the
+# handoff was written: a complete-looking bundle with an unsigned handoff, and
+# a retry blocked by "bundle destination already exists".
+@test
+def "an export whose handoff key upstream refuses leaves nothing behind" [] {
+    let tmp_dir = $in.tmp_dir
+    let a = make-signer $tmp_dir "a"
+    let b = make-signer $tmp_dir "b"
+    let born = link add $P1 $P2 --repo $a.repo
+    seal --repo $a.repo --no-stamp | ignore
+
+    # A real key with its .pub sibling, absent from pubkeys/ — nothing local
+    # can fault it, so only `ssh-sign sign` refuses, at the very last step.
+    let stranger = $tmp_dir | path join key-stranger
+    ^ssh-keygen -t ed25519 -f $stranger -N "" -C stranger -q
+
+    let dest = $tmp_dir | path join out
+    let err = try {
+        bundle $born.cid --repo $a.repo --out $dest --to (signer-cid $b.home) --key $stranger | ignore
+        null
+    } catch {|e| $e.msg }
+    assert ($err != null and ($err | str contains "not registered")) $"unregistered handoff key did not throw: ($err)"
+    assert not ($dest | path exists)
+
+    # ...so the retry with the registered key finds no debris in its way
+    let out = bundle $born.cid --repo $a.repo --out $dest --to (signer-cid $b.home) --key $a.key
+    assert (($out | path join $"($born.cid).handoff.json") | path exists)
+}

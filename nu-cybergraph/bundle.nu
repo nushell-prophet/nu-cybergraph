@@ -76,23 +76,35 @@ def assemble-seal-artifacts [root: path out: path root_hex: string] {
     }
 }
 
-# Resolve and validate the handoff signing key: --key, else git config
-# user.signingKey. main runs this BEFORE the destination dir is created —
-# same discipline as seal's pre-checks: a key error after assembly leaves a
-# complete-looking bundle whose handoff is unsigned, and the retry is then
-# blocked by "bundle destination already exists".
+# Resolve the handoff signing key: --key, else the GRAPH REPO's git config.
+# Why not leave it to `ssh-sign sign`, whose --key already defaults from git
+# config: upstream resolves it in the current directory (`resolve-signing-key`
+# takes a --root the `sign` path does not expose), and the graph is usually
+# not the directory the operator stands in — the suite proved it, every
+# temp-repo export fell back to the wrong config.
+#
+# What this deliberately does NOT check is what makes a key USABLE: a `.pub`
+# beside it and its fingerprint registered in pubkeys/. Those are upstream's
+# rules — `ssh-sign sign` -> `signing-principal`, nu-multiproof b6d7b11, "a
+# principal is not the signer's to choose" — and a copy here would enforce one
+# invariant in two places, drifting the moment upstream narrows it again (it
+# just did). main's cleanup is what makes their refusal survivable.
 def resolve-handoff-key [root: path key: any]: nothing -> path {
-    let resolved = if $key != null { $key } else {
-        let k = ^git -C $root config user.signingKey | complete
-        if $k.exit_code != 0 or ($k.stdout | str trim | is-empty) {
-            error make {msg: "handoff needs a signing key: set git config user.signingKey or pass --key"}
-        }
-        $k.stdout | str trim | path expand
+    if $key != null { return $key }
+    let k = ^git -C $root config user.signingKey | complete
+    if $k.exit_code != 0 or ($k.stdout | str trim | is-empty) {
+        error make {msg: "handoff needs a signing key: set git config user.signingKey or pass --key"}
     }
-    if not ($resolved | path exists) {
-        error make {msg: $"handoff signing key not found: ($resolved)"}
+    let raw = $k.stdout | str trim
+    # git's inline form carries the key material instead of a path. Upstream
+    # signs with it by materializing a temp file and owning its lifetime
+    # (`with-signing-key`); reproducing that here would be a second copy of
+    # someone else's cleanup rule, so the handoff names the gap instead of
+    # failing later as "signing key not found: key::ssh-ed25519 AAAA…".
+    if ($raw | str starts-with "key::") {
+        error make {msg: "handoff cannot sign with an inline `key::` user.signingKey — pass --key with the key file"}
     }
-    $resolved
+    $raw | path expand
 }
 
 # Write and sign the sender's handoff into a proof dir. Signed directly with
@@ -116,37 +128,19 @@ def write-handoff [root: path dir: path link_cid: string to: string receipt_hash
 # The writer's own exit check — the same root-cert test import runs first.
 # Observed once: an interior `cp -r` error was printed but not raised, and a
 # custody re-export shipped with the birth bundle missing entirely, exit 0.
-# Whatever the cause, a partial bundle must not leave the repo with exit 0 —
-# and must not stay on disk looking complete, so it is removed before erroring.
-def assert-complete-bundle [out: path]: nothing -> path {
+# Whatever the cause, a partial bundle must not leave the repo with exit 0.
+# Removing it is main's job, not this one's: every failure below the "already
+# exists" check leaves the same debris, so one cleanup covers them all.
+def assert-complete-bundle [out: path] {
     let certs = list-files $out --suffix ".cert.json"
     if ($certs | length) != 1 {
-        rm --recursive --force $out
         error make {msg: $"bundle came out incomplete: ($certs | length) *.cert.json at the root instead of 1 — partial bundle removed, re-run the export"}
     }
-    $out
 }
 
-# Export a link as a portable, offline-verifiable bundle: the birth bundle
-# for an own link; for an imported link, the foreign bundle unchanged plus
-# this repo's custody layer. --to names the recipient in a signed handoff.
-export def main [
-    link_cid: string # CID of a link: authored here (certs/) or imported (imported/*/)
-    --repo: path # Source repo root (default: git root of current directory)
-    --out: path # Bundle destination (default: exports/<link_cid>)
-    --to: string # Recipient signer CID — adds a signed handoff (default: none, an open export)
-    --key: path # SSH private key for the handoff signature (default: from git config user.signingKey)
-]: nothing -> path {
-    let root = graph-root $repo
-    if $to != null and $to !~ $CID_V0_RE {
-        error make {msg: $"--to must be a signer CID \(base58btc CID v0\): ($to)"}
-    }
-    let key = if $to == null { null } else { resolve-handoff-key $root $key }
-    let out = if $out != null { $out | path expand } else { exports-dir $root | path join $link_cid }
-    if ($out | path exists) {
-        error make {msg: $"bundle destination already exists: ($out)"}
-    }
-
+# Everything that writes into the destination dir. Split out of main so the
+# whole of it sits under one cleanup: from here down, any raise leaves debris.
+def assemble-bundle [root: path out: path link_cid: string to: any key: any] {
     let cert = cert-path $root $link_cid
     if ($cert | path exists) {
         # Own link: the birth bundle
@@ -159,7 +153,7 @@ export def main [
             # The author has no receipt — their handoff pins nothing but the link
             write-handoff $root $out $link_cid $to null $key
         }
-        return (assert-complete-bundle $out)
+        return
     }
 
     # Imported link: re-export with this repo's custody layer appended
@@ -186,5 +180,41 @@ export def main [
         let receipt_hash = open --raw ($root | path join (receipt-relpath $link_cid)) | hash sha256
         write-handoff $root $layer $link_cid $to $receipt_hash $key
     }
-    assert-complete-bundle $out
+}
+
+# Export a link as a portable, offline-verifiable bundle: the birth bundle
+# for an own link; for an imported link, the foreign bundle unchanged plus
+# this repo's custody layer. --to names the recipient in a signed handoff.
+export def main [
+    link_cid: string # CID of a link: authored here (certs/) or imported (imported/*/)
+    --repo: path # Source repo root (default: git root of current directory)
+    --out: path # Bundle destination (default: exports/<link_cid>)
+    --to: string # Recipient signer CID — adds a signed handoff (default: none, an open export)
+    --key: path # SSH private key for the handoff signature (default: from git config user.signingKey)
+]: nothing -> path {
+    let root = graph-root $repo
+    if $to != null and $to !~ $CID_V0_RE {
+        error make {msg: $"--to must be a signer CID \(base58btc CID v0\): ($to)"}
+    }
+    let key = if $to == null { null } else { resolve-handoff-key $root $key }
+    let out = if $out != null { $out | path expand } else { exports-dir $root | path join $link_cid }
+    if ($out | path exists) {
+        error make {msg: $"bundle destination already exists: ($out)"}
+    }
+
+    # Why a cleanup and not more pre-checks: a raise below this line — an
+    # unregistered signing key most of all (see resolve-handoff-key) — used to
+    # leave a complete-looking bundle whose handoff was unsigned, and the retry
+    # then hit "bundle destination already exists" above. The dir did not exist
+    # before, so removing it restores exactly the state the export started in,
+    # for every cause rather than the one a pre-check could name. The error is
+    # re-raised raw: labels, help and location are the operator's evidence.
+    try {
+        assemble-bundle $root $out $link_cid $to $key
+        assert-complete-bundle $out
+    } catch {|e|
+        rm --recursive --force $out
+        error make $e.raw
+    }
+    $out
 }
