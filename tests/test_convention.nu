@@ -141,6 +141,13 @@ def "operand-embedding conventions put the operand in the source" [] {
     let sm = convention same $A $B --repo $tmp --signer $S | get record
     assert equal $sm.cid_from (derive {about: $A, op: "same"})
     assert equal $sm.cid_to $B
+
+    # Directed, and the source is the original: a reader holding the text asks
+    # which translations exist, and the pair records which language came first.
+    let tr = convention translation $A $B --repo $tmp --signer $S | get record
+    assert equal $tr.cid_from (derive {about: $A, op: "translation"})
+    assert equal $tr.cid_to $B
+    assert not equal $tr.cid_from (derive {about: $B, op: "translation"})
 }
 
 @test

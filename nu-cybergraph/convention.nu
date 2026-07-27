@@ -30,6 +30,7 @@
 #   deny (cyberlink)    {op: deny}                                    → {cid_from: A, cid_to: B, signer: S}
 #   agree / disagree    {op: agree}                                   → B
 #   quote               {about: A, op: quote}                         → B
+#   translation         {about: A, op: translation}                   → B
 #   pro / con           {about: C, op: pro}                           → B
 #   question            {about: B, op: question}                      → Q
 #   author              {about: B, op: author}                        → P
@@ -39,13 +40,15 @@
 #   answer              {cid_from: {about: B, op: question}, cid_to: Q, op: answer} → A
 #   claimed-at          {about: X, op: claimed_at}                    → T
 #
-# Fifteen verbs, twelve conventions: repeat is bj002's edge repetition, which
-# is not one of them (no CID in the source), and claimed-at and update-file are
-# this repo's extensions — claimed-at took over the claimed_at field removed from
-# the link record, so a time claim is an ordinary optional edge instead of a
-# fixture of every record; update-file is bj002's update act stated about a file
-# instead of an edge, which is what a version chain of files needs. bj002's set
-# of conventions is open, which is what permits both.
+# Sixteen verbs, twelve conventions: repeat is bj002's edge repetition, which
+# is not one of them (no CID in the source), and claimed-at, update-file and
+# translation are this repo's extensions — claimed-at took over the claimed_at
+# field removed from the link record, so a time claim is an ordinary optional
+# edge instead of a fixture of every record; update-file is bj002's update act
+# stated about a file instead of an edge, which is what a version chain of files
+# needs; translation names the one relation a multilingual corpus lives on, and
+# neither `same` nor `quote` says it. bj002's set of conventions is open, which
+# is what permits all three.
 #
 # Reading and aggregation (count the signals, weigh signers, read consensus)
 # are deliberately out of scope: a local repo is a single signer, so there is
@@ -226,6 +229,27 @@ export def quote [
 ]: nothing -> record {
     let root = graph-root $repo
     edge {about: (resolve-particle $root $about), op: "quote"} (resolve-particle $root $excerpt) $signer $repo
+}
+
+# Translation: {about: A, op: translation} → B states that B says in another
+# language what A says. The source is the original, so a reader holding it
+# computes one hash and asks which translations exist; the direction also
+# records which text came first, which a symmetric relation would lose.
+#
+# Not `same`: that says two names denote one entity, and two language versions
+# are two files, each with its own author and its own CID. Not `quote` either —
+# a quote is checkable byte-for-byte, a translation is a judgement, and the
+# signature is what puts the signer behind it. An extension like `claimed-at`
+# and `update-file`, which bj002's open set of conventions permits.
+@example "B is a translation of A" { convention translation QmA… QmB… }
+export def translation [
+    original: string # the text translated from
+    translated: string # the text translated into another language
+    --signer: string
+    --repo: path
+]: nothing -> record {
+    let root = graph-root $repo
+    edge {about: (resolve-particle $root $original), op: "translation"} (resolve-particle $root $translated) $signer $repo
 }
 
 # Agree: {op: agree} → B — "claim B is true". Gives an opinion about a
