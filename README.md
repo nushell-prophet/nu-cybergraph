@@ -84,7 +84,7 @@ Every convention stands on one primitive, the canonical record: **`convention de
 
 An instruction lives in the *source* of its edge — a derived CID such as the CID of `{"op":"deny"}` — so the source is opaque. To make it readable, every convention publishes each record it mints — the instruction and the address records it references — as self-addressed files under `particles/`: the record is its own preimage, so dereferencing the CID yields named fields with the real operand CIDs, and a text search for an operand's CID finds every record it participates in (bj002 "Reading instructions"). Those files are not sealed directly: a sealed convention edge names its source CID, and showing bytes that hash to a sealed CID time-anchors them — the same rule that anchors any file named by a sealed link.
 
-This table is the spec of the fourteen shapes; a record in source or target position means the CID of its canonical bytes. The header of `nu-cybergraph/convention.nu` restates it in the implementation's address-expression notation — same facts, second notation; if a shape ever changes, both move together.
+This table is the spec of the fourteen verbs; a record in source or target position means the CID of its canonical bytes. Twelve rows, because `confirm` and `deny` each take two targets, and `agree`/`disagree` and `pro`/`con` are mirror pairs. The header of `nu-cybergraph/convention.nu` restates it in the implementation's address-expression notation — same facts, second notation; if a shape ever changes, both move together.
 
 | verb | edge written |
 |---|---|
@@ -140,4 +140,4 @@ Requires [nutest](https://github.com/vyadh/nutest) at `../../ai-sandbox-dev-cont
 use toolkit.nu *; main test
 ```
 
-Tests run fully offline: `--no-stamp` is the only network the seal path has, and CIDs need no external call. The OTS path is exercised by nu-multiproof's own suite.
+Tests run fully offline: the OTS stamp is the only network call the seal path makes, and `--no-stamp` skips it; CIDs need no external call at all. The OTS path is exercised by nu-multiproof's own suite.
