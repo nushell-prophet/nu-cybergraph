@@ -18,18 +18,37 @@
 use _record.nu [CID_V0_RE RFC3339_RE]
 use _receipt.nu [SHA256_RE]
 
-export const HANDOFF_KEYS = [link from to receipt handed_at]
+# Domain separation lives in the SIGNED BYTES, not in the signature namespace.
+# nu-multiproof used to take a `--namespace` on sign/verify; the value was
+# interpolated raw into the allowed_signers line beside the principal, so a
+# crafted namespace injected `cert-authority` and rendered every registered key
+# trusted for anything. The flag is gone and every signature this toolchain
+# makes is under the generic `file` namespace — which is exactly why the bytes
+# must say what they are. Same shape as nu-multiproof's `root-statement`
+# ("multiproof-merkle-v1 <hex>"), in this repo's JSON idiom: a leading schema
+# token, so a handoff signature cannot be replayed as any other artifact this
+# key signs, and vice versa.
+#
+# Why v1 and not v2 after the format bump: the pre-tag handoff carried no
+# version claim at all, so nothing ever called itself v1 and no reader can
+# confuse the two — validate-handoff refuses a record without the key outright.
+# v1 is the first handoff format that has a name.
+export const HANDOFF_SCHEMA = "cybergraph-handoff-v1"
 
-# Signature namespace: a handoff signature must not be replayable as any
-# other kind of file signature made with the same key (and vice versa).
-export const HANDOFF_NAMESPACE = "cybergraph-handoff"
+# `schema` FIRST, so the signed bytes open with the domain tag.
+export const HANDOFF_KEYS = [schema link from to receipt handed_at]
 
-# Enforce the handoff shape: exact HANDOFF_KEYS set, CID fields (link, from, to),
-# receipt hash-or-null, RFC 3339 handed_at.
+# Enforce the handoff shape: exact HANDOFF_KEYS set, the schema token byte-exact,
+# CID fields (link, from, to), receipt hash-or-null, RFC 3339 handed_at.
 export def validate-handoff [rec: record]: nothing -> nothing {
     let cols = $rec | columns
     if ($cols | sort) != ($HANDOFF_KEYS | sort) {
         error make {msg: $"handoff must have exactly keys ($HANDOFF_KEYS | str join ', ') — got ($cols | str join ', ')"}
+    }
+    # Byte-exact, like parse-root-statement: a wrong or drifted token is a
+    # different format, never something to tolerate and read anyway.
+    if $rec.schema != $HANDOFF_SCHEMA {
+        error make {msg: $"handoff schema must be exactly ($HANDOFF_SCHEMA): ($rec.schema | to json)"}
     }
     for key in [link from to] {
         if ($rec | get $key) !~ $CID_V0_RE {

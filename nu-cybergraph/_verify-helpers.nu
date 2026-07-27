@@ -7,7 +7,7 @@ use _deps/pubkey.nu [pubkey]
 use _deps/ssh-sign.nu [ssh-sign]
 use _record.nu [read-link]
 use _receipt.nu [read-receipt bundle-manifest custody-layers]
-use _handoff.nu [read-handoff HANDOFF_NAMESPACE]
+use _handoff.nu [read-handoff]
 use _layout.nu [receipt-relpath custody-layer-dirname handoff-filename]
 
 # Neuron identity is the CID of the pubkey file bytes, so the spec pins one
@@ -55,6 +55,9 @@ def bound [v: record pubs: table claimed: string]: nothing -> bool {
 # holder, the holder's exact receipt — null for the author), and a valid
 # signature by a pubkey whose CID IS `from` (the handoff twin of the neuron
 # binding). Whether `to` matches the NEXT holder is the caller's chain check.
+# read-handoff requires the schema token byte-exact, so what keeps this
+# signature from being replayed as some other artifact is the signed bytes
+# themselves — no signature namespace is involved (see _handoff.nu).
 def check-handoff [dir: path link_cid: string holder: string expected_receipt: any pubs: table]: nothing -> any {
     let file = $dir | path join (handoff-filename $link_cid)
     if not ($file | path exists) {
@@ -63,7 +66,7 @@ def check-handoff [dir: path link_cid: string holder: string expected_receipt: a
     let h = read-handoff $file
     let claims_ok = $h.link == $link_cid and $h.from == $holder and $h.receipt == $expected_receipt
     let sigs = try {
-        ssh-sign verify $file --pubkeys-dir ($dir | path join multiproofs pubkeys) --namespace $HANDOFF_NAMESPACE
+        ssh-sign verify $file --pubkeys-dir ($dir | path join multiproofs pubkeys)
     } catch { [] }
     let signed = $sigs | where valid | any {|s|
         $pubs | where name == $s.signer | any {|p| ($p.bytes | cid-v0) == $h.from }

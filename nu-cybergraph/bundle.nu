@@ -18,7 +18,7 @@ use _layout.nu [
 ]
 use _record.nu [CID_V0_RE]
 use _receipt.nu [read-receipt custody-layers own-neuron]
-use _handoff.nu [handoff-bytes HANDOFF_NAMESPACE]
+use _handoff.nu [handoff-bytes HANDOFF_SCHEMA]
 
 # Copy one seal's verification artifacts into a proof dir: the snapshot's
 # root statement + signatures, the signer pubkeys, and the OTS bundles
@@ -88,6 +88,7 @@ def resolve-handoff-key [root: path key: any]: nothing -> path {
 # is the only immediate, local authentication available.
 def write-handoff [root: path dir: path link_cid: string to: string receipt_hash: any key: path] {
     let handoff = {
+        schema: $HANDOFF_SCHEMA
         link: $link_cid
         from: (own-neuron $root)
         to: $to
@@ -96,7 +97,7 @@ def write-handoff [root: path dir: path link_cid: string to: string receipt_hash
     }
     let file = $dir | path join (handoff-filename $link_cid)
     handoff-bytes $handoff | save --raw $file
-    ssh-sign sign $file --key $key --pubkeys-dir ($root | path join multiproofs pubkeys) --namespace $HANDOFF_NAMESPACE
+    ssh-sign sign $file --key $key --pubkeys-dir ($root | path join multiproofs pubkeys)
 }
 
 # The writer's own exit check — the same root-cert test import runs first.
