@@ -138,7 +138,7 @@ def "a record tampered after its birth seal aborts the next seal too" [] {
 # The signing identity is the repo's git config, so both key failures below are
 # reached by re-pointing user.signingKey after init — there is no --key to pass.
 @test
-def "seal fails fast when the signing key's public half is missing" [] {
+def "seal fails fast when the signing key has no public half beside it" [] {
     let r = make-bare-repo $in.tmp_dir
     init --repo $r.repo
     let other = $in.tmp_dir | path join other-key
