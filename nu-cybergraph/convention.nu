@@ -23,27 +23,38 @@
 # this repo's experiment (see _derive.nu), not on bj002's comma-join. The
 # whole layer, as expressions:
 #
-#   repeat             A                                             → B
-#   deny (edge)        {op: deny}                                    → {cid_from: A, cid_to: B}
-#   deny (cyberlink)   {op: deny}                                    → {cid_from: A, cid_to: B, signer: S}
-#   agree / disagree   {op: agree}                                   → B
-#   quote              {about: A, op: quote}                         → B
-#   pro / con          {about: C, op: pro}                           → B
-#   question           {about: B, op: question}                      → Q
-#   author             {about: B, op: author}                        → P
-#   same               {about: P1, op: same}                         → P2
-#   update             {cid_from: A, cid_to: B, op: update}          → C
-#   answer             {cid_from: {about: B, op: question}, cid_to: Q, op: answer} → A
-#   claimed-at         {about: X, op: claimed_at}                    → T
+#   repeat              A                                             → B
+#   confirm (edge)      {op: confirm}                                 → {cid_from: A, cid_to: B}
+#   confirm (cyberlink) {op: confirm}                                 → {cid_from: A, cid_to: B, signer: S}
+#   deny (edge)         {op: deny}                                    → {cid_from: A, cid_to: B}
+#   deny (cyberlink)    {op: deny}                                    → {cid_from: A, cid_to: B, signer: S}
+#   agree / disagree    {op: agree}                                   → B
+#   quote               {about: A, op: quote}                         → B
+#   pro / con           {about: C, op: pro}                           → B
+#   question            {about: B, op: question}                      → Q
+#   author              {about: B, op: author}                        → P
+#   same                {about: P1, op: same}                         → P2
+#   update              {cid_from: A, cid_to: B, op: update}          → C
+#   answer              {cid_from: {about: B, op: question}, cid_to: Q, op: answer} → A
+#   claimed-at          {about: X, op: claimed_at}                    → T
 #
-# claimed-at is this repo's extension, not one of bj002's twelve: it took
-# over the claimed_at field removed from the link record, so a time claim is
-# an ordinary optional edge instead of a fixture of every record.
+# Fourteen verbs, twelve conventions: repeat is bj002's edge repetition, which
+# is not one of them (no CID in the source), and claimed-at is this repo's
+# extension — it took over the claimed_at field removed from the link record,
+# so a time claim is an ordinary optional edge instead of a fixture of every
+# record. bj002's set of conventions is open, which is what permits it.
 #
-# Reading and aggregation (count confirms, weigh signers, read consensus) are
-# deliberately out of scope: a local repo is a single signer, so there is
+# Reading and aggregation (count the signals, weigh signers, read consensus)
+# are deliberately out of scope: a local repo is a single signer, so there is
 # nothing to aggregate yet. `derive` alone gives a reader the address to look
-# up; the counting is a later, cross-signer concern.
+# up; the counting is a later, cross-signer concern. One rule for whoever
+# writes it: repeats and confirms are two signals, so a reader reports two
+# numbers and never their sum — bj002's formula keeps them apart as
+# f(repeats, confirms, denies, signer_weights, time_decay). Instructions force
+# the distinction: several signers can propose an update from the one source
+# {cid_from: A, cid_to: B, op: update}, and repetitions cannot pick between
+# their versions, because repeating someone else's update claims you derived
+# it yourself. Confirmations are what tell the proposals apart.
 
 use _repo.nu graph-root
 use _derive.nu [record-bytes]
@@ -101,6 +112,32 @@ export def repeat [
     let cid_from = resolve-particle $root $cid_from
     let cid_to = resolve-particle $root $cid_to
     edge $cid_from $cid_to $signer $repo
+}
+
+# Confirm an edge (`confirm A B`) or a specific cyberlink (`confirm A B S`).
+# Source is the fixed record {op: confirm}; the target is what is supported —
+# an address record carrying the real fields of the edge, plus its signer when
+# a specific record is called valid (say, not spam), with no opinion about the
+# statement. The mirror of `deny` in both targets; unlike `repeat`, it claims
+# no work of one's own (bj002 "Confirming an edge and a cyberlink").
+@example "confirm the edge A → B" { convention confirm QmA… QmB… }
+@example "confirm signer S's cyberlink A → B" { convention confirm QmA… QmB… QmS… }
+export def confirm [
+    cid_from: string # source of the edge being confirmed
+    cid_to: string # target of the edge being confirmed
+    confirmed_signer?: string # signer of the cyberlink being confirmed; omit to confirm the edge itself
+    --signer: string
+    --repo: path
+]: nothing -> record {
+    let root = graph-root $repo
+    let confirmed = {
+        cid_from: (resolve-particle $root $cid_from)
+        cid_to: (resolve-particle $root $cid_to)
+    }
+    let target = if $confirmed_signer == null { $confirmed } else {
+        $confirmed | insert signer (resolve-particle $root $confirmed_signer)
+    }
+    edge {op: "confirm"} $target $signer $repo
 }
 
 # Deny an edge (`deny A B`) or a specific cyberlink (`deny A B S`). Source is

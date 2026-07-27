@@ -19,6 +19,7 @@ const S = "QmddrVz92VH3LqT2i7uXeK4AVh6LyU7zjDiLbSdChPsULr"
 # `printf '<record>\n' | ipfs add --only-hash --cid-version=0`. Changing the
 # serialization breaks every derived CID — this test is the pin, same role as
 # test_record.nu's GOLDEN_CID.
+const CONFIRM = "QmcLFo8UMWWuUP7ruztAW5C1zPwmF7GTZs8X6Lig4pXkBh" # {"op":"confirm"}
 const DENY = "QmU8kL28M7yecZ5iPGJZ3e89fytWFzLszU3QtKRj5hV2kK" # {"op":"deny"}
 const AGREE = "QmTswdDR4inURY4GeWGvmL9S8xrDZjfiGEyeUUZzUNRNYk" # {"op":"agree"}
 const DISAGREE = "QmbQUXxqMrFA6zGYmgjvbFKyywS7Gcbb3afb3wqG6s7r6J" # {"op":"disagree"}
@@ -27,6 +28,7 @@ const CYBERLINK_ABS = "Qme4L2P7QwNoijw6HzYVrqrrtk99oj1XvJHvAb9yobHVLe" # {"cid_f
 
 @test
 def "derive golden CIDs pin the record canon" [] {
+    assert equal (derive {op: "confirm"}) $CONFIRM
     assert equal (derive {op: "deny"}) $DENY
     assert equal (derive {op: "agree"}) $AGREE
     assert equal (derive {op: "disagree"}) $DISAGREE
@@ -66,6 +68,18 @@ def "repeat publishes the plain edge, no instruction source" [] {
     let r = convention repeat $A $B --repo $in.tmp --signer $S | get record
     assert equal $r.cid_from $A
     assert equal $r.cid_to $B
+}
+
+@test
+def "confirm targets the edge address, or the cyberlink CID with a signer" [] {
+    let tmp = $in.tmp
+    let edge = convention confirm $A $B --repo $tmp --signer $S | get record
+    assert equal $edge.cid_from $CONFIRM
+    assert equal $edge.cid_to $EDGE_AB
+
+    let link = convention confirm $A $B $S --repo $tmp --signer $S | get record
+    assert equal $link.cid_from $CONFIRM
+    assert equal $link.cid_to $CYBERLINK_ABS
 }
 
 @test
