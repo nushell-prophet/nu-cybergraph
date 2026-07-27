@@ -146,7 +146,7 @@ def "answer attaches to the question-in-context, not the bare question" [] {
 }
 
 @test
-def "claimed-at publishes the timestamp as a particle and edges to it" [] {
+def "claimed-at publishes the timestamp as a file and edges to it" [] {
     let t = "2026-07-16T00:00:00+00:00"
     let r = convention claimed-at $A $t --repo $in.tmp --signer $S | get record
     assert equal $r.cid_from (derive {about: $A, op: "claimed_at"})
@@ -164,9 +164,9 @@ def "claimed-at refuses a non-RFC-3339 or impossible time" [] {
     assert error {|| convention claimed-at $A "2026-13-01T00:00:00+00:00" --repo $tmp --signer $S }
 }
 
-# --- Records are published as self-addressed particles -----------------------
+# --- Records are published as self-addressed files -----------------------
 @test
-def "every convention publishes its records as self-addressed particles" [] {
+def "every convention publishes its records as self-addressed files" [] {
     let tmp = $in.tmp
     convention deny $A $B --repo $tmp --signer $S | ignore
     convention answer $A $B $C --repo $tmp --signer $S | ignore

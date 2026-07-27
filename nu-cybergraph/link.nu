@@ -22,8 +22,8 @@ def own-signer-cid [root: path]: nothing -> string {
 # An endpoint is any content-addressed file; its CID is the CID v0 of its bytes.
 # Both endpoints accept a CID or content: a non-CID argument is published as a
 # file under particles/ and its CID is linked (see _particle.nu).
-@example "link two particles by the CIDs of their bytes" { link add QmUQUHEmv651XCBhiWUQpx2zf4PDts1aXL324ZFyV4QZPF QmW9519sfmW2MvDb4TU4dKtiFAXm1UPDvE7JrMaBjprVHp }
-@example "publish two texts as particles and link them" { link add "cyber" "bostrom" }
+@example "link two files by the CIDs of their bytes" { link add QmUQUHEmv651XCBhiWUQpx2zf4PDts1aXL324ZFyV4QZPF QmW9519sfmW2MvDb4TU4dKtiFAXm1UPDvE7JrMaBjprVHp }
+@example "publish two texts as files and link them" { link add "cyber" "bostrom" }
 export def add [
     cid_from: string # source vertex: a CID v0, or content to publish as a file
     cid_to: string # target vertex: a CID v0, or content to publish as a file
