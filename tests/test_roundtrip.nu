@@ -329,13 +329,17 @@ def "a handoff that is tampered, unsigned, or misclaiming is refused" [] {
     assert equal $v.handed_to null
     assert error {|| import $bad_sig --repo $b.repo }
 
-    # Signature stripped but the handoff kept: a claim without proof
+    # Signature stripped but the handoff kept: a claim without proof. Nothing
+    # legitimate produces a handoff with no signature beside it, so this is a
+    # malformed bundle and must THROW naming the file — not come back as
+    # "no valid signature by the handoff's `from` neuron", which is a verdict
+    # about a signature that was never there to weigh.
     let no_sig = $tmp_dir | path join no-sig
     cp -r $a_out $no_sig
     glob ($no_sig | path join $"($handoff_name).*.sig") | each {|s| rm $s }
-    let v2 = verify-bundle $no_sig
-    assert not $v2.valid
-    assert ($v2.error | str contains "no valid signature")
+    let e2 = try { verify-bundle $no_sig | ignore; null } catch {|e| $e.msg }
+    assert ($e2 != null and ($e2 | str contains "no signature files found")) $"unsigned handoff did not throw: ($e2)"
+    assert ($e2 | str contains $handoff_name)
 
     # `from` claims an identity other than the holder it travels with
     let wrong_from = $tmp_dir | path join wrong-from

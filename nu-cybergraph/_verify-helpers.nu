@@ -65,9 +65,16 @@ def check-handoff [dir: path link_cid: string holder: string expected_receipt: a
     }
     let h = read-handoff $file
     let claims_ok = $h.link == $link_cid and $h.from == $holder and $h.receipt == $expected_receipt
-    let sigs = try {
-        ssh-sign verify $file --pubkeys-dir ($dir | path join multiproofs pubkeys)
-    } catch { [] }
+    # No try/catch: `ssh-sign verify` throws only when it cannot form a verdict
+    # at all — no signature file beside the handoff, no pubkey in the bundle,
+    # ssh-keygen unusable. Swallowing those into an empty table turned every
+    # one of them into "no valid signature by the handoff's `from` neuron" —
+    # a handoff that COULD NOT be checked reading as a handoff that FAILED a
+    # check, and a missing sig file reading as an accusation. A sig that is
+    # present but bad is a verdict row (valid: false), which is what the
+    # binding below weighs; anything else is a malformed bundle, and this
+    # module already throws on those (missing cert, non-canonical pubkey).
+    let sigs = ssh-sign verify $file --pubkeys-dir ($dir | path join multiproofs pubkeys)
     let signed = $sigs | where valid | any {|s|
         $pubs | where name == $s.signer | any {|p| ($p.bytes | cid-v0) == $h.from }
     }
