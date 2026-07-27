@@ -376,6 +376,25 @@ def "non-canonical pubkey file in a bundle is refused" [] {
     assert error {|| verify-bundle $bundle_dir }
 }
 
+# `pubkey canonical` shells out to OpenSSH, so it throws for reasons that are
+# not about the key at all. The refusal must say which — a bare `try {}` turned
+# a missing ssh-keygen into "non-canonical pubkey file" over a good ed25519
+# key, the verdict-about-the-key mistake nu-multiproof 310c29b exists to avoid.
+@test
+def "a broken toolchain is refused as a toolchain problem, not as a bad key" [] {
+    let tmp_dir = $in.tmp_dir
+    let a = make-neuron $tmp_dir "a"
+    let born = link add $P1 $P2 --repo $a.repo
+    seal --repo $a.repo --no-stamp | ignore
+    let out = bundle $born.cid --repo $a.repo --out ($tmp_dir | path join out)
+
+    let err = with-env {PATH: []} {
+        try { verify-bundle $out | ignore; null } catch {|e| $e.msg }
+    }
+    assert ($err != null) "a bundle verified with no ssh-keygen on PATH"
+    assert ($err | str contains "toolchain problem") $"the refusal blamed the key: ($err)"
+}
+
 @test
 def "tampered record in a bundle fails self-addressing" [] {
     let tmp_dir = $in.tmp_dir

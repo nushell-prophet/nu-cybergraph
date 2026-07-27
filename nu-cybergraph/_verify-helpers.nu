@@ -21,7 +21,19 @@ def canonical-pubkeys [dir: path]: nothing -> table {
         | each {|f| {path: $f bytes: (open --raw $f | into binary)} }
     for pub in $pubs {
         let raw = $pub.bytes | decode
-        if $raw != (try { $raw | pubkey canonical }) {
+        # Why the caught error is re-raised with its message intact, and not
+        # folded into the refusal below: `pubkey canonical` shells out to
+        # OpenSSH, so it throws for reasons that are not about the key at all —
+        # nu-multiproof 310c29b names a missing ssh-keygen as a toolchain
+        # problem for exactly this reason. A bare `try {}` turned that into
+        # "non-canonical pubkey file" over a perfectly good ed25519 key (probed
+        # with a PATH holding no ssh-keygen), sending the operator after the
+        # wrong problem. Same shape as upstream's own canonical-file, and the
+        # same correction as 115d567 one layer up.
+        let canon = try { $raw | pubkey canonical } catch {|e|
+            error make {msg: $"($pub.path) is not an SSH public key: ($e.msg)"}
+        }
+        if $raw != $canon {
             error make {msg: $"non-canonical pubkey file: ($pub.path) — expected `<type> <base64>` + newline, no comment"}
         }
     }
