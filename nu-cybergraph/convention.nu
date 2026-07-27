@@ -1,7 +1,10 @@
 # The twelve conventions of bj002 — encode an instruction for processing the
 # cybergraph as an ordinary edge. Every convention is one statement in a tiny
 # grammar, so they all compile to a single engine (`address` + `edge`); the
-# verbs below differ only in the shape they declare.
+# verbs below differ only in the shape they declare. `repeat` is the exception
+# that proves the rule: edge repetition puts no special CID in the source, so
+# there is no string that would go into `hash()` and it is not a convention at
+# all — but it is still an edge, so it rides the same engine.
 #
 # The grammar has one atom and one constructor. An **address expression** is
 # either a leaf — a CID you supply or an op word ("deny"), used verbatim — or
@@ -20,7 +23,7 @@
 # this repo's experiment (see _derive.nu), not on bj002's comma-join. The
 # whole layer, as expressions:
 #
-#   confirm            A                                             → B
+#   repeat             A                                             → B
 #   deny (edge)        {op: deny}                                    → {cid_from: A, cid_to: B}
 #   deny (cyberlink)   {op: deny}                                    → {cid_from: A, cid_to: B, signer: S}
 #   agree / disagree   {op: agree}                                   → B
@@ -81,13 +84,16 @@ def edge [
     link add (address $root $src) (address $root $tgt) --signer $signer --repo $repo
 }
 
-# Confirm an edge: simply repeat it. Both endpoints are leaves — a plain edge
-# is not an instruction, and the repetition itself is what aggregation counts
-# (bj002 "Confirming an edge").
-@example "confirm the edge A → B" { convention confirm QmA… QmB… }
-export def confirm [
-    cid_from: string # source particle of the edge being confirmed
-    cid_to: string # target particle of the edge being confirmed
+# Repeat an edge: state the same thing yourself. Both endpoints are leaves —
+# a plain edge is not an instruction, and repetition writes no source record,
+# so it is not a convention. What separates it from `confirm` is work: you
+# collated the source, re-ran the computation, checked the quote — only then
+# is repeating it honest, where `confirm` leans on whoever did that work
+# (bj002 "Confirming an edge and a cyberlink").
+@example "repeat the edge A → B" { convention repeat QmA… QmB… }
+export def repeat [
+    cid_from: string # source particle of the edge being repeated
+    cid_to: string # target particle of the edge being repeated
     --signer: string
     --repo: path
 ]: nothing -> record {

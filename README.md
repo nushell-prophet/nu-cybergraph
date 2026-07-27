@@ -86,7 +86,7 @@ This table is the spec of the thirteen shapes; a record in source or target posi
 
 | verb | edge written |
 |---|---|
-| `confirm A B` | `A → B` (the plain edge repeated — no instruction record) |
+| `repeat A B` | `A → B` (the plain edge published again — no instruction record, and not a convention) |
 | `deny A B` / `deny A B N` | `{"op":"deny"} → {"cid_from":A,"cid_to":B}` (edge) / `→ {"cid_from":A,"cid_to":B,"signer":S}` (a signer's cyberlink) |
 | `update A B C` | `{"cid_from":A,"cid_to":B,"op":"update"} → C` |
 | `quote A B` | `{"about":A,"op":"quote"} → B` |

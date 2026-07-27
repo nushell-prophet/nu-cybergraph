@@ -62,8 +62,8 @@ def cleanup [] {
 }
 
 @test
-def "confirm repeats the plain edge, no instruction source" [] {
-    let r = convention confirm $A $B --repo $in.tmp --signer $S | get record
+def "repeat publishes the plain edge, no instruction source" [] {
+    let r = convention repeat $A $B --repo $in.tmp --signer $S | get record
     assert equal $r.cid_from $A
     assert equal $r.cid_to $B
 }
