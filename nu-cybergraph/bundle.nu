@@ -10,6 +10,7 @@
 # so the same verification machinery covers both.
 
 use _deps/ssh-sign.nu [ssh-sign]
+use _deps/pubkey.nu [pubkey]
 use _repo.nu graph-root
 use _layout.nu [
     links-dir exports-dir cert-path cert-filename snapshot-dir imported-dir
@@ -31,16 +32,26 @@ def assemble-seal-artifacts [root: path out: path root_hex: string] {
     mkdir ($out | path join multiproofs pubkeys)
     glob ($snap | path join *) | each {|f| cp $f ($out | path join multiproofs) }
 
-    # Signer pubkeys, derived from the snapshot's sig names (tree-root.txt.<name>.sig).
-    # Anchored regex, greedy middle: a signer name may itself contain ".sig",
-    # which str replace's first-match semantics would mangle.
+    # Signer pubkeys, found by KEY MATERIAL. The middle segment of a sig name is
+    # the signer's fingerprint (nu-multiproof b6d7b11: `sig-path-for` names the
+    # file after `signing-principal`, which is the key's own digest), while a
+    # pubkey file's name is decoration — upstream pins that a key registered
+    # under any name still signs and verifies. Joining the segment onto
+    # `pubkeys/<name>.pub` therefore shipped a bundle with no signer key at all
+    # for any neuron who renamed the file `init` wrote.
+    # Anchored regex, greedy middle: a fingerprint cannot contain ".sig", but
+    # the bare `<file>.sig` form must not parse as one either.
     let signers = glob ($snap | path join tree-root.txt.*.sig)
-        | each {|s| $s | path basename | parse --regex '^tree-root\.txt\.(?<name>.+)\.sig$' | get --optional 0.name }
-        | compact
-    let copied = $signers | each {|name|
-        let pub = $root | path join multiproofs pubkeys $"($name).pub"
-        if ($pub | path exists) { cp $pub ($out | path join multiproofs pubkeys); $name } else { null }
-    } | where $it != null
+        | each {|s| $s | path basename | parse --regex '^tree-root\.txt\.(?<fp>.+)\.sig$' | get --optional 0.fp }
+    let registered = glob ($root | path join multiproofs pubkeys *.pub)
+        | each {|f| {path: $f fingerprint: (open --raw $f | pubkey fingerprint)} }
+    let copied = $signers | each {|fp|
+        let hit = $registered | where fingerprint == $fp
+        if ($hit | is-empty) { null } else {
+            cp ($hit | first | get path) ($out | path join multiproofs pubkeys)
+            $fp
+        }
+    }
     if ($copied | is-empty) {
         error make {msg: "no signer pubkey found for the snapshot's signatures — the bundle could never verify"}
     }

@@ -308,6 +308,25 @@ def "a pubkey filed under the fingerprint of another key cannot borrow its autho
     assert error {|| import $out --repo $c.repo }
 }
 
+# A pubkey file's name is decoration upstream — `mv` is how an operator sets
+# it, and a key registered under any name still signs and verifies. Export must
+# therefore find the signer's key by fingerprint, not by joining the sig name
+# onto pubkeys/. The neuron CID is the file BYTES, so a rename changes nothing
+# the bundle claims.
+@test
+def "a renamed pubkey file still exports a verifiable bundle" [] {
+    let tmp_dir = $in.tmp_dir
+    let a = make-neuron $tmp_dir "a"
+    let pubkeys = $a.home | path join multiproofs pubkeys
+    mv (glob ($pubkeys | path join *.pub) | first) ($pubkeys | path join "my-laptop.pub")
+
+    let born = link add $P1 $P2 --repo $a.repo
+    seal --repo $a.repo --no-stamp | ignore
+    let v = verify-bundle (bundle $born.cid --repo $a.repo --out ($tmp_dir | path join out))
+    assert $v.valid
+    assert $v.neuron.bound
+}
+
 @test
 def "non-canonical pubkey file in a bundle is refused" [] {
     let tmp_dir = $in.tmp_dir
