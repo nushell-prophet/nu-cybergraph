@@ -20,7 +20,12 @@ def canonical-pubkeys [dir: path]: nothing -> table {
     let pubs = list-files ($dir | path join multiproofs pubkeys) --suffix ".pub"
         | each {|f| {path: $f bytes: (open --raw $f | into binary)} }
     for pub in $pubs {
-        let raw = $pub.bytes | decode
+        # decode only to hand text to ssh-keygen; the verdict below is on the
+        # bytes. `decode` strips a UTF-8 BOM (so does `decode utf-8` — probed on
+        # 0.114.1), so comparing decoded strings accepted `EF BB BF` + the
+        # canonical line as canonical while it addresses to a different CID —
+        # the one-key-two-identities fork this check exists to close.
+        let raw = $pub.bytes | decode utf-8
         # Why the caught error is re-raised with its message intact, and not
         # folded into the refusal below: `pubkey canonical` shells out to
         # OpenSSH, so it throws for reasons that are not about the key at all —
@@ -33,14 +38,14 @@ def canonical-pubkeys [dir: path]: nothing -> table {
         let canon = try { $raw | pubkey canonical } catch {|e|
             error make {msg: $"($pub.path) is not an SSH public key: ($e.msg)"}
         }
-        if $raw != $canon {
-            error make {msg: $"non-canonical pubkey file: ($pub.path) — expected `<type> <base64>` + newline, no comment"}
+        if $pub.bytes != ($canon | into binary) {
+            error make {msg: $"non-canonical pubkey file: ($pub.path) — expected `<type> <base64>` + newline, no comment, no BOM"}
         }
     }
     # The principal a key signs under, derived from the key material — the same
     # digest nu-multiproof renders into its trust list. Computed after the
     # canonical check, which is the one thing that can make it throw.
-    $pubs | insert fingerprint {|p| $p.bytes | decode | pubkey fingerprint }
+    $pubs | insert fingerprint {|p| $p.bytes | decode utf-8 | pubkey fingerprint }
 }
 
 # One proof directory — a birth bundle or a custody layer, same layout: a

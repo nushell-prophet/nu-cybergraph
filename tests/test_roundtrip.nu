@@ -376,6 +376,27 @@ def "non-canonical pubkey file in a bundle is refused" [] {
     assert error {|| verify-bundle $bundle_dir }
 }
 
+# Signer identity is the CID of the file BYTES, so the canonical check must be
+# a byte check. A UTF-8 BOM is the case that proves it: nushell's `decode`
+# strips one, so the decoded string compares equal to the canonical form while
+# the bytes — and therefore the CID — differ. That is the one-key-two-identities
+# fork the canonical form exists to close.
+@test
+def "a pubkey file with a byte-order mark is not the canonical form" [] {
+    let tmp_dir = $in.tmp_dir
+    let a = make-signer $tmp_dir "a"
+    let born = link add $P1 $P2 --repo $a.repo
+    seal --repo $a.repo --no-stamp | ignore
+    let bundle_dir = bundle $born.cid --repo $a.repo --out ($tmp_dir | path join out-bundle)
+
+    let pub = glob ($bundle_dir | path join multiproofs pubkeys *.pub) | first
+    let canon = open --raw $pub | into binary
+    ((0x[EF BB BF]) ++ $canon) | save --raw --force $pub
+    assert equal (open --raw $pub | into binary | decode) ($canon | decode)
+    assert not ((open --raw $pub | into binary | cid-v0) == ($canon | cid-v0))
+    assert error {|| verify-bundle $bundle_dir }
+}
+
 # `pubkey canonical` shells out to OpenSSH, so it throws for reasons that are
 # not about the key at all. The refusal must say which — a bare `try {}` turned
 # a missing ssh-keygen into "non-canonical pubkey file" over a good ed25519
