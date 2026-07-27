@@ -70,8 +70,8 @@ def "birth, seal, bundle, import, verify — the full link journey" [] {
     let bundle_dir = bundle $born.cid --repo $a.repo --out ($tmp_dir | path join out-bundle)
     let b = make-neuron $tmp_dir "b"
     let imported = import $bundle_dir --repo $b.repo
-    assert equal $imported.neuron $born.record.neuron
-    assert (($b.home | path join imported $born.record.neuron $born.cid) | path exists)
+    assert equal $imported.neuron $born.record.signer
+    assert (($b.home | path join imported $born.record.signer $born.cid) | path exists)
 
     # B verifies its copy offline, by CID alone
     let checks = verify $born.cid --repo $b.repo
@@ -84,7 +84,7 @@ def "birth, seal, bundle, import, verify — the full link journey" [] {
     seal --repo $b.repo --no-stamp | ignore
     let b_manifest = open --raw ($b.home | path join multiproofs tree-hashes.csv)
         | from csv --no-infer
-    let bundled_record = $"imported/($born.record.neuron)/($born.cid)/links/($born.cid).json"
+    let bundled_record = $"imported/($born.record.signer)/($born.cid)/links/($born.cid).json"
     assert ($b_manifest | where filepath == $bundled_record | is-not-empty)
 
     # A second seal must not touch the frozen certificate (birth, not latest)
@@ -455,7 +455,7 @@ def "a handoff that is tampered, unsigned, or misclaiming is refused" [] {
     let wrong_from = $tmp_dir | path join wrong-from
     cp -r $a_out $wrong_from
     let f3 = $wrong_from | path join $handoff_name
-    open --raw $f3 | str replace $born.record.neuron $P1 | save --raw --force $f3
+    open --raw $f3 | str replace $born.record.signer $P1 | save --raw --force $f3
     let v3 = verify-bundle $wrong_from
     assert not $v3.valid
     assert ($v3.error | str contains "handoff claims do not match")
@@ -569,7 +569,7 @@ def "a re-export that comes out without a root certificate is refused and remove
     seal --repo $b.repo --no-stamp | ignore
 
     # Corrupt the source copy so assembly produces a certless bundle root
-    rm ($b.home | path join imported $born.record.neuron $born.cid $"($born.cid).cert.json")
+    rm ($b.home | path join imported $born.record.signer $born.cid $"($born.cid).cert.json")
     let dest = $tmp_dir | path join b-out
     let err = try { bundle $born.cid --repo $b.repo --out $dest | ignore; null } catch {|e| $e.msg }
     assert ($err != null and ($err | str contains "incomplete"))

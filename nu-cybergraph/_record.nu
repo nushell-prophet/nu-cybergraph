@@ -22,7 +22,7 @@ use _derive.nu [record-bytes]
 # anyone, at any time, is one file under one CID. Time is not the record's
 # business: the provable bound comes from the birth seal, and an author's
 # *claimed* time is a convention edge over the graph (`convention claimed-at`).
-export const LINK_KEYS = [cid_from cid_to neuron]
+export const LINK_KEYS = [cid_from cid_to signer]
 
 # Exported for _receipt.nu, _handoff.nu and convention.nu — they reuse the
 # record's field disciplines. RFC3339_RE guards timestamps that live OUTSIDE

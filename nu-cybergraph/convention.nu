@@ -22,7 +22,7 @@
 #
 #   confirm            A                                             → B
 #   deny (edge)        {op: deny}                                    → {cid_from: A, cid_to: B}
-#   deny (cyberlink)   {op: deny}                                    → {cid_from: A, cid_to: B, neuron: N}
+#   deny (cyberlink)   {op: deny}                                    → {cid_from: A, cid_to: B, signer: S}
 #   agree / disagree   {op: agree}                                   → B
 #   quote              {about: A, op: quote}                         → B
 #   pro / con          {about: C, op: pro}                           → B
@@ -50,7 +50,7 @@ use link.nu
 
 # Re-exported so a reader can compute any address by hand: the edge address
 # `derive {cid_from: A, cid_to: B}`, the cyberlink's derived CID
-# `derive {cid_from: A, cid_to: B, neuron: N}`, or a candidate instruction
+# `derive {cid_from: A, cid_to: B, signer: S}`, or a candidate instruction
 # source (bj002 appendix, "Reading instructions").
 export use _derive.nu [derive]
 
@@ -116,7 +116,7 @@ export def deny [
         cid_to: (resolve-particle $root $cid_to)
     }
     let target = if $disputed_neuron == null { $disputed } else {
-        $disputed | insert neuron (resolve-particle $root $disputed_neuron)
+        $disputed | insert signer (resolve-particle $root $disputed_neuron)
     }
     edge {op: "deny"} $target $neuron $repo
 }

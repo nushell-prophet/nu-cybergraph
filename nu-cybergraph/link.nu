@@ -34,7 +34,7 @@ export def add [
     let rec = {
         cid_from: (resolve-particle $root $cid_from)
         cid_to: (resolve-particle $root $cid_to)
-        neuron: (if $neuron != null { $neuron } else { own-neuron-cid $root })
+        signer: (if $neuron != null { $neuron } else { own-neuron-cid $root })
     }
     let cid = link-cid $rec
     mkdir (links-dir $root)

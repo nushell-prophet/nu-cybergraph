@@ -23,7 +23,7 @@ const DENY = "QmU8kL28M7yecZ5iPGJZ3e89fytWFzLszU3QtKRj5hV2kK" # {"op":"deny"}
 const AGREE = "QmTswdDR4inURY4GeWGvmL9S8xrDZjfiGEyeUUZzUNRNYk" # {"op":"agree"}
 const DISAGREE = "QmbQUXxqMrFA6zGYmgjvbFKyywS7Gcbb3afb3wqG6s7r6J" # {"op":"disagree"}
 const EDGE_AB = "QmawrHuBDdcSRCPumzsKfsMi5FJne8xai9WNPAdr3NmLBV" # {"cid_from":A,"cid_to":B} — the edge address
-const CYBERLINK_ABN = "QmYAAKqmQ8Z1ZdQMX2iEZ4gkWak9vh6vyt7gtj1b54yXWq" # {"cid_from":A,"cid_to":B,"neuron":N}
+const CYBERLINK_ABN = "Qme4L2P7QwNoijw6HzYVrqrrtk99oj1XvJHvAb9yobHVLe" # {"cid_from":A,"cid_to":B,"signer":N}
 
 @test
 def "derive golden CIDs pin the record canon" [] {
@@ -31,7 +31,7 @@ def "derive golden CIDs pin the record canon" [] {
     assert equal (derive {op: "agree"}) $AGREE
     assert equal (derive {op: "disagree"}) $DISAGREE
     assert equal (derive {cid_from: $A, cid_to: $B}) $EDGE_AB
-    assert equal (derive {cid_from: $A, cid_to: $B, neuron: $N}) $CYBERLINK_ABN
+    assert equal (derive {cid_from: $A, cid_to: $B, signer: $N}) $CYBERLINK_ABN
 }
 
 @test

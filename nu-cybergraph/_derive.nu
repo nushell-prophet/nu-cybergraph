@@ -13,7 +13,7 @@
 # strings only (no nesting: a reference to another record is its CID),
 # exactly one trailing "\n". The appendix's two special cases are just
 # records: the edge address is `derive {cid_from: A, cid_to: B}`, the
-# cyberlink's derived CID is `derive {cid_from: A, cid_to: B, neuron: N}`.
+# cyberlink's derived CID is `derive {cid_from: A, cid_to: B, signer: S}`.
 #
 # The link *file* record (_record.nu) is serialized by the same rule —
 # record-bytes is the one canon of the format. Since the file record is

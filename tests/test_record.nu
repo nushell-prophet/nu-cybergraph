@@ -5,18 +5,18 @@ use ../nu-cybergraph/_record.nu [link-bytes link-cid validate-link read-link LIN
 use ../nu-cybergraph/_derive.nu [derive]
 use ../nu-cybergraph/_deps/cid-v0.nu [cid-v0]
 
-# Fixed record for golden pinning — same particle/neuron CIDs as the
+# Fixed record for golden pinning — same particle/signer CIDs as the
 # bostrom-journal bj003 smoke experiment.
 def golden-record []: nothing -> record {
     {
         cid_from: "QmUQUHEmv651XCBhiWUQpx2zf4PDts1aXL324ZFyV4QZPF"
         cid_to: "QmW9519sfmW2MvDb4TU4dKtiFAXm1UPDvE7JrMaBjprVHp"
-        neuron: "QmddrVz92VH3LqT2i7uXeK4AVh6LyU7zjDiLbSdChPsULr"
+        signer: "QmddrVz92VH3LqT2i7uXeK4AVh6LyU7zjDiLbSdChPsULr"
     }
 }
 
-const GOLDEN_BYTES = '{"cid_from":"QmUQUHEmv651XCBhiWUQpx2zf4PDts1aXL324ZFyV4QZPF","cid_to":"QmW9519sfmW2MvDb4TU4dKtiFAXm1UPDvE7JrMaBjprVHp","neuron":"QmddrVz92VH3LqT2i7uXeK4AVh6LyU7zjDiLbSdChPsULr"}'
-const GOLDEN_CID = "QmQoY7wbGV6797ErgTf39eMAeXuGbm5ZRHay4XTcoHMMvU"
+const GOLDEN_BYTES = '{"cid_from":"QmUQUHEmv651XCBhiWUQpx2zf4PDts1aXL324ZFyV4QZPF","cid_to":"QmW9519sfmW2MvDb4TU4dKtiFAXm1UPDvE7JrMaBjprVHp","signer":"QmddrVz92VH3LqT2i7uXeK4AVh6LyU7zjDiLbSdChPsULr"}'
+const GOLDEN_CID = "QmRyRXXRM7ztFTPiyXjDtra9ND2oU64iE2jcydwubW17Ze"
 
 @test
 def "golden bytes: alphabetical key order, compact JSON, one trailing newline" [] {
@@ -26,7 +26,7 @@ def "golden bytes: alphabetical key order, compact JSON, one trailing newline" [
 
 # The record is exactly the triple, so the file's self-address IS the act's
 # derived CID: the link file is the preimage of the cyberlink's
-# address, for every neuron alike.
+# address, for every signer alike.
 @test
 def "link file CID equals the derived cyberlink CID" [] {
     assert equal (link-cid (golden-record)) (derive (golden-record))
@@ -35,7 +35,7 @@ def "link file CID equals the derived cyberlink CID" [] {
 @test
 def "input key order does not change the CID" [] {
     let reordered = {
-        neuron: "QmddrVz92VH3LqT2i7uXeK4AVh6LyU7zjDiLbSdChPsULr"
+        signer: "QmddrVz92VH3LqT2i7uXeK4AVh6LyU7zjDiLbSdChPsULr"
         cid_to: "QmW9519sfmW2MvDb4TU4dKtiFAXm1UPDvE7JrMaBjprVHp"
         cid_from: "QmUQUHEmv651XCBhiWUQpx2zf4PDts1aXL324ZFyV4QZPF"
     }
@@ -47,11 +47,14 @@ def "malformed records are rejected" [] {
     # Not a CID
     assert error {|| validate-link ((golden-record) | update cid_from "not-a-cid") }
     # CID v1 charset (0 and l are outside base58btc)
-    assert error {|| validate-link ((golden-record) | update neuron "Qm0l000000000000000000000000000000000000000000") }
+    assert error {|| validate-link ((golden-record) | update signer "Qm0l000000000000000000000000000000000000000000") }
     # Extra key — the removed claimed_at stays removed
     assert error {|| validate-link ((golden-record) | insert claimed_at "2026-07-16T00:00:00+00:00") }
     # Missing key
-    assert error {|| validate-link ((golden-record) | reject neuron) }
+    assert error {|| validate-link ((golden-record) | reject signer) }
+    # The pre-`signer` shape is malformed, not legacy: the key-set check refuses
+    # it like any other wrong record, so no reader can quietly read `neuron`.
+    assert error {|| validate-link ((golden-record) | rename signer neuron) }
 }
 
 @test
@@ -83,7 +86,7 @@ def "read-link rejects non-canonical bytes even under their own address" [] {
     # and break the file's identity with the cyberlink's derived CID.
     let variants = [
         # reordered keys
-        ((golden-record) | select neuron cid_to cid_from | to json --raw)
+        ((golden-record) | select signer cid_to cid_from | to json --raw)
         # added whitespace
         $"($GOLDEN_BYTES | str replace '{' '{ ')"
         # duplicate key: `from json` keeps the LAST, so the first value is a

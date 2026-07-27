@@ -201,7 +201,7 @@ def verify-custody [bundle: path link_cid: string author: string root_handoff: a
 }
 
 # Verify a portable bundle directory: the birth proof (multiproof result +
-# NEURON BINDING — the record's `neuron` must be the CID of a pubkey that
+# NEURON BINDING — the record's `signer` must be the CID of a pubkey that
 # validly signed the root statement), then every custody layer on top.
 export def verify-bundle [bundle: path]: nothing -> record {
     let birth = verify-proof-dir $bundle
@@ -210,15 +210,15 @@ export def verify-bundle [bundle: path]: nothing -> record {
     # read-link throws on a record that fails self-addressing — tampered bytes
     # never reach the binding check.
     let rec = read-link ($bundle | path join $v.leaf.filepath)
-    let neuron_bound = bound $v.signatures $birth.pubs $rec.neuron
+    let neuron_bound = bound $v.signatures $birth.pubs $rec.signer
     # No `\(`: that is an escape only in `$"…"`. Inside the `'…'` here the
     # backslash is literal, and it printed as one. Parens need no escaping in a
     # single-quoted string — nothing interpolates there.
     print $"neuron:    (if $neuron_bound { 'bound' } else { 'NOT BOUND (no valid signature by the claimed neuron)' })"
 
     let link_cid = $v.leaf.filepath | path parse | get stem
-    let root_handoff = check-handoff $bundle $link_cid $rec.neuron null $birth.pubs
-    let custody = verify-custody $bundle $link_cid $rec.neuron $root_handoff
+    let root_handoff = check-handoff $bundle $link_cid $rec.signer null $birth.pubs
+    let custody = verify-custody $bundle $link_cid $rec.signer $root_handoff
     let custody_ok = $custody | all { $in.valid }
     let root_handoff_ok = $root_handoff == null or $root_handoff.valid
     if ($custody | is-not-empty) {
@@ -238,13 +238,13 @@ export def verify-bundle [bundle: path]: nothing -> record {
 
     $v
     | insert record $rec
-    | insert neuron {cid: $rec.neuron bound: $neuron_bound}
+    | insert neuron {cid: $rec.signer bound: $neuron_bound}
     | insert handoff $root_handoff
     | insert custody $custody
     | insert handed_to $handed_to
     | update valid ($v.valid and $neuron_bound and $root_handoff_ok and $custody_ok)
     | update error (if $v.error != null { $v.error } else if not $neuron_bound {
-        "record's neuron CID matches no validly-signing pubkey in the bundle"
+        "record's signer CID matches no validly-signing pubkey in the bundle"
     } else if not $root_handoff_ok {
         $root_handoff.error
     } else if not $custody_ok {
