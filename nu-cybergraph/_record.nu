@@ -20,7 +20,7 @@ use _derive.nu [record-bytes]
 # equals the act's derived CID (under the record form of `derive`, _derive.nu)
 # — the same cyberlink recorded by
 # anyone, at any time, is one file under one CID. Time is not the record's
-# business: the provable bound comes from the birth seal, and an author's
+# business: the provable bound comes from the birth seal, and a signer's
 # *claimed* time is a convention edge over the graph (`convention claimed-at`).
 export const LINK_KEYS = [cid_from cid_to signer]
 

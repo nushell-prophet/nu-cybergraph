@@ -82,13 +82,13 @@ def address [root: path expr: any]: nothing -> string {
 }
 
 # Write a convention's edge: resolve the source and target expressions, then
-# emit through `link add` so the triple guard, self-addressing and author
-# resolution all come from one place. The verbs forward their author/repo
+# emit through `link add` so the triple guard, self-addressing and signer
+# resolution all come from one place. The verbs forward their signer/repo
 # controls here unchanged.
 def edge [
     src: any # source address expression
     tgt: any # target address expression
-    signer: any # author override or null
+    signer: any # signer override or null
     repo: any # target repo or null
 ]: nothing -> record {
     let root = graph-root $repo
@@ -199,12 +199,12 @@ export def quote [
     edge {about: (resolve-particle $root $about), op: "quote"} (resolve-particle $root $excerpt) $signer $repo
 }
 
-# Agree: {op: agree} → B — "claim B is true". Gives an opinion about
-# standalone content an edge of its own, so it aggregates like any other
+# Agree: {op: agree} → B — "claim B is true". Gives an opinion about a
+# standalone file an edge of its own, so it aggregates like any other
 # (bj002 "Agreement and disagreement with content").
 @example "agree with claim B" { convention agree QmB… }
 export def agree [
-    cid: string # the content being agreed with
+    cid: string # the file being agreed with
     --signer: string
     --repo: path
 ]: nothing -> record {
@@ -212,11 +212,11 @@ export def agree [
 }
 
 # Disagree: {op: disagree} → B — "claim B is false". The other axis from
-# deny: this speaks about the content, deny about the statement or the record
+# deny: this speaks about the file's content, deny about the statement or the record
 # (bj002 "Agreement and disagreement with content").
 @example "disagree with claim B" { convention disagree QmB… }
 export def disagree [
-    cid: string # the content being disagreed with
+    cid: string # the file being disagreed with
     --signer: string
     --repo: path
 ]: nothing -> record {
@@ -224,7 +224,7 @@ export def disagree [
 }
 
 # Argument for: {about: C, op: pro} → B — "B is an argument for C". C is any
-# CID: content, an edge, or a cyberlink; the level of argumentation is the
+# CID: a file, an edge, or a cyberlink; the level of argumentation is the
 # out-degree of the source (bj002 "Argument for and against").
 @example "B argues for C" { convention pro QmC… QmB… }
 export def pro [
@@ -286,13 +286,13 @@ export def answer [
     edge $src (resolve-particle $root $answer) $signer $repo
 }
 
-# Authorship: {about: B, op: author} → P — "the author of content B is P". The
+# Authorship: {about: B, op: author} → P — "the author of file B is P". The
 # signer of the edge is the one who ports it (the archivist), which need not be
 # the author P; the signature certifies the porting, not the authorship
 # (bj002 "Authorship: porting from other mediums").
 @example "the author of B is P" { convention author QmB… QmP… }
 export def author [
-    content: string # the ported content
+    content: string # the ported file
     author_id: string # CID of the author's identifier
     --signer: string
     --repo: path

@@ -8,7 +8,7 @@ use ../nu-cybergraph/_derive.nu [derive]
 use ../nu-cybergraph/_layout.nu [particles-dir particle-path]
 use ../nu-cybergraph/_deps/cid-v0.nu [cid-v0]
 
-# Same fixture CIDs as test_convention.nu; plain --repo dir, fixed author,
+# Same fixture CIDs as test_convention.nu; plain --repo dir, fixed signer,
 # so everything runs offline with no git/ssh/init.
 const A = "QmQXupHE6VPzpoBTivNXAAGwigJE68n4TeVUSxYnFL78GV"
 const B = "Qmc9pm5gQqDwJMiFTmFEuTxRhSy5Cn2yt7NZh1LrxmMhSi"
@@ -104,7 +104,7 @@ def "particle cat refuses anything but a bare CID" [] {
 }
 
 @test
-def "particle cat fails on a missing particle" [] {
+def "particle cat fails on a file that is not in the store" [] {
     assert error {|| particle cat $A --repo $in.tmp }
 }
 
@@ -127,7 +127,7 @@ def "particle cat rejects a tampered store file" [] {
 }
 
 @test
-def "link add resolves text endpoints to published particles" [] {
+def "link add resolves text endpoints to published files" [] {
     let r = link add "cyber" "bostrom" --repo $in.tmp --signer $N | get record
     assert equal $r.cid_from ("cyber" | into binary | cid-v0)
     assert equal $r.cid_to ("bostrom" | into binary | cid-v0)

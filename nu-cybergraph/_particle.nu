@@ -27,7 +27,7 @@ export def particle-files [root: path cid: string]: nothing -> list<string> {
 export def particle-find [root: path cid: string]: nothing -> path {
     let files = particle-files $root $cid
     match ($files | length) {
-        0 => { error make {msg: $"no particle ($cid) in store"} }
+        0 => { error make {msg: $"no file ($cid) in store"} }
         1 => { $files | first }
         _ => { error make {msg: $"ambiguous store: ($files | length) files for ($cid) — one CID, one file"} }
     }

@@ -12,7 +12,7 @@ use _deps/cid-v0.nu [cid-v0]
 # bytes — `open --raw file | particle add` publishes a file). Idempotent:
 # identical content is one file. Also the escape hatch for content that
 # looks like a CID: `particle add` never treats its input as an address.
-@example "publish a text particle" { particle add "cyber" }
+@example "publish text as a file" { particle add "cyber" }
 @example "publish a file's bytes" { open --raw doc.md | particle add }
 @example "publish markdown, keep the extension" { open --raw doc.md | particle add --ext md }
 export def add [
@@ -48,7 +48,7 @@ export def add [
 # star-importers. That is workable (skip `use particle.nu *`, or alias the
 # builtin first), but cat carries the domain meaning, so the collision is
 # not worth managing.
-@example "read a particle" { particle cat QmQXupHE6VPzpoBTivNXAAGwigJE68n4TeVUSxYnFL78GV }
+@example "read a stored file" { particle cat QmQXupHE6VPzpoBTivNXAAGwigJE68n4TeVUSxYnFL78GV }
 export def cat [
     cid: string # CID v0 of the file (Qm + 44 chars)
     --repo: path # Target repo root (default: git root of current directory)
@@ -59,7 +59,7 @@ export def cat [
     let file = particle-find (graph-root $repo) $cid
     let content = open --raw $file
     if ($content | into binary | cid-v0) != $cid {
-        error make {msg: $"tampered particle: ($file | path basename) does not hash to its name"}
+        error make {msg: $"tampered file: ($file | path basename) does not hash to its name"}
     }
     $content
 }

@@ -8,7 +8,7 @@ use _particle.nu [resolve-particle]
 use _deps/cid-v0.nu [cid-v0]
 
 # Derive the repo's own signer identity: the CID of its registered pubkey.
-# With several pubkeys registered the choice is the author's — require --signer.
+# With several pubkeys registered the choice is the signer's — require --signer.
 def own-signer-cid [root: path]: nothing -> string {
     let pubs = list-files ($root | path join multiproofs pubkeys) --suffix ".pub"
     match ($pubs | length) {
@@ -27,7 +27,7 @@ def own-signer-cid [root: path]: nothing -> string {
 export def add [
     cid_from: string # source vertex: a CID v0, or content to publish as a file
     cid_to: string # target vertex: a CID v0, or content to publish as a file
-    --signer: string # Author's signer CID (default: CID of the single registered pubkey)
+    --signer: string # Signer CID (default: CID of the single registered pubkey)
     --repo: path # Target repo root (default: git root of current directory)
 ]: nothing -> record {
     let root = graph-root $repo

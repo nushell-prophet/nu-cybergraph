@@ -50,7 +50,7 @@ def "record-bytes refuses non-string values" [] {
 
 # --- Each convention shapes the right edge -----------------------------------
 # Written to a plain directory: an existing --repo path needs no git/ssh/init
-# (link add mkdirs links/). The author is fixed so the run is offline and
+# (link add mkdirs links/). The signer is fixed so the run is offline and
 # deterministic; the assertions are on cid_from/cid_to — the shape of the edge,
 # independent of who signs it.
 @before-each
@@ -127,7 +127,7 @@ def "operand-embedding conventions put the operand in the source" [] {
 }
 
 @test
-def "agree and disagree use the fixed source, target is the content" [] {
+def "agree and disagree use the fixed source, target is the file" [] {
     let tmp = $in.tmp
     let a = convention agree $B --repo $tmp --signer $S | get record
     assert equal $a.cid_from $AGREE
