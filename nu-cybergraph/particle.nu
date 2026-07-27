@@ -1,16 +1,16 @@
-# Publish content particles: arbitrary bytes stored self-addressed under
-# particles/. The public face of the store primitive every write command
-# resolves its text arguments through.
+# Publish files: arbitrary bytes stored self-addressed under particles/. The
+# public face of the store primitive every write command resolves its text
+# arguments through.
 
 use _repo.nu graph-root
 use _particle.nu [particle-store particle-find]
 use _record.nu [CID_V0_RE]
 use _deps/cid-v0.nu [cid-v0]
 
-# Publish content as a self-addressed particle under particles/ and return its
+# Publish content as a self-addressed file under particles/ and return its
 # CID. Content comes as the argument or through the pipeline (string or raw
 # bytes — `open --raw file | particle add` publishes a file). Idempotent:
-# identical content is one particle. Also the escape hatch for content that
+# identical content is one file. Also the escape hatch for content that
 # looks like a CID: `particle add` never treats its input as an address.
 @example "publish a text particle" { particle add "cyber" }
 @example "publish a file's bytes" { open --raw doc.md | particle add }
@@ -39,8 +39,8 @@ export def add [
     }
 }
 
-# Read a particle's exact bytes by CID. The argument is the bare 46-char CID —
-# never a filename or path — and the store file is found whatever extension it
+# Read a stored file's exact bytes by CID. The argument is the bare 46-char
+# CID — never a filename or path — and the file is found whatever extension it
 # carries. The bytes are verified to hash back to the CID before being
 # returned, so a tampered store file fails instead of being served.
 # Named cat after `ipfs cat` — the established verb for reading by CID.
@@ -50,7 +50,7 @@ export def add [
 # not worth managing.
 @example "read a particle" { particle cat QmQXupHE6VPzpoBTivNXAAGwigJE68n4TeVUSxYnFL78GV }
 export def cat [
-    cid: string # CID v0 of the particle (Qm + 44 chars)
+    cid: string # CID v0 of the file (Qm + 44 chars)
     --repo: path # Target repo root (default: git root of current directory)
 ]: nothing -> any {
     if $cid !~ $CID_V0_RE {

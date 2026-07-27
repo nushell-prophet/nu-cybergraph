@@ -1,8 +1,8 @@
-# The particle store primitive and the text-or-CID resolver shared by every
-# write command (`particle add`, `link add`, the convention verbs). Borrowed
+# The file store primitive and the text-or-CID resolver shared by every write
+# command (`particle add`, `link add`, the convention verbs). Borrowed
 # discipline: cy's `pin-text` — the argument convention that made that CLI
-# comfortable: a CID passes through untouched, anything else becomes a
-# particle first.
+# comfortable: a CID passes through untouched, anything else becomes a file
+# first.
 
 use _layout.nu [particles-dir particle-path PARTICLE_EXT_RE]
 use _record.nu [CID_V0_RE]
@@ -38,7 +38,7 @@ export def particle-find [root: path cid: string]: nothing -> path {
 # than rewritten. Stores the exact bytes given — no newline appended, no
 # encoding transform — so the file trivially self-addresses.
 # `--ext` names the file `<cid>.<ext>` — a presentation hint, not part of the
-# address: if the particle already exists under any name, the existing file
+# address: if the content already exists under any name, the existing file
 # wins and no second copy is written (one CID, one file).
 export def particle-store [root: path --ext: string]: binary -> string {
     let bytes = $in
@@ -58,10 +58,10 @@ export def particle-store [root: path --ext: string]: binary -> string {
     $cid
 }
 
-# Resolve a particle argument: a CID v0 is used as-is; any other string is
-# published as a content particle and replaced by its CID. Content that itself
-# looks like a CID cannot pass through here as content — publish it with
-# `particle add` first and hand over the returned CID.
+# Resolve a text-or-CID argument: a CID v0 is used as-is; any other string is
+# published as a file and replaced by its CID. Content that itself looks like
+# a CID cannot pass through here as content — publish it with `particle add`
+# first and hand over the returned CID.
 # Not an --ignore-cid flag (cy's escape hatch) because: `particle add` composes
 # to the same result, and one uniform rule beats a flag on every write command.
 export def resolve-particle [root: path arg: string]: nothing -> string {

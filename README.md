@@ -1,16 +1,18 @@
 # nu-cybergraph
 
-A local cybergraph on a git backend: content-addressed link records between particles (files), with per-link authorship and birth-time proofs built on [nu-multiproof](https://codeberg.org/nushell-prophet/nu-multiproof/).
+A local cybergraph on a git backend: content-addressed link records between files, with per-link authorship and birth-time proofs built on [nu-multiproof](https://codeberg.org/nushell-prophet/nu-multiproof/).
 
 🚧 Proof of concept, agent-written, barely tested — do not treat as secure.
 
 ## Origins
 
-The concept of Cybergraph was first invented and implemented by @mastercyb and @cyborgshead in the Bostrom blockchain. Cyberlink, Particle and Neuron are their terms too. Initially I resisted using them, but after tons of iterations I came to the conclusion that they deserve their own names, due to the uniqueness and substantiality of Cybergraph. Bostrom's *neuron* is the one word this repo no longer uses on its own account: following `bostrom-journal` bj002, the one who signs a cyberlink is the **signer** everywhere below, and `neuron` is kept only when quoting Bostrom.
+The concept of Cybergraph was first invented and implemented by @mastercyb and @cyborgshead in the Bostrom blockchain. Cyberlink, Particle and Neuron are their terms too. Initially I resisted using them, but after tons of iterations I came to the conclusion that they deserve their own names, due to the uniqueness and substantiality of Cybergraph. Bostrom's *neuron* and *particle* are the two words this repo no longer uses on its own account: following `bostrom-journal` bj002, only *cybergraph* and *cyberlink* stay coined, because coined names made the thing look more exotic than it is and cost the reader effort before the mechanics. So below, the one who signs a cyberlink is a **signer**, and what a cyberlink connects is an ordinary **file** — a **vertex** when the point is its position in the graph. `neuron` and `particle` are kept only where the text quotes Bostrom.
+
+One place keeps the old word on purpose: the store directory is `particles/` and the command is `particle`, because `files/` is too ambiguous a directory name inside a repo that is itself full of files — so where the prose below says *file* or *vertex*, the path and the command still say *particle*.
 
 ## Concept
 
-A **particle** is a content-addressed file (CID v0) — a CID becomes a particle when a link references it. A **link** is a directed edge between two particles, asserted by a **signer** — an identity that is itself just the CID of an SSH public key. A signer's cybergraph is a git repository of link records.
+Everything published here is a **file**, addressed by the CID v0 of its bytes; a file becomes a **vertex** of the graph the moment its CID stands in an edge. A **link** is a directed edge between two files, asserted by a **signer** — an identity that is itself just the CID of an SSH public key. A signer's cybergraph is a git repository of link records.
 
 The design goal is cheap per-link portability: one signer can hand a single link to another with a verifiable author signature and a verifiable birth-time bound, **without** signing every record individually and without shipping its whole graph. The mechanism is a **birth certificate**: sign and OTS-stamp one merkle root per seal (nu-multiproof's machinery), then freeze each link's inclusion proof from the first seal that catalogued it.
 
@@ -21,8 +23,8 @@ use nu-cybergraph/
 
 nu-cybergraph init                       # multiproof init + links/ certs/ under <repo>/cybergraph/
 nu-cybergraph particle add "any text"    # publish content as particles/<cid>, get the CID
-nu-cybergraph particle cat Qm…           # read a particle's exact bytes by its bare CID
-nu-cybergraph link add Qm…from Qm…to     # write links/<cid>.json (non-CID args are published as particles first)
+nu-cybergraph particle cat Qm…           # read a stored file's exact bytes by its bare CID
+nu-cybergraph link add Qm…from Qm…to     # write links/<cid>.json (non-CID args are published as files first)
 nu-cybergraph seal                       # sign + stamp the root, freeze new certificates
 nu-cybergraph bundle Qm…link             # portable bundle → exports/<cid>/ (imported link: re-export + custody layer)
 nu-cybergraph bundle Qm…link --to Qm…signer # …plus a signed handoff naming the recipient
@@ -48,20 +50,20 @@ Example — the golden record itself (one line + `\n`, CID `QmRyRXXRM7ztFTPiyXjD
 
 Why JSON and not CSV/NUON: JSON is readable by every language and tool (and natively by nushell); CSV quoting is not canonical (the same reason nu-multiproof's merkle leaves hash parsed fields, not raw lines). Certificates are JSON too, for the same reach — nu-multiproof's `merkle prove`/`verify` speak JSON natively.
 
-## Particles and text arguments
+## The file store and text arguments
 
-`particle add` publishes arbitrary content as a self-addressed particle: a string argument or piped content (string or raw bytes — `open --raw doc.md | particle add`) is stored as `particles/<cid>` with its exact bytes, and the CID comes back. Idempotent: identical content is one particle.
+`particle add` publishes arbitrary content as a self-addressed file: a string argument or piped content (string or raw bytes — `open --raw doc.md | particle add`) is stored as `particles/<cid>` with its exact bytes, and the CID comes back. Idempotent: identical content is one file.
 
-`--ext` keeps a filename extension on the store file — `particle add --ext md` writes `particles/<cid>.md`, so a forge renders the particle as a document. The extension is presentation only, never part of the address: the CID is always the bare 46 characters, commands that read a particle accept only that (`particle cat Qm…` — a filename or path is refused) and resolve the store file whatever extension it carries. One CID, one file: a re-add of existing content under a different extension is a no-op (the first name wins), and a store holding two files for one CID fails fast on read. `particle cat` also verifies the bytes hash back to the CID before serving them, so a tampered store file fails instead of being returned.
+`--ext` keeps a filename extension on the store file — `particle add --ext md` writes `particles/<cid>.md`, so a forge renders it as a document. The extension is presentation only, never part of the address: the CID is always the bare 46 characters, commands that read the store accept only that (`particle cat Qm…` — a filename or path is refused) and find the file whatever extension it carries. One CID, one file: a re-add of existing content under a different extension is a no-op (the first name wins), and a store holding two files for one CID fails fast on read. `particle cat` also verifies the bytes hash back to the CID before serving them, so a tampered store file fails instead of being returned.
 
-Every particle argument of a write command (`link add`, all convention verbs) accepts either a CID v0 or content: a CID passes through untouched, anything else goes through the same store first and its CID is used. So `convention question Qm… "who reviews this?"` publishes the question text and writes the edge in one call. The one ambiguity — content that itself looks like a CID — has a composable escape hatch instead of a flag: publish it explicitly with `particle add` (which never treats input as an address) and pass the returned CID.
+Every content argument of a write command (`link add`, all convention verbs) accepts either a CID v0 or content: a CID passes through untouched, anything else goes through the same store first and its CID is used. So `convention question Qm… "who reviews this?"` publishes the question text and writes the edge in one call. The one ambiguity — content that itself looks like a CID — has a composable escape hatch instead of a flag: publish it explicitly with `particle add` (which never treats input as an address) and pass the returned CID.
 
 ## Signer repo layout
 
 ```
 cybergraph/
   links/<link-cid>.json            # link records, one per file, self-addressed
-  particles/<cid>[.ext]            # self-addressed particles: instruction/address records and published content (extension optional, cosmetic)
+  particles/<cid>[.ext]            # the file store, self-addressed: instruction/address records and published content (extension optional, cosmetic)
   certs/<link-cid>.cert.json       # birth certificates (frozen `merkle prove` output)
   seals/<root-hex-12>/             # archival root statement + signatures, one per seal
   exports/<link-cid>/              # bundles built by `bundle` (default --out)
@@ -72,15 +74,15 @@ cybergraph/
 
 A sha256 git backend (`git init --object-format=sha256`) is recommended; the merkle/certificate layer works on sha1 repos too. Note GitHub does not host sha256 repos — Codeberg and plain remotes do.
 
-**Graph home.** The graph home is always `<git-root>/cybergraph/` — `init` creates it, every command finds it. Particles are referenced by CID, not path, so they never need to live under the graph home — or in the repo at all. The seal manifest covers only the graph subtree; a particle outside it still gets time-anchored the moment a sealed link mentions its CID, because showing bytes that hash to an anchored CID extends the anchor to those bytes. (Attesting a whole repo's files is a different job — use nu-multiproof's `seal` directly for that.)
+**Graph home.** The graph home is always `<git-root>/cybergraph/` — `init` creates it, every command finds it. Files are referenced by CID, not path, so they never need to live under the graph home — or in the repo at all. The seal manifest covers only the graph subtree; a file outside it still gets time-anchored the moment a sealed link mentions its CID, because showing bytes that hash to an anchored CID extends the anchor to those bytes. (Attesting a whole repo's files is a different job — use nu-multiproof's `seal` directly for that.)
 
 ## Conventions (bj002)
 
 The twelve conventions of `bostrom-journal` bj002 — confirm, deny, update, quote, agree, disagree, pro, con, question, answer, author, same — *encode* an instruction for processing the graph as an ordinary edge. Concept and rationale live in bj002; this section is the mechanics. `nu-cybergraph convention <verb>` writes the edge through the same record path as `link add` (triple guard, self-addressing, author resolution), so it takes the same `--signer`/`--repo` controls. Two further verbs are not among the twelve. `repeat` publishes the bare edge again: bj002 names edge repetition beside the conventions but not among them, because it puts no special CID in the source — there is no string that would go into `hash()`. `claimed-at` is this repo's extension, which took over the `claimed_at` field removed from the link record (see time semantics); bj002's set of conventions is open, which is what permits it. Fourteen verbs, twelve conventions.
 
-Every convention stands on one primitive, the canonical record: **`convention derive`** takes a flat record, serializes it canonically — compact JSON, keys in alphabetical order, values strings only (no nesting: a reference to another record is its CID), exactly one trailing `\n` — and returns the CID v0 of those bytes, a **derived CID** (reproduce any with `printf '<record>\n' | ipfs add --only-hash --cid-version=0`). The record form is **this repo's experiment, not journal canon**: bj002's appendix defines `hash(x, y, …)` as the CID of the arguments comma-joined, and the journal issue that proposed records instead (bj002-1) was withdrawn on 2026-07-20 as a negative result — for the journal *text*, whose meaning drifted under the conversion; the code keeps testing the record form, where named fields and IPLD proximity are worth the price. The appendix's two special cases are just records here: the edge address is `derive {cid_from: A, cid_to: B}`, the cyberlink's derived CID is `derive {cid_from: A, cid_to: B, signer: S}`. This byte format is pinned by `tests/test_convention.nu`, same discipline as the record format — changing it breaks every derived CID. The link *file* record above IS the triple record under the same rule, so its self-address and the cyberlink's derived CID are one CID: acts are addressed by the double and triple alone (bj002 "Основы"), and the file in `links/` is the published preimage of that address.
+Every convention stands on one primitive, the canonical record: **`convention derive`** takes a flat record, serializes it canonically — compact JSON, keys in alphabetical order, values strings only (no nesting: a reference to another record is its CID), exactly one trailing `\n` — and returns the CID v0 of those bytes, a **derived CID** (reproduce any with `printf '<record>\n' | ipfs add --only-hash --cid-version=0`). The record form is **this repo's experiment, not journal canon**: bj002's appendix defines `hash(x, y, …)` as the CID of the arguments comma-joined, and the journal issue that proposed records instead (bj002-1) was withdrawn on 2026-07-20 as a negative result — for the journal *text*, whose meaning drifted under the conversion; the code keeps testing the record form, where named fields and IPLD proximity are worth the price. The appendix's two special cases are just records here: the edge address is `derive {cid_from: A, cid_to: B}`, the cyberlink's derived CID is `derive {cid_from: A, cid_to: B, signer: S}`. This byte format is pinned by `tests/test_convention.nu`, same discipline as the record format — changing it breaks every derived CID. The link *file* record above IS the triple record under the same rule, so its self-address and the cyberlink's derived CID are one CID: acts are addressed by the double and triple alone (bj002 "Fundamentals"), and the file in `links/` is the published preimage of that address.
 
-An instruction lives in the *source* of its edge — a derived CID such as the CID of `{"op":"deny"}` — so the source is opaque. To make it readable, every convention publishes each record it mints — the instruction and the address records it references — as self-addressed particles under `particles/`: the record is its own preimage, so dereferencing the CID yields named fields with the real operand CIDs, and a text search for an operand's CID finds every record it participates in (bj002 "Reading instructions"). Particles are not sealed directly: a sealed convention edge names its source CID, and showing bytes that hash to a sealed CID time-anchors them — the same rule that anchors any particle named by a sealed link.
+An instruction lives in the *source* of its edge — a derived CID such as the CID of `{"op":"deny"}` — so the source is opaque. To make it readable, every convention publishes each record it mints — the instruction and the address records it references — as self-addressed files under `particles/`: the record is its own preimage, so dereferencing the CID yields named fields with the real operand CIDs, and a text search for an operand's CID finds every record it participates in (bj002 "Reading instructions"). Those files are not sealed directly: a sealed convention edge names its source CID, and showing bytes that hash to a sealed CID time-anchors them — the same rule that anchors any file named by a sealed link.
 
 This table is the spec of the fourteen shapes; a record in source or target position means the CID of its canonical bytes. The header of `nu-cybergraph/convention.nu` restates it in the implementation's address-expression notation — same facts, second notation; if a shape ever changes, both move together.
 
@@ -97,7 +99,7 @@ This table is the spec of the fourteen shapes; a record in source or target posi
 | `answer B Q A` | `{"cid_from":{"about":B,"op":"question"},"cid_to":Q,"op":"answer"} → A` |
 | `author B P` | `{"about":B,"op":"author"} → P` |
 | `same P1 P2` | `{"about":P1,"op":"same"} → P2` |
-| `claimed-at X T` | `{"about":X,"op":"claimed_at"} → T` (extension, not in bj002; T is an RFC 3339 particle) |
+| `claimed-at X T` | `{"about":X,"op":"claimed_at"} → T` (extension, not in bj002; T is an RFC 3339 timestamp published as a file) |
 
 The cyberlink target of `confirm`/`deny` is the triple record, and that record is byte-identical to the link file itself (see above) — so its derived CID *is* the CID of the file in `links/`. `confirm A B S` targets that file: the preimage of the address being confirmed is already published, and a reader who has the CID can open it.
 

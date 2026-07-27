@@ -12,10 +12,10 @@
 # to its derived CID, so the final record is flat, and its canonical bytes
 # (see _derive.nu) give the CID. A verb's positional arguments accept content
 # as well as CIDs: each verb passes them through `resolve-particle` first (a
-# CID is used as-is, any other text is published as a content particle and
-# replaced by its CID), so by the time an expression is built every leaf is a
-# CID or an op word. Resolving an expression walks the tree; every record it
-# passes through is published as a self-addressed particle under particles/ —
+# CID is used as-is, any other text is published as a file and replaced by its
+# CID), so by the time an expression is built every leaf is a CID or an op
+# word. Resolving an expression walks the tree; every record it passes
+# through is published as a self-addressed file under particles/ —
 # the record is its own preimage, dereferencing the CID yields named fields
 # with the real operand CIDs (bj002 "Reading instructions"). This recursion
 # is homoiconicity made executable — an instruction is built of the same
@@ -71,7 +71,7 @@ export use _derive.nu [derive]
 # Resolve an address expression to a CID. A leaf string is used verbatim (a
 # CID input or an op word); a record has its values resolved first — a nested
 # record becomes its CID — then its canonical bytes are published as a
-# self-addressed particle and the particle's CID returned. The one place the
+# self-addressed file and that file's CID returned. The one place the
 # grammar is interpreted.
 def address [root: path expr: any]: nothing -> string {
     if ($expr | describe) == "string" { return $expr }
@@ -103,8 +103,8 @@ def edge [
 # (bj002 "Confirming an edge and a cyberlink").
 @example "repeat the edge A → B" { convention repeat QmA… QmB… }
 export def repeat [
-    cid_from: string # source particle of the edge being repeated
-    cid_to: string # target particle of the edge being repeated
+    cid_from: string # source vertex of the edge being repeated
+    cid_to: string # target vertex of the edge being repeated
     --signer: string
     --repo: path
 ]: nothing -> record {
@@ -303,7 +303,8 @@ export def author [
 
 # Identity: {about: P1, op: same} → P2 — "P1 and P2 name one entity" (the
 # analogue of owl:sameAs). Directed: the mirror edge is a different pair,
-# counted separately; folding directions is a read policy (bj002 "Identity").
+# counted separately; folding directions is a read policy (bj002 "Identity:
+# another name for the same entity").
 @example "P1 and P2 are the same entity" { convention same QmP1… QmP2… }
 export def same [
     name_from: string # one name of the entity
@@ -317,8 +318,8 @@ export def same [
 
 # Claimed time: {about: X, op: claimed_at} → T — "I claim X's time is T". X is
 # any CID: a link file (= the triple), an edge or cyberlink derived CID, or a
-# particle. The heir of the claimed_at field removed from the link record: as
-# an edge the claim is optional and per-signer, and the act itself keeps one
+# published file. The heir of the claimed_at field removed from the link
+# record: as an edge the claim is optional and per-signer, and the act keeps one
 # CID for everyone. Claimed or in-record, the time stays unproven either way —
 # the provable bound is the OTS anchor of the birth seal (README, time
 # semantics).
@@ -334,8 +335,8 @@ export def claimed-at [
     }
     # The discipline the link record used to enforce on the field, now at the
     # one spot time claims are born: RFC 3339 shape (constrained charset — the
-    # particle stays escape-free), then a real calendar date (the regex admits
-    # month 13, `into datetime` rejects it).
+    # timestamp file stays escape-free), then a real calendar date (the regex
+    # admits month 13, `into datetime` rejects it).
     if $t !~ $RFC3339_RE {
         error make {msg: $"claimed time is not an RFC 3339 timestamp: ($t | to json)"}
     }

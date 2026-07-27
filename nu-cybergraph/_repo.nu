@@ -24,7 +24,7 @@ export def repo-root [repo?: path]: nothing -> path {
 # root-layout fallback — the author recreated the only such graph rather
 # than carry a second layout forever. Whole-repo attestation (what root
 # layout used to give the tool repo) is plain nu-multiproof's job, not the
-# graph's. Particles are referenced by CID, not path, so they never need to
+# graph's. Files are referenced by CID, not path, so they never need to
 # live under the graph home (or in the repo at all); the seal manifest
 # covers only the graph subtree.
 export def graph-root [repo?: path]: nothing -> path {

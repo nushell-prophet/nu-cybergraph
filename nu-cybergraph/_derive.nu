@@ -19,7 +19,8 @@
 # record-bytes is the one canon of the format. Since the file record is
 # exactly the triple, the file's self-address and the act's derived CID are
 # one CID: acts are addressed by the double and triple alone (bj002
-# «Основы»), and the file in links/ is the published preimage of that address.
+# "Fundamentals"), and the file in links/ is the published preimage of that
+# address.
 #
 # Alphabetical means byte order of the UTF-8 key bytes — locale-free and
 # case-sensitive; nushell's record `sort` matches it for these keys.
@@ -28,9 +29,9 @@ use _deps/cid-v0.nu [cid-v0]
 
 # Canonical bytes of a record: keys sorted alphabetically, compact JSON, one
 # trailing "\n". Values must be strings — flatness is the spec, not a
-# convenience: one structure, one byte string, one CID. Published as a
-# particle by the convention layer, the record is its own preimage
-# (bj002 "Reading instructions").
+# convenience: one structure, one byte string, one CID. Published as a file by
+# the convention layer, the record is its own preimage (bj002 "Reading
+# instructions").
 export def record-bytes [rec: record]: nothing -> binary {
     for key in ($rec | columns) {
         let kind = $rec | get $key | describe

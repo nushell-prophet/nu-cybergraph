@@ -19,14 +19,14 @@ def own-signer-cid [root: path]: nothing -> string {
 }
 
 # Write a new link record to links/<cid>.json, named by its own content address.
-# A particle is any content-addressed file; its CID is the CID v0 of its bytes.
+# An endpoint is any content-addressed file; its CID is the CID v0 of its bytes.
 # Both endpoints accept a CID or content: a non-CID argument is published as a
-# content particle under particles/ and its CID is linked (see _particle.nu).
+# file under particles/ and its CID is linked (see _particle.nu).
 @example "link two particles by the CIDs of their bytes" { link add QmUQUHEmv651XCBhiWUQpx2zf4PDts1aXL324ZFyV4QZPF QmW9519sfmW2MvDb4TU4dKtiFAXm1UPDvE7JrMaBjprVHp }
 @example "publish two texts as particles and link them" { link add "cyber" "bostrom" }
 export def add [
-    cid_from: string # source particle: a CID v0, or content to publish as one
-    cid_to: string # target particle: a CID v0, or content to publish as one
+    cid_from: string # source vertex: a CID v0, or content to publish as a file
+    cid_to: string # target vertex: a CID v0, or content to publish as a file
     --signer: string # Author's signer CID (default: CID of the single registered pubkey)
     --repo: path # Target repo root (default: git root of current directory)
 ]: nothing -> record {

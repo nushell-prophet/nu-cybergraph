@@ -20,22 +20,22 @@ export def links-dir [root: path]: nothing -> path {
     $root | path join $LINKS_DIR
 }
 
-# <root>/particles — any self-addressed particle: instruction/address records
-# (published so a reader can dereference an instruction edge, bj002 "Reading
-# instructions") and content published by `particle add` or by a text argument
-# to a write command. Not in the seal manifest: a particle is anchored the
-# moment a sealed link names its CID (README "Graph home").
+# <root>/particles — the file store, every file self-addressed: instruction and
+# address records (published so a reader can dereference an instruction edge,
+# bj002 "Reading instructions") and content published by `particle add` or by a
+# text argument to a write command. Not in the seal manifest: a stored file is
+# anchored the moment a sealed link names its CID (README "Graph home").
 export def particles-dir [root: path]: nothing -> path {
     $root | path join $PARTICLES_DIR
 }
 
-# Extension a particle filename may carry after the CID: dot-separated
+# Extension a store filename may carry after the CID: dot-separated
 # alphanumeric segments ("md", "tar.gz"), no leading dot. One canon for the
 # write side (`particle-store --ext` validates against it) and the read side
 # (`particle-files` recognizes store files by it).
 export const PARTICLE_EXT_RE = '^[A-Za-z0-9]+(\.[A-Za-z0-9]+)*$'
 
-# <root>/particles/<cid> — one particle, self-addressed by the CID v0 of its
+# <root>/particles/<cid> — one file, self-addressed by the CID v0 of its
 # exact bytes. `--ext` appends a filename extension (`<cid>.md`) — presentation
 # convenience only (e.g. a forge renders .md); the address is always the bare
 # CID, and readers resolve it whatever extension the file carries.

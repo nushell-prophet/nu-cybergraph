@@ -5,7 +5,7 @@ use ../nu-cybergraph/_record.nu [link-bytes link-cid validate-link read-link LIN
 use ../nu-cybergraph/_derive.nu [derive]
 use ../nu-cybergraph/_deps/cid-v0.nu [cid-v0]
 
-# Fixed record for golden pinning — same particle/signer CIDs as the
+# Fixed record for golden pinning — same file/signer CIDs as the
 # bostrom-journal bj003 smoke experiment.
 def golden-record []: nothing -> record {
     {

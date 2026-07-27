@@ -26,7 +26,7 @@ export const LINK_KEYS = [cid_from cid_to signer]
 
 # Exported for _receipt.nu, _handoff.nu and convention.nu — they reuse the
 # record's field disciplines. RFC3339_RE guards timestamps that live OUTSIDE
-# link records (receipts, handoffs, claimed-at particles): a link record
+# link records (receipts, handoffs, claimed-at files): a link record
 # itself carries no time.
 export const CID_V0_RE = '^Qm[1-9A-HJ-NP-Za-km-z]{44}$'
 

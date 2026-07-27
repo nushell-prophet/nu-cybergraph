@@ -6,7 +6,7 @@ use ../nu-cybergraph/_derive.nu [derive record-bytes]
 use ../nu-cybergraph/_layout.nu [particles-dir particle-path]
 use ../nu-cybergraph/_deps/cid-v0.nu [cid-v0]
 
-# Particle/signer CIDs of the bj003 smoke run; S is the record golden's signer.
+# File/signer CIDs of the bj003 smoke run; S is the record golden's signer.
 const A = "QmQXupHE6VPzpoBTivNXAAGwigJE68n4TeVUSxYnFL78GV"
 const B = "Qmc9pm5gQqDwJMiFTmFEuTxRhSy5Cn2yt7NZh1LrxmMhSi"
 const C = "QmW9519sfmW2MvDb4TU4dKtiFAXm1UPDvE7JrMaBjprVHp"
@@ -172,7 +172,7 @@ def "every convention publishes its records as self-addressed particles" [] {
     convention answer $A $B $C --repo $tmp --signer $S | ignore
 
     let particles = ls (particles-dir ($tmp | path join cybergraph))
-    # Filename == CID v0 of the file's own bytes, for every particle written.
+    # Filename == CID v0 of the file's own bytes, for every file written.
     let misaddressed = $particles | where {|p|
         ($p.name | path basename) != (open --raw $p.name | into binary | cid-v0)
     }
