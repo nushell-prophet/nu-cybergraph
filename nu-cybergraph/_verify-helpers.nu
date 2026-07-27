@@ -211,7 +211,10 @@ export def verify-bundle [bundle: path]: nothing -> record {
     # never reach the binding check.
     let rec = read-link ($bundle | path join $v.leaf.filepath)
     let neuron_bound = bound $v.signatures $birth.pubs $rec.neuron
-    print $"neuron:    (if $neuron_bound { 'bound' } else { 'NOT BOUND \(no valid signature by the claimed neuron\)' })"
+    # No `\(`: that is an escape only in `$"…"`. Inside the `'…'` here the
+    # backslash is literal, and it printed as one. Parens need no escaping in a
+    # single-quoted string — nothing interpolates there.
+    print $"neuron:    (if $neuron_bound { 'bound' } else { 'NOT BOUND (no valid signature by the claimed neuron)' })"
 
     let link_cid = $v.leaf.filepath | path parse | get stem
     let root_handoff = check-handoff $bundle $link_cid $rec.neuron null $birth.pubs
