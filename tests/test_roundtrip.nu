@@ -13,6 +13,7 @@ use ../nu-cybergraph/import.nu
 use ../nu-cybergraph/verify.nu
 use ../nu-cybergraph/_verify-helpers.nu [verify-bundle]
 use ../nu-cybergraph/_deps/cid-v0.nu [cid-v0]
+use ../nu-cybergraph/_deps/pubkey.nu [pubkey]
 
 const P1 = "QmUQUHEmv651XCBhiWUQpx2zf4PDts1aXL324ZFyV4QZPF"
 const P2 = "QmW9519sfmW2MvDb4TU4dKtiFAXm1UPDvE7JrMaBjprVHp"
@@ -266,6 +267,45 @@ def "forged authorship is refused: neuron CID of a key that never signed" [] {
 
     let b = make-neuron $tmp_dir "b"
     assert error {|| import $bundle_dir --repo $b.repo }
+}
+
+# A bundle chooses its own file names, and nothing else about it. The binding
+# must therefore ask key material both times: which key signed (the verdict
+# row's principal, a fingerprint since nu-multiproof b6d7b11) and which key the
+# claimed neuron CID addresses. Matching the principal against a pubkey file's
+# STEM put a name back in the trust path — this is that attack, end to end.
+#
+# No apostrophe in the name: nutest builds `execute: { <name> }`, so a `'` in
+# it opens a string the generated block never closes and the whole suite fails
+# to parse (same trap as the leading `word:` noted above).
+@test
+def "a pubkey filed under the fingerprint of another key cannot borrow its authorship" [] {
+    let tmp_dir = $in.tmp_dir
+    let m = make-neuron $tmp_dir "mallory"
+    let victim = make-neuron $tmp_dir "victim"
+    let victim_canon = open --raw $victim.pub | pubkey canonical
+    let victim_cid = $victim_canon | into binary | cid-v0
+
+    # mallory claims the victim authored the link, and seals with her own key
+    let born = link add $P1 $P2 --repo $m.repo --neuron $victim_cid
+    seal --repo $m.repo --no-stamp | ignore
+    let out = bundle $born.cid --repo $m.repo --out ($tmp_dir | path join out)
+    assert not (verify-bundle $out | get neuron.bound) "unforged bundle already bound"
+
+    # The forgery: mallory's key moves to a name nothing reads, and the
+    # victim's key takes the file name that IS mallory's principal. The trust
+    # list renders from key material, so mallory's signature still validates.
+    let pubdir = $out | path join multiproofs pubkeys
+    let mallory_fp = open --raw $m.pub | pubkey fingerprint
+    mv ($pubdir | path join $"($mallory_fp).pub") ($pubdir | path join "decoration.pub")
+    $victim_canon | save --raw --force ($pubdir | path join $"($mallory_fp).pub")
+
+    let v = verify-bundle $out
+    assert equal ($v.signatures | where valid | get signer) [$mallory_fp]
+    assert not $v.neuron.bound "the victim's neuron CID was bound to mallory's signature"
+    assert not $v.valid
+    let c = make-neuron $tmp_dir "carol"
+    assert error {|| import $out --repo $c.repo }
 }
 
 @test

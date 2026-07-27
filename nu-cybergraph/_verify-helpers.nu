@@ -17,14 +17,17 @@ use _layout.nu [receipt-relpath custody-layer-dirname handoff-filename]
 # the same bytes — a re-read could race with a file swap (check vs use).
 def canonical-pubkeys [dir: path]: nothing -> table {
     let pubs = glob ($dir | path join multiproofs pubkeys *.pub)
-        | each {|f| {path: $f name: ($f | path parse | get stem) bytes: (open --raw $f | into binary)} }
+        | each {|f| {path: $f bytes: (open --raw $f | into binary)} }
     for pub in $pubs {
         let raw = $pub.bytes | decode
         if $raw != (try { $raw | pubkey canonical }) {
             error make {msg: $"non-canonical pubkey file: ($pub.path) — expected `<type> <base64>` + newline, no comment"}
         }
     }
-    $pubs
+    # The principal a key signs under, derived from the key material — the same
+    # digest nu-multiproof renders into its trust list. Computed after the
+    # canonical check, which is the one thing that can make it throw.
+    $pubs | insert fingerprint {|p| $p.bytes | decode | pubkey fingerprint }
 }
 
 # One proof directory — a birth bundle or a custody layer, same layout: a
@@ -40,13 +43,25 @@ def verify-proof-dir [dir: path]: nothing -> record {
 }
 
 # The binding check: does CLAIMED (a neuron CID) match a pubkey that validly
-# signed this proof's root statement? Without it, anyone could re-seal
-# someone else's record — or receipt — under their own key and the signature
-# would still verify, against the wrong identity.
-def bound [v: record pubs: table claimed: string]: nothing -> bool {
-    $v.signatures | where valid | any {|s|
-        $pubs | where name == $s.signer | any {|p| ($p.bytes | cid-v0) == $claimed }
-    }
+# signed these bytes? Without it, anyone could re-seal someone else's record —
+# or receipt — under their own key and the signature would still verify,
+# against the wrong identity.
+#
+# Both sides of the match are key material, and that is the whole point. This
+# used to read `where name == $s.signer` — the pubkey file's STEM against the
+# principal in the verdict row — which made a file name authorize an identity.
+# Under nu-multiproof b6d7b11 a principal became the key's own fingerprint, so
+# the stem match survived only because `init` happens to name the file after
+# it; a bundle is free to name its files anything. Filing the victim's key as
+# `<attacker-fingerprint>.pub` (with the attacker's own key beside it under any
+# other name, so the trust list still renders it and the signature still
+# validates) bound the attacker's signature to the victim's neuron CID:
+# `valid: true`, `bound: true`, imported by a third repo as the victim's
+# authorship. Pinned by tests/test_roundtrip.nu "a pubkey filed under another
+# key's fingerprint cannot borrow its authorship".
+def bound [sigs: table pubs: table claimed: string]: nothing -> bool {
+    let signers = $sigs | where valid | get signer
+    $pubs | any {|p| ($p.bytes | cid-v0) == $claimed and $p.fingerprint in $signers }
 }
 
 # A proof dir's outgoing handoff, if present — null when the dir has none
@@ -75,9 +90,7 @@ def check-handoff [dir: path link_cid: string holder: string expected_receipt: a
     # binding below weighs; anything else is a malformed bundle, and this
     # module already throws on those (missing cert, non-canonical pubkey).
     let sigs = ssh-sign verify $file --pubkeys-dir ($dir | path join multiproofs pubkeys)
-    let signed = $sigs | where valid | any {|s|
-        $pubs | where name == $s.signer | any {|p| ($p.bytes | cid-v0) == $h.from }
-    }
+    let signed = bound $sigs $pubs $h.from
     {
         to: $h.to
         hash: (open --raw $file | hash sha256)
@@ -134,7 +147,7 @@ def verify-custody [bundle: path link_cid: string author: string root_handoff: a
         if ($layer.dir | path basename) != (custody-layer-dirname $layer.index $receipt.custodian) {
             error make {msg: $"custody layer dirname ($layer.dir | path basename) does not match its receipt's custodian"}
         }
-        let custodian_bound = bound $v $checked.pubs $receipt.custodian
+        let custodian_bound = bound $v.signatures $checked.pubs $receipt.custodian
         let files_ok = $receipt.files == $birth_files
         let prev_expected = if $prev_hash == "" { null } else { $prev_hash }
         let prev_ok = $receipt.prev == $prev_expected
@@ -184,7 +197,7 @@ export def verify-bundle [bundle: path]: nothing -> record {
     # read-link throws on a record that fails self-addressing — tampered bytes
     # never reach the binding check.
     let rec = read-link ($bundle | path join $v.leaf.filepath)
-    let neuron_bound = bound $v $birth.pubs $rec.neuron
+    let neuron_bound = bound $v.signatures $birth.pubs $rec.neuron
     print $"neuron:    (if $neuron_bound { 'bound' } else { 'NOT BOUND \(no valid signature by the claimed neuron\)' })"
 
     let link_cid = $v.leaf.filepath | path parse | get stem
