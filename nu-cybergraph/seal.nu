@@ -10,32 +10,6 @@ use _layout.nu [links-dir certs-dir cert-path snapshot-dir receipts-dir receipt-
 use _record.nu [read-link]
 use _deps/seal.nu [seal]
 use _deps/merkle.nu [merkle]
-use _deps/pubkey.nu [pubkey]
-
-# The public half of the key this repo's git config will sign with, plus how to
-# name it back to the operator. Both forms git allows: inline `key::<line>`
-# material, or a path whose `.pub` sibling holds the public half.
-#
-# Why resolved here rather than imported from nu-multiproof's _key-helpers.nu:
-# cross-repo imports of another project's `_`-internals carry no compatibility
-# promise — the same call _repo.nu made for repo-root.
-def signing-pubkey [root: path]: nothing -> record<line: string, desc: string, hint: string> {
-    let cfg = ^git -C $root config user.signingKey | complete
-    if $cfg.exit_code != 0 or ($cfg.stdout | str trim | is-empty) {
-        error make {msg: "no signing key configured — set git config user.signingKey in the repo seal targets"}
-    }
-    let raw = $cfg.stdout | str trim
-    if ($raw | str starts-with "key::") {
-        {line: ($raw | str replace "key::" "") desc: "the inline user.signingKey" hint: ""}
-    } else {
-        let expanded = $raw | path expand
-        let pub = if ($expanded | str ends-with ".pub") { $expanded } else { $"($expanded).pub" }
-        if not ($pub | path exists) {
-            error make {msg: $"the signing key's public half is not on disk: ($pub)"}
-        }
-        {line: (open --raw $pub) desc: $pub hint: $" --pubkey ($pub)"}
-    }
-}
 
 # `seal` in the body is nu-multiproof's seal; this wrapper stages the
 # cybergraph files, runs it, then freezes certificates and the root snapshot.
@@ -48,27 +22,21 @@ export def main [
 ]: nothing -> record {
     let root = graph-root $repo
 
-    # Fail fast BEFORE multiproof's seal mutates anything: it rewrites the
-    # manifest and the root statement — and deletes signatures over bytes that
-    # changed — in its step 2, while its own registration check (`ssh-sign
-    # sign` → signing-principal) only fires in step 3, once that is done. Same
-    # invariant, asked before the damage instead of after; that ordering is the
-    # only reason this is not a duplicate of upstream's check. Registration is
-    # deliberate — it establishes the neuron identity — so seal points to init
+    # Upstream's seal now asks its registration question before rewriting
+    # anything (nu-multiproof 923daa1), so the fingerprint pre-check that
+    # lived here — with its own copy of the signing-key resolution — is gone
+    # with it. What stays is the bootstrap case upstream cannot name: an empty
+    # pubkeys/ means `nu-cybergraph init` has not run, and registration is
+    # deliberate — it establishes the neuron identity — so seal points there
     # instead of registering as a side effect.
-    let registered = glob ($root | path join multiproofs pubkeys *.pub)
+    # Not glob: a repo path holding `[ ] * ? {` reads as pattern syntax and
+    # silently returns [] (nu-multiproof's trap list).
+    let pubkeys_dir = $root | path join multiproofs pubkeys
+    let registered = if ($pubkeys_dir | path exists) {
+        ls --all $pubkeys_dir | where type == file | where ($it.name | str ends-with ".pub")
+    } else { [] }
     if ($registered | is-empty) {
         error make {msg: "no pubkey registered in multiproofs/pubkeys/ — run `nu-cybergraph init` first"}
-    }
-    # Compare fingerprints, not `<type> <base64>` text: upstream a principal IS
-    # the key's own fingerprint, and `pubkey fingerprint` canonicalizes on the
-    # way in — so this asks the same question multiproof will ask, in the same
-    # terms, instead of a hand-rolled string compare that reads a padded copy of
-    # a registered key as a different key.
-    let signing = signing-pubkey $root
-    let known = $registered | each {|f| open --raw $f | pubkey fingerprint }
-    if ($signing.line | pubkey fingerprint) not-in $known {
-        error make {msg: $"($signing.desc) is not registered in multiproofs/pubkeys/ — run `nu-cybergraph init($signing.hint)` first"}
     }
 
     # Self-addressing is the format's contract for every reader, but until now
@@ -77,7 +45,7 @@ export def main [
     # non-canonical record would get catalogued, signed, and frozen into a
     # birth certificate that proves the neuron attested a file which is not its
     # own address. Check here, at that boundary, and before multiproof's seal
-    # mutates anything — same reason as the pubkey block above.
+    # mutates anything.
     #
     # Every link, not just the newborns: each seal re-attests the whole
     # catalogue, so a record tampered with after its birth seal must abort this
