@@ -14,11 +14,7 @@ export def main [
     # arbitrary-shaped repo (see graph-root).
     mkdir ((repo-root $repo) | path join cybergraph)
     let root = graph-root $repo
-    if $pubkey != null {
-        init --repo $root --pubkey $pubkey
-    } else {
-        init --repo $root
-    }
+    init --repo $root --pubkey $pubkey
     mkdir (links-dir $root) (certs-dir $root)
     print $"cybergraph layout ready: links/ certs/ in ($root)"
 }

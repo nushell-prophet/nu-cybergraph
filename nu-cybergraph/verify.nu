@@ -26,12 +26,7 @@ export def main [
             # Pass the caller's $repo through, not the resolved $root:
             # graph-root is not idempotent (it always appends cybergraph/),
             # so a resolved home must never be re-resolved.
-            let b = if $repo != null {
-                bundle $link_cid --repo $repo --out ($tmp | path join bundle)
-            } else {
-                bundle $link_cid --out ($tmp | path join bundle)
-            }
-            verify-bundle $b
+            verify-bundle (bundle $link_cid --repo $repo --out ($tmp | path join bundle))
         } catch {|e|
             rm -rf $tmp
             error make {msg: $e.msg}

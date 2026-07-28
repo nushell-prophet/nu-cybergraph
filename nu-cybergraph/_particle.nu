@@ -54,12 +54,12 @@ export def particle-store [root: path --ext: string]: binary -> string {
     let cid = $bytes | cid-v0
     if (particle-files $root $cid | is-empty) {
         mkdir (particles-dir $root)
-        let out = if $ext == null {
-            particle-path $root $cid
-        } else {
-            particle-path $root $cid --ext $ext
-        }
-        $bytes | save --raw $out
+        # No null guard around the forward: nushell refuses `--ext null` only
+        # when the PARSER can prove the value is nothing (a `null` literal or a
+        # variable it typed as such). A flag's own value is not that case — it
+        # forwards fine and arrives absent, which is exactly what a missing
+        # --ext means. Same everywhere this module forwards an optional flag.
+        $bytes | save --raw (particle-path $root $cid --ext $ext)
     }
     $cid
 }

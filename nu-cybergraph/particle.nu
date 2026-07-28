@@ -32,11 +32,7 @@ export def add [
     } else {
         error make {msg: "nothing to publish — pass a string argument or pipe content in"}
     }
-    if $ext == null {
-        $bytes | particle-store $root
-    } else {
-        $bytes | particle-store $root --ext $ext
-    }
+    $bytes | particle-store $root --ext $ext
 }
 
 # Read a stored file's exact bytes by CID. The argument is the bare 46-char
