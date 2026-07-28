@@ -24,10 +24,16 @@ export def particle-files [root: path cid: string]: nothing -> list<string> {
 }
 
 # Resolve a CID to its one store file, whatever extension it carries.
-export def particle-find [root: path cid: string]: nothing -> path {
+# `--optional` returns null for a CID the store holds no file for — the one
+# absence a reader may legitimately meet, because a cyberlink names CIDs and
+# the bytes need not be local. An ambiguous store still fails under it: two
+# files for one CID is a broken store, not an absence.
+# Why `nothing -> any` and not `path`: nushell rejects a null return against a
+# declared `path` at parse time.
+export def particle-find [root: path cid: string --optional]: nothing -> any {
     let files = particle-files $root $cid
     match ($files | length) {
-        0 => { error make {msg: $"no file ($cid) in store"} }
+        0 => { if $optional { null } else { error make {msg: $"no file ($cid) in store"} } }
         1 => { $files | first }
         _ => { error make {msg: $"ambiguous store: ($files | length) files for ($cid) — one CID, one file"} }
     }

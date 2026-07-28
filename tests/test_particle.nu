@@ -126,6 +126,34 @@ def "particle cat rejects a tampered store file" [] {
     assert error {|| particle cat $cid --repo $tmp }
 }
 
+# The absence a reader may legitimately meet: a cyberlink names CIDs, and the
+# bytes need not be local.
+@test
+def "particle cat --optional returns null for a CID the store does not hold" [] {
+    assert equal (particle cat $A --repo $in.tmp --optional) null
+}
+
+# The point of the flag: absence turns into null, tampering still raises. Under
+# a bare try/catch the two would be one outcome, and the hash check would be
+# worth nothing to a reader who has to handle absence.
+@test
+def "particle cat --optional still rejects a tampered file" [] {
+    let tmp = $in.tmp
+    let root = $in.root
+    let cid = particle add "cyber" --repo $tmp
+    "evil" | save --force --raw (particle-path $root $cid)
+    assert error {|| particle cat $cid --repo $tmp --optional }
+}
+
+@test
+def "particle cat --optional still fails on two files for one CID" [] {
+    let tmp = $in.tmp
+    let root = $in.root
+    let cid = particle add "cyber" --repo $tmp
+    "cyber" | save --raw (particle-path $root $cid --ext md)
+    assert error {|| particle cat $cid --repo $tmp --optional }
+}
+
 @test
 def "link add resolves text endpoints to published files" [] {
     let r = link add "cyber" "bostrom" --repo $in.tmp --signer $N | get record

@@ -48,15 +48,25 @@ export def add [
 # star-importers. That is workable (skip `use particle.nu *`, or alias the
 # builtin first), but cat carries the domain meaning, so the collision is
 # not worth managing.
+#
+# Why `--optional` rather than a separate `particle has`: a reader walking a
+# graph has to tell "the bytes are not local" from "the bytes are tampered",
+# and those are the same outcome under a bare `try`/`catch` — the catch
+# swallows the tamper error, which is the one thing the hash check exists to
+# raise. A predicate plus a read would split that into two calls with a gap
+# between them; one call answers both.
 @example "read a stored file" { particle cat QmQXupHE6VPzpoBTivNXAAGwigJE68n4TeVUSxYnFL78GV }
+@example "read it, or null if this repo does not hold it" { particle cat QmQXup… --optional }
 export def cat [
     cid: string # CID v0 of the file (Qm + 44 chars)
     --repo: path # Target repo root (default: git root of current directory)
+    --optional # return null when the store holds no file for this CID, instead of failing
 ]: nothing -> any {
     if $cid !~ $CID_V0_RE {
         error make {msg: $"not a CID v0: ($cid) — particle cat takes the bare 46-char CID, not a filename"}
     }
-    let file = particle-find (graph-root $repo) $cid
+    let file = particle-find (graph-root $repo) $cid --optional=$optional
+    if $file == null { return null }
     let content = open --raw $file
     if ($content | into binary | cid-v0) != $cid {
         error make {msg: $"tampered file: ($file | path basename) does not hash to its name"}

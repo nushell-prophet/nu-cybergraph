@@ -56,6 +56,8 @@ Why JSON and not CSV/NUON: JSON is readable by every language and tool (and nati
 
 `--ext` keeps a filename extension on the store file — `particle add --ext md` writes `particles/<cid>.md`, so a forge renders it as a document. The extension is presentation only, never part of the address: the CID is always the bare 46 characters, commands that read the store accept only that (`particle cat Qm…` — a filename or path is refused) and find the file whatever extension it carries. One CID, one file: a re-add of existing content under a different extension is a no-op (the first name wins), and a store holding two files for one CID fails fast on read. `particle cat` also verifies the bytes hash back to the CID before serving them, so a tampered store file fails instead of being returned.
 
+`particle cat --optional` returns null when this repo holds no file for the CID, and still raises on a tampered or ambiguous one. A graph reader needs that split: a cyberlink names CIDs and the bytes need not be local, so absence is ordinary — but wrapping the plain `cat` in `try`/`catch` to absorb it also swallows the tamper error, which is the one thing the hash check exists to raise.
+
 Every content argument of a write command (`link add`, all convention verbs) accepts either a CID v0 or content: a CID passes through untouched, anything else goes through the same store first and its CID is used. So `convention question Qm… "who reviews this?"` publishes the question text and writes the edge in one call. The one ambiguity — content that itself looks like a CID — has a composable escape hatch instead of a flag: publish it explicitly with `particle add` (which never treats input as an address) and pass the returned CID.
 
 ## Signer repo layout
