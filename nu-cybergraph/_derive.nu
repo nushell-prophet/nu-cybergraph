@@ -39,7 +39,16 @@ export def record-bytes [rec: record]: nothing -> binary {
             error make {msg: $"canonical record values must be strings — ($key) is ($kind); a reference to another record is its CID"}
         }
     }
-    ($rec | sort | to json --raw) + "\n" | into binary
+    ordered-bytes $rec ($rec | columns | sort)
+}
+
+# The same bytes with the key order given instead of sorted — compact JSON,
+# one trailing "\n". Receipts and handoffs are not content-addressed, so they
+# pin a semantic order in a KEYS const (the handoff opens with its schema
+# token, which alphabetical order would bury); the byte rule they share with
+# canonical records is this one, and it lives in one place.
+export def ordered-bytes [rec: record keys: list<string>]: nothing -> binary {
+    ($rec | select ...$keys | to json --raw) + "\n" | into binary
 }
 
 # The CID v0 of the record's canonical bytes — a derived CID.

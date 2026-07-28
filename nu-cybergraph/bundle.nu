@@ -18,7 +18,7 @@ use _layout.nu [
     receipt-relpath receipt-cert-path receipt-cert-filename custody-dir custody-layer-dirname
     handoff-filename
 ]
-use _record.nu [CID_V0_RE]
+use _validate.nu [CID_V0_RE]
 use _receipt.nu [read-receipt custody-layers]
 use _signer.nu [own-signer]
 use _handoff.nu [handoff-bytes HANDOFF_SCHEMA]

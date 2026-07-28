@@ -12,29 +12,18 @@
 #   re-listing all prior layers would grow the chain quadratically.
 
 use _fs.nu [list-files list-dirs]
-use _record.nu [CID_V0_RE RFC3339_RE]
+use _derive.nu [ordered-bytes]
+use _validate.nu [SHA256_RE assert-keys assert-cids assert-timestamp assert-hash-or-null]
 use _layout.nu [CUSTODY_DIR custody-dir]
 
 export const RECEIPT_KEYS = [link signer custodian received_at files prev handoff]
 
-# Exported for _handoff.nu — same hash-field discipline.
-export const SHA256_RE = '^[0-9a-f]{64}$'
-
 # Enforce the receipt shape: exact RECEIPT_KEYS set, CID fields, RFC 3339
 # received_at, non-empty files manifest, hash-or-null chain fields (prev, handoff).
 export def validate-receipt [rec: record]: nothing -> nothing {
-    let cols = $rec | columns
-    if ($cols | sort) != ($RECEIPT_KEYS | sort) {
-        error make {msg: $"receipt must have exactly keys ($RECEIPT_KEYS | str join ', ') — got ($cols | str join ', ')"}
-    }
-    for key in [link signer custodian] {
-        if ($rec | get $key) !~ $CID_V0_RE {
-            error make {msg: $"receipt ($key) must be a base58btc CID v0: (($rec | get $key) | to json)"}
-        }
-    }
-    if $rec.received_at !~ $RFC3339_RE {
-        error make {msg: $"receipt received_at is not an RFC 3339 timestamp: ($rec.received_at | to json)"}
-    }
+    assert-keys $rec $RECEIPT_KEYS "receipt"
+    assert-cids $rec [link signer custodian] "receipt"
+    assert-timestamp $rec received_at "receipt"
     if ($rec.files | is-empty) {
         error make {msg: "receipt files manifest is empty"}
     }
@@ -43,16 +32,12 @@ export def validate-receipt [rec: record]: nothing -> nothing {
             error make {msg: $"malformed receipt files entry: ($f | to json --raw)"}
         }
     }
-    if $rec.prev != null and $rec.prev !~ $SHA256_RE {
-        error make {msg: $"receipt prev must be null or a sha256 hex: ($rec.prev | to json)"}
-    }
+    assert-hash-or-null $rec prev "receipt"
     # `handoff`: sha256 of the handoff file this custodian received the bundle
     # by (null when it arrived without one). Hashing it into the sealed receipt
     # is what makes the sender's claim strippable only before the recipient
     # seals, never after.
-    if $rec.handoff != null and $rec.handoff !~ $SHA256_RE {
-        error make {msg: $"receipt handoff must be null or a sha256 hex: ($rec.handoff | to json)"}
-    }
+    assert-hash-or-null $rec handoff "receipt"
 }
 
 # Deterministic bytes: keys in RECEIPT_KEYS order, compact JSON, one trailing
@@ -61,7 +46,7 @@ export def validate-receipt [rec: record]: nothing -> nothing {
 # custodian's signed seal root covering the file, not the filename.
 export def receipt-bytes [rec: record]: nothing -> binary {
     validate-receipt $rec
-    ($rec | select ...$RECEIPT_KEYS | to json --raw) + "\n" | into binary
+    ordered-bytes $rec $RECEIPT_KEYS
 }
 
 # Read a receipt file and validate its shape. No self-addressing check —

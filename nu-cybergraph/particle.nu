@@ -4,7 +4,7 @@
 
 use _repo.nu graph-root
 use _particle.nu [particle-store particle-find]
-use _record.nu [CID_V0_RE]
+use _validate.nu [CID_V0_RE]
 use _deps/cid-v0.nu [cid-v0]
 
 # Publish content as a self-addressed file under particles/ and return its

@@ -65,7 +65,7 @@
 use _repo.nu graph-root
 use _derive.nu [record-bytes]
 use _particle.nu [particle-store resolve-particle]
-use _record.nu [RFC3339_RE]
+use _validate.nu [RFC3339_RE]
 use link.nu
 
 # Re-exported so a reader can compute any address by hand: the edge address

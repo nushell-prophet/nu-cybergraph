@@ -11,6 +11,7 @@
 
 use _deps/cid-v0.nu [cid-v0]
 use _derive.nu [record-bytes]
+use _validate.nu [assert-keys assert-cids]
 
 # Why alphabetical (not the semantic triple-first order): one serialization
 # rule for every record in the format — link files and derived records alike —
@@ -24,26 +25,11 @@ use _derive.nu [record-bytes]
 # *claimed* time is a convention edge over the graph (`convention claimed-at`).
 export const LINK_KEYS = [cid_from cid_to signer]
 
-# Exported for _receipt.nu, _handoff.nu and convention.nu — they reuse the
-# record's field disciplines. RFC3339_RE guards timestamps that live OUTSIDE
-# link records (receipts, handoffs, claimed-at files): a link record
-# itself carries no time.
-export const CID_V0_RE = '^Qm[1-9A-HJ-NP-Za-km-z]{44}$'
-
-export const RFC3339_RE = '^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?(Z|[+-]\d{2}:\d{2})$'
-
 # Enforce the record shape: exact LINK_KEYS set, CID v0 values throughout.
 # Errors on the first violation, returns nothing on success.
 export def validate-link [rec: record]: nothing -> nothing {
-    let cols = $rec | columns
-    if ($cols | sort) != ($LINK_KEYS | sort) {
-        error make {msg: $"link record must have exactly keys ($LINK_KEYS | str join ', ') — got ($cols | str join ', ')"}
-    }
-    for key in $LINK_KEYS {
-        if ($rec | get $key) !~ $CID_V0_RE {
-            error make {msg: $"($key) must be a base58btc CID v0 \(Qm + 44 chars\): (($rec | get $key) | to json)"}
-        }
-    }
+    assert-keys $rec $LINK_KEYS "link record"
+    assert-cids $rec $LINK_KEYS "link record"
 }
 
 # Canonical bytes: the shared canon — alphabetical keys, compact JSON, one

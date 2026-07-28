@@ -5,7 +5,7 @@
 # first.
 
 use _layout.nu [particles-dir particle-path PARTICLE_EXT_RE]
-use _record.nu [CID_V0_RE]
+use _validate.nu [CID_V0_RE]
 use _deps/cid-v0.nu [cid-v0]
 
 # All store files addressing a CID: `<cid>` bare or `<cid>.<ext>`. The store

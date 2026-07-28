@@ -15,8 +15,8 @@
 # stripping a handoff breaks the next receipt, so it cannot be silently
 # removed once the recipient sealed.
 
-use _record.nu [CID_V0_RE RFC3339_RE]
-use _receipt.nu [SHA256_RE]
+use _derive.nu [ordered-bytes]
+use _validate.nu [assert-keys assert-cids assert-timestamp assert-hash-or-null]
 
 # Domain separation lives in the SIGNED BYTES, not in the signature namespace.
 # nu-multiproof used to take a `--namespace` on sign/verify; the value was
@@ -41,33 +41,22 @@ export const HANDOFF_KEYS = [schema link from to receipt handed_at]
 # Enforce the handoff shape: exact HANDOFF_KEYS set, the schema token byte-exact,
 # CID fields (link, from, to), receipt hash-or-null, RFC 3339 handed_at.
 export def validate-handoff [rec: record]: nothing -> nothing {
-    let cols = $rec | columns
-    if ($cols | sort) != ($HANDOFF_KEYS | sort) {
-        error make {msg: $"handoff must have exactly keys ($HANDOFF_KEYS | str join ', ') — got ($cols | str join ', ')"}
-    }
+    assert-keys $rec $HANDOFF_KEYS "handoff"
     # Byte-exact, like parse-root-statement: a wrong or drifted token is a
     # different format, never something to tolerate and read anyway.
     if $rec.schema != $HANDOFF_SCHEMA {
         error make {msg: $"handoff schema must be exactly ($HANDOFF_SCHEMA): ($rec.schema | to json)"}
     }
-    for key in [link from to] {
-        if ($rec | get $key) !~ $CID_V0_RE {
-            error make {msg: $"handoff ($key) must be a base58btc CID v0: (($rec | get $key) | to json)"}
-        }
-    }
-    if $rec.receipt != null and $rec.receipt !~ $SHA256_RE {
-        error make {msg: $"handoff receipt must be null or a sha256 hex: ($rec.receipt | to json)"}
-    }
-    if $rec.handed_at !~ $RFC3339_RE {
-        error make {msg: $"handoff handed_at is not an RFC 3339 timestamp: ($rec.handed_at | to json)"}
-    }
+    assert-cids $rec [link from to] "handoff"
+    assert-hash-or-null $rec receipt "handoff"
+    assert-timestamp $rec handed_at "handoff"
 }
 
 # Deterministic bytes, same discipline as records and receipts: keys in
 # HANDOFF_KEYS order, compact JSON, one trailing newline.
 export def handoff-bytes [rec: record]: nothing -> binary {
     validate-handoff $rec
-    ($rec | select ...$HANDOFF_KEYS | to json --raw) + "\n" | into binary
+    ordered-bytes $rec $HANDOFF_KEYS
 }
 
 # Read a handoff file and validate its shape — authenticity is the detached
