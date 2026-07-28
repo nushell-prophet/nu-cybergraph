@@ -54,17 +54,17 @@
 # neither `same` nor `quote` says it. bj002's set of conventions is open, which
 # is what permits all three.
 #
-# Reading and aggregation (count the signals, weigh signers, read consensus)
-# are deliberately out of scope: a local repo is a single signer, so there is
-# nothing to aggregate yet. `derive` alone gives a reader the address to look
-# up; the counting is a later, cross-signer concern. One rule for whoever
-# writes it: repeats and confirms are two signals, so a reader reports two
-# numbers and never their sum — bj002's formula keeps them apart as
-# f(repeats, confirms, denies, signer_weights, time_decay). Instructions force
-# the distinction: several signers can propose an update from the one source
-# {cid_from: A, cid_to: B, op: update}, and repetitions cannot pick between
-# their versions, because repeating someone else's update claims you derived
-# it yourself. Confirmations are what tell the proposals apart.
+# Reading these edges back is `link list` / `touching` / `tally` (link.nu,
+# _read.nu): the published preimage is what makes a derived CID readable, so
+# the writing side here and the reading side there are two halves of one
+# mechanism. The rule they share: repeats and confirms are two signals, so a
+# reader reports two numbers and never their sum — bj002's formula keeps them
+# apart as f(repeats, confirms, denies, signer_weights, time_decay).
+# Instructions force the distinction: several signers can propose an update
+# from the one source {cid_from: A, cid_to: B, op: update}, and repetitions
+# cannot pick between their versions, because repeating someone else's update
+# claims you derived it yourself. Confirmations are what tell the proposals
+# apart.
 
 use _repo.nu graph-root
 use _derive.nu [record-bytes]

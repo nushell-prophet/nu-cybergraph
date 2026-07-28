@@ -25,6 +25,9 @@ nu-cybergraph init                       # multiproof init + links/ certs/ under
 nu-cybergraph particle add "any text"    # publish content as particles/<cid>, get the CID
 nu-cybergraph particle cat Qm…           # read a stored file's exact bytes by its bare CID
 nu-cybergraph link add Qm…from Qm…to     # write links/<cid>.json (non-CID args are published as files first)
+nu-cybergraph link list                  # the whole graph as a table, each edge with the verb it states
+nu-cybergraph link touching Qm…          # which links name this CID, and in which position
+nu-cybergraph link tally Qm…             # per verb and position: how many links, how many signers
 nu-cybergraph seal                       # sign + stamp the root, freeze new certificates
 nu-cybergraph bundle Qm…link             # portable bundle → exports/<cid>/ (imported link: re-export + custody layer)
 nu-cybergraph bundle Qm…link --to Qm…signer # …plus a signed handoff naming the recipient
@@ -107,7 +110,23 @@ This table is the spec of the sixteen verbs; a record in source or target positi
 
 The cyberlink target of `confirm`/`deny` is the triple record, and that record is byte-identical to the link file itself (see above) — so its derived CID *is* the CID of the file in `links/`. `confirm A B S` targets that file: the preimage of the address being confirmed is already published, and a reader who has the CID can open it.
 
-Reading and aggregation — counting repeats and confirms, weighing signers, measuring consensus — are out of scope for now: one repo is one signer, so there is nothing to aggregate locally yet. `derive` gives a reader the address to look up; the counting is a later, cross-signer concern. One rule for whoever writes it: repeats and confirms are two signals, so a reader reports two numbers and never their sum — bj002's formula keeps them apart as `f(repeats, confirms, denies, signer_weights, time_decay)`. Instructions are what force the distinction: several signers can propose an update from the one source `{"cid_from":A,"cid_to":B,"op":"update"}`, and repetitions cannot pick between their versions, because repeating someone else's update claims you derived it yourself. Confirmations are what tell the proposals apart.
+## Reading the graph
+
+An edge is opaque on purpose: `X → Y` says nothing about what X is. Reading it back is bj002's "Reading instructions" — dereference the source, which works because every convention publishes the record it minted, so a derived CID has its named fields on disk. Three commands do that over the local graph.
+
+| command | what it answers |
+|---|---|
+| `link list` | the whole graph, one row per record: `cid_from`, `cid_to`, `signer` as stored, then `op`, `src`, `tgt` — the verb the source declares and the endpoints' own records, where this repo holds them |
+| `link touching <cid>` | which links name this CID, and **where**: `role` is `cid_from`, `cid_to`, or a dotted path into an instruction's record (`cid_from.about`, `cid_to.cid_from`) |
+| `link tally <cid>` | one row per verb and position: how many links say it, and how many distinct signers signed them |
+
+`role` is the part a CID alone cannot carry. As `cid_to` of an `update` a file is the new version; as `cid_from.about` it is the one being replaced; as `cid_to.cid_from` it is an endpoint of an edge somebody confirmed. A link that names the same CID in two positions comes back twice — that is a fact about the act, not a duplicate.
+
+Counts stay separate and are never summed. Repeats and confirms are two signals — repeating an edge claims you did the work yourself, confirming leans on whoever did — so a reader reports two numbers, and bj002's formula keeps them apart as `f(repeats, confirms, denies, signer_weights, time_decay)`. Instructions force the distinction: several signers can propose an update from the one source `{"cid_from":A,"cid_to":B,"op":"update"}`, and repetitions cannot pick between their versions, because repeating someone else's update claims you derived it yourself. Confirmations are what tell the proposals apart. Summing is a reading policy and belongs to the reader.
+
+The aggregate is not the end of the line — it is the next file. `link tally <cid> | to json | nu-cybergraph particle add` publishes the count as a self-addressed file, and `link add` hangs it off what it counts: the aggregate becomes an ordinary vertex others can quote, confirm or deny, without recomputing it.
+
+Two limits, both deliberate. Own links only (`links/`) — an imported bundle is another signer's copy, checked by `verify` against its birth seal, and mixing it in would silently turn "what this signer said" into "what everyone said", which is the distinction aggregation rests on; so `signers` reads 1 in a fresh repo. And every file the reader opens is hashed back to the CID that names it, which is the cost: a full `link list` over the journal's 567-link graph checks ~1600 addresses and takes ~20 seconds.
 
 ## Birth certificate
 
