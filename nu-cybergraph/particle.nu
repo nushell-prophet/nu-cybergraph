@@ -3,9 +3,8 @@
 # arguments through.
 
 use _repo.nu graph-root
-use _particle.nu [particle-store particle-find]
+use _particle.nu [particle-store particle-read]
 use _validate.nu [CID_V0_RE]
-use _deps/cid-v0.nu [cid-v0]
 
 # Publish content as a self-addressed file under particles/ and return its
 # CID. Content comes as the argument or through the pipeline (string or raw
@@ -61,11 +60,5 @@ export def cat [
     if $cid !~ $CID_V0_RE {
         error make {msg: $"not a CID v0: ($cid) — particle cat takes the bare 46-char CID, not a filename"}
     }
-    let file = particle-find (graph-root $repo) $cid --optional=$optional
-    if $file == null { return null }
-    let content = open --raw $file
-    if ($content | into binary | cid-v0) != $cid {
-        error make {msg: $"tampered file: ($file | path basename) does not hash to its name"}
-    }
-    $content
+    particle-read (graph-root $repo) $cid --optional=$optional
 }
