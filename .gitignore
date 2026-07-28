@@ -1,1 +1,4 @@
 /.claude
+
+# Why: parked findings are notes to the user, not part of any change — `git add -A` kept sweeping them into unrelated commits. Add one deliberately with `git add -f todo/<file>`.
+/todo/
