@@ -19,7 +19,8 @@ use _layout.nu [
     handoff-filename
 ]
 use _record.nu [CID_V0_RE]
-use _receipt.nu [read-receipt custody-layers own-signer]
+use _receipt.nu [read-receipt custody-layers]
+use _signer.nu [own-signer]
 use _handoff.nu [handoff-bytes HANDOFF_SCHEMA]
 
 # Copy one seal's verification artifacts into a proof dir: the snapshot's

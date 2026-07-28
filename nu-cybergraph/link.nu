@@ -1,22 +1,10 @@
 # Create link records in a signer's repo.
 
 use _repo.nu graph-root
-use _fs.nu list-files
 use _record.nu [link-bytes link-cid]
 use _layout.nu [links-dir link-path]
 use _particle.nu [resolve-particle]
-use _deps/cid-v0.nu [cid-v0]
-
-# Derive the repo's own signer identity: the CID of its registered pubkey.
-# With several pubkeys registered the choice is the signer's — require --signer.
-def own-signer-cid [root: path]: nothing -> string {
-    let pubs = list-files ($root | path join multiproofs pubkeys) --suffix ".pub"
-    match ($pubs | length) {
-        0 => (error make {msg: "no pubkey registered — run `nu-cybergraph init` first"})
-        1 => (open --raw ($pubs | first) | into binary | cid-v0)
-        _ => (error make {msg: "multiple pubkeys registered — pass --signer explicitly"})
-    }
-}
+use _signer.nu [own-signer]
 
 # Write a new link record to links/<cid>.json, named by its own content address.
 # An endpoint is any content-addressed file; its CID is the CID v0 of its bytes.
@@ -34,7 +22,7 @@ export def add [
     let rec = {
         cid_from: (resolve-particle $root $cid_from)
         cid_to: (resolve-particle $root $cid_to)
-        signer: (if $signer != null { $signer } else { own-signer-cid $root })
+        signer: (if $signer != null { $signer } else { own-signer $root })
     }
     let cid = link-cid $rec
     mkdir (links-dir $root)

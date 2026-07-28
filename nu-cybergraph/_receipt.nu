@@ -11,7 +11,6 @@
 #   proves order transitively while every receipt stays constant-size —
 #   re-listing all prior layers would grow the chain quadratically.
 
-use _deps/cid-v0.nu [cid-v0]
 use _fs.nu [list-files list-dirs]
 use _record.nu [CID_V0_RE RFC3339_RE]
 use _layout.nu [CUSTODY_DIR custody-dir]
@@ -103,16 +102,4 @@ export def custody-layers [bundle: path]: nothing -> table {
         {index: ($idx | into int) dir: $d}
     }
     | sort-by index
-}
-
-# The repo's own signer identity: the CID of its single registered pubkey.
-# init canonicalizes the key at registration, so the file bytes ARE the
-# canonical form — hash them directly. Ambiguity (several registered keys)
-# is an error: one keypair is one signer, a custody claim needs exactly one.
-export def own-signer [root: path]: nothing -> string {
-    let pubs = list-files ($root | path join multiproofs pubkeys) --suffix ".pub"
-    if ($pubs | length) != 1 {
-        error make {msg: $"cannot derive the custodian signer: expected exactly one pubkey in multiproofs/pubkeys/, found ($pubs | length)"}
-    }
-    open --raw ($pubs | first) | into binary | cid-v0
 }
