@@ -19,6 +19,9 @@ export def own-signer [root: path]: nothing -> string {
     match ($pubs | length) {
         0 => (error make {msg: "no pubkey registered in multiproofs/pubkeys/ — run `nu-cybergraph init` first"})
         1 => (open --raw ($pubs | first) | into binary | cid-v0)
-        _ => (error make {msg: "multiple pubkeys registered — this repo has no single signer identity; pass --signer where the command takes one"})
+        # Names the condition, not a remedy: two of the three callers (import,
+        # bundle) have no --signer flag to offer, and pointing an operator at a
+        # flag that does not exist is worse than the old message this replaced.
+        _ => (error make {msg: $"multiple pubkeys registered in multiproofs/pubkeys/ \(($pubs | length)) — this repo has no single signer identity"})
     }
 }
