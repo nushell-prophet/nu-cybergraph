@@ -7,14 +7,18 @@
 # all — but it is still an edge, so it rides the same engine.
 #
 # The grammar has one atom and one constructor. An **address expression** is
-# either a leaf — a CID you supply or an op word ("deny"), used verbatim — or
-# a record whose values are themselves expressions: a nested record resolves
-# to its derived CID, so the final record is flat, and its canonical bytes
-# (see _derive.nu) give the CID. A verb's positional arguments accept content
-# as well as CIDs: each verb passes them through `resolve-particle` first (a
-# CID is used as-is, any other text is published as a file and replaced by its
-# CID), so by the time an expression is built every leaf is a CID or an op
-# word. Resolving an expression walks the tree; every record it passes
+# either a leaf — an operand, given as a CID or as the content itself — or a
+# record whose values are themselves expressions: a nested record resolves to
+# its derived CID, so the final record is flat, and its canonical bytes (see
+# _derive.nu) give the CID. Operands go through `resolve-particle` (a CID is
+# used as-is, any other text is published as a file and replaced by its CID),
+# so a verb's arguments accept content as well as addresses. The one string
+# that is NOT an operand is the value of an `op` key: the single reserved
+# position in the grammar, a word the format defines, used verbatim. That is
+# the whole distinction the engine has to make, and it makes it in one place,
+# which is why every verb below is a single call.
+#
+# Resolving an expression walks the tree; every record it passes
 # through is published as a self-addressed file under particles/ —
 # the record is its own preimage, dereferencing the CID yields named fields
 # with the real operand CIDs (bj002 "Reading instructions"). This recursion
@@ -74,15 +78,16 @@ use link.nu
 # source (bj002 appendix, "Reading instructions").
 export use _derive.nu [derive]
 
-# Resolve an address expression to a CID. A leaf string is used verbatim (a
-# CID input or an op word); a record has its values resolved first — a nested
-# record becomes its CID — then its canonical bytes are published as a
-# self-addressed file and that file's CID returned. The one place the
-# grammar is interpreted.
+# Resolve an address expression to a CID. A leaf string is an operand —
+# `resolve-particle` turns content into its CID and leaves a CID alone. A
+# record has its values resolved first (a nested record becomes its CID),
+# except the `op` value, which is the format's own word and never an operand;
+# the flat result is then published as a self-addressed file and its CID
+# returned. The one place the grammar is interpreted.
 def address [root: path expr: any]: nothing -> string {
-    if ($expr | describe) == "string" { return $expr }
+    if ($expr | describe) == "string" { return (resolve-particle $root $expr) }
     let resolved = $expr | columns | reduce --fold {} {|key acc|
-        $acc | insert $key (address $root ($expr | get $key))
+        $acc | insert $key (if $key == "op" { $expr.op } else { address $root ($expr | get $key) })
     }
     record-bytes $resolved | particle-store $root
 }
@@ -101,6 +106,15 @@ def edge [
     link add (address $root $src) (address $root $tgt) --signer $signer --repo $repo
 }
 
+# What `confirm` and `deny` speak about: the fields of the edge itself, plus
+# its signer when a specific cyberlink rather than the edge is meant. The two
+# verbs take the same three arguments and differ only in the op word — one
+# shape, so it is built once.
+def subject [cid_from: string cid_to: string about_signer: any]: nothing -> record {
+    let pair = {cid_from: $cid_from, cid_to: $cid_to}
+    if $about_signer == null { $pair } else { $pair | insert signer $about_signer }
+}
+
 # Repeat an edge: state the same thing yourself. Both endpoints are leaves —
 # a plain edge is not an instruction, and repetition writes no source record,
 # so it is not a convention. What separates it from `confirm` is work: you
@@ -114,9 +128,6 @@ export def repeat [
     --signer: string
     --repo: path
 ]: nothing -> record {
-    let root = graph-root $repo
-    let cid_from = resolve-particle $root $cid_from
-    let cid_to = resolve-particle $root $cid_to
     edge $cid_from $cid_to $signer $repo
 }
 
@@ -135,15 +146,7 @@ export def confirm [
     --signer: string
     --repo: path
 ]: nothing -> record {
-    let root = graph-root $repo
-    let confirmed = {
-        cid_from: (resolve-particle $root $cid_from)
-        cid_to: (resolve-particle $root $cid_to)
-    }
-    let target = if $confirmed_signer == null { $confirmed } else {
-        $confirmed | insert signer (resolve-particle $root $confirmed_signer)
-    }
-    edge {op: "confirm"} $target $signer $repo
+    edge {op: "confirm"} (subject $cid_from $cid_to $confirmed_signer) $signer $repo
 }
 
 # Deny an edge (`deny A B`) or a specific cyberlink (`deny A B S`). Source is
@@ -159,15 +162,7 @@ export def deny [
     --signer: string
     --repo: path
 ]: nothing -> record {
-    let root = graph-root $repo
-    let disputed = {
-        cid_from: (resolve-particle $root $cid_from)
-        cid_to: (resolve-particle $root $cid_to)
-    }
-    let target = if $disputed_signer == null { $disputed } else {
-        $disputed | insert signer (resolve-particle $root $disputed_signer)
-    }
-    edge {op: "deny"} $target $signer $repo
+    edge {op: "deny"} (subject $cid_from $cid_to $disputed_signer) $signer $repo
 }
 
 # Update an edge: {cid_from: A, cid_to: B, op: update} → C marks C as the new
@@ -182,13 +177,7 @@ export def update [
     --signer: string
     --repo: path
 ]: nothing -> record {
-    let root = graph-root $repo
-    let src = {
-        cid_from: (resolve-particle $root $cid_from)
-        cid_to: (resolve-particle $root $cid_to)
-        op: "update"
-    }
-    edge $src (resolve-particle $root $cid_new) $signer $repo
+    edge {cid_from: $cid_from, cid_to: $cid_to, op: "update"} $cid_new $signer $repo
 }
 
 # Update a file: {about: B, op: update} → C — "C is the version that replaces B".
@@ -213,8 +202,7 @@ export def "update-file" [
     --signer: string
     --repo: path
 ]: nothing -> record {
-    let root = graph-root $repo
-    edge {about: (resolve-particle $root $superseded), op: "update"} (resolve-particle $root $replacement) $signer $repo
+    edge {about: $superseded, op: "update"} $replacement $signer $repo
 }
 
 # Quote: {about: A, op: quote} → B states that B is a faithful excerpt of A
@@ -227,8 +215,7 @@ export def quote [
     --signer: string
     --repo: path
 ]: nothing -> record {
-    let root = graph-root $repo
-    edge {about: (resolve-particle $root $about), op: "quote"} (resolve-particle $root $excerpt) $signer $repo
+    edge {about: $about, op: "quote"} $excerpt $signer $repo
 }
 
 # Translation: {about: A, op: translation} → B states that B says in another
@@ -248,8 +235,7 @@ export def translation [
     --signer: string
     --repo: path
 ]: nothing -> record {
-    let root = graph-root $repo
-    edge {about: (resolve-particle $root $original), op: "translation"} (resolve-particle $root $translated) $signer $repo
+    edge {about: $original, op: "translation"} $translated $signer $repo
 }
 
 # Agree: {op: agree} → B — "claim B is true". Gives an opinion about a
@@ -261,7 +247,7 @@ export def agree [
     --signer: string
     --repo: path
 ]: nothing -> record {
-    edge {op: "agree"} (resolve-particle (graph-root $repo) $cid) $signer $repo
+    edge {op: "agree"} $cid $signer $repo
 }
 
 # Disagree: {op: disagree} → B — "claim B is false". The other axis from
@@ -273,7 +259,7 @@ export def disagree [
     --signer: string
     --repo: path
 ]: nothing -> record {
-    edge {op: "disagree"} (resolve-particle (graph-root $repo) $cid) $signer $repo
+    edge {op: "disagree"} $cid $signer $repo
 }
 
 # Argument for: {about: C, op: pro} → B — "B is an argument for C". C is any
@@ -286,8 +272,7 @@ export def pro [
     --signer: string
     --repo: path
 ]: nothing -> record {
-    let root = graph-root $repo
-    edge {about: (resolve-particle $root $target), op: "pro"} (resolve-particle $root $argument) $signer $repo
+    edge {about: $target, op: "pro"} $argument $signer $repo
 }
 
 # Argument against: {about: C, op: con} → B — "B is an argument against C".
@@ -299,8 +284,7 @@ export def con [
     --signer: string
     --repo: path
 ]: nothing -> record {
-    let root = graph-root $repo
-    edge {about: (resolve-particle $root $target), op: "con"} (resolve-particle $root $argument) $signer $repo
+    edge {about: $target, op: "con"} $argument $signer $repo
 }
 
 # Question: {about: B, op: question} → Q — "Q is a question about B". B is any
@@ -313,8 +297,7 @@ export def question [
     --signer: string
     --repo: path
 ]: nothing -> record {
-    let root = graph-root $repo
-    edge {about: (resolve-particle $root $about), op: "question"} (resolve-particle $root $question) $signer $repo
+    edge {about: $about, op: "question"} $question $signer $repo
 }
 
 # Answer: {cid_from: {about: B, op: question}, cid_to: Q, op: answer} → A —
@@ -330,13 +313,7 @@ export def answer [
     --signer: string
     --repo: path
 ]: nothing -> record {
-    let root = graph-root $repo
-    let src = {
-        cid_from: {about: (resolve-particle $root $about), op: "question"}
-        cid_to: (resolve-particle $root $question)
-        op: "answer"
-    }
-    edge $src (resolve-particle $root $answer) $signer $repo
+    edge {cid_from: {about: $about, op: "question"}, cid_to: $question, op: "answer"} $answer $signer $repo
 }
 
 # Authorship: {about: B, op: author} → P — "the author of file B is P". The
@@ -350,8 +327,7 @@ export def author [
     --signer: string
     --repo: path
 ]: nothing -> record {
-    let root = graph-root $repo
-    edge {about: (resolve-particle $root $content), op: "author"} (resolve-particle $root $author_id) $signer $repo
+    edge {about: $content, op: "author"} $author_id $signer $repo
 }
 
 # Identity: {about: P1, op: same} → P2 — "P1 and P2 name one entity" (the
@@ -365,8 +341,7 @@ export def same [
     --signer: string
     --repo: path
 ]: nothing -> record {
-    let root = graph-root $repo
-    edge {about: (resolve-particle $root $name_from), op: "same"} (resolve-particle $root $name_to) $signer $repo
+    edge {about: $name_from, op: "same"} $name_to $signer $repo
 }
 
 # Claimed time: {about: X, op: claimed_at} → T — "I claim X's time is T". X is
@@ -396,6 +371,5 @@ export def claimed-at [
     try { $t | into datetime | ignore } catch {
         error make {msg: $"claimed time is not a real calendar date: ($t | to json)"}
     }
-    let root = graph-root $repo
-    edge {about: (resolve-particle $root $about), op: "claimed_at"} (resolve-particle $root $t) $signer $repo
+    edge {about: $about, op: "claimed_at"} $t $signer $repo
 }
