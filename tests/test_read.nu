@@ -102,6 +102,31 @@ def "the rg-narrowed reading and the full scan return the same rows" [] {
     # This is what keeps the fast path from becoming a second implementation.
     assert equal (link touching $B --repo $tmp) (link touching $B --repo $tmp --scan)
     assert equal (link tally $B --repo $tmp) (link tally $B --repo $tmp --scan)
+    # Asserted outright as well: with no rg on PATH both sides run the same
+    # branch, and an equality test alone would then pin nothing.
+    assert equal (link touching $B --repo $tmp --scan | get role | sort) [
+        "cid_from.about" "cid_from.cid_from.about" "cid_to" "cid_to.cid_to"
+    ]
+}
+
+# The graph's files are `links/<cid>.json` and store names that parse as an
+# address. Anything else in those directories belongs to nobody: rg sees a
+# dotfile and recurses into subdirectories, a listing does neither, and before
+# both sides were filtered by the same rule the two disagreed — one returned a
+# row the other did not, or raised where the other did not.
+@test
+def "a file that is not a graph file is ignored by both readings" [] {
+    let ctx = $in
+    convention update-file $B $C --signer $S --repo $ctx.tmp
+    let expected = link touching $B --repo $ctx.tmp
+
+    $"mentions ($B)" | save --raw ($ctx.root | path join particles .note)
+    mkdir ($ctx.root | path join particles sub)
+    $"mentions ($B)" | save --raw ($ctx.root | path join particles sub buried)
+    "not a record" | save --raw ($ctx.root | path join links notes.txt)
+
+    assert equal (link touching $B --repo $ctx.tmp) $expected
+    assert equal (link touching $B --repo $ctx.tmp --scan) $expected
 }
 
 @test

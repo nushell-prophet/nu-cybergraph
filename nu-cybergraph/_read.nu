@@ -15,15 +15,16 @@
 # "this parses as an instruction", never "this was meant as one".
 
 use _layout.nu [links-dir particles-dir]
-use _particle.nu [index-find particle-verify]
+use _particle.nu [index-find particle-verify store-cid]
 use _record.nu [read-link]
+use _fs.nu list-files
 
 # Every link record in the graph home, each checked against its own address by
 # read-link. Sorted by CID so a reading is reproducible across filesystems.
 export def read-links [root: path]: nothing -> table {
-    let dir = links-dir $root
-    if not ($dir | path exists) { return [] }
-    ls $dir | get name | sort | each {|f| {cid: ($f | path parse | get stem)} | merge (read-link $f) }
+    list-files (links-dir $root) --suffix ".json"
+    | sort
+    | each {|f| {cid: ($f | path parse | get stem)} | merge (read-link $f) }
 }
 
 # The record a store file publishes, or null when it is not an instruction
@@ -67,18 +68,20 @@ export def deref [index: record cid: string]: nothing -> any {
 # — the same answer, slower — and the tests run both ways against each other,
 # because an optional fast path that nothing exercises is a path that rots.
 #
-# The rg flags are all correctness, not taste: `--no-config` so a user's
+# The two rg flags are correctness, not taste: `--no-config` so a user's
 # RIPGREP_CONFIG_PATH cannot add an exclusion, `--no-ignore` so a gitignored
-# graph home is still searched, `--hidden` for a dotted store file, `--text` so
-# a published binary is not skipped as unreadable. Anything rg silently omits
-# here is a link a reader would never see.
+# graph home is still searched. Anything rg silently omits is a link a reader
+# would never see. Nothing here compensates for rg listing a file the scan
+# would not (it recurses into subdirectories) or the other way round (`ls`
+# without --all hides a dotfile): both sides are filtered by the graph's own
+# filename rules in `touches`, which is where the two are made to agree.
 export def candidates [root: path cid: string --scan]: nothing -> list<path> {
     let dirs = [(links-dir $root) (particles-dir $root)] | where {|d| $d | path exists }
     if ($dirs | is-empty) { return [] }
     if $scan or (which rg | is-empty) {
-        return ($dirs | each {|d| ls $d | get name } | flatten)
+        return ($dirs | each {|d| list-files $d } | flatten)
     }
-    let found = ^rg --no-config --no-ignore --hidden --text --fixed-strings --files-with-matches -- $cid ...$dirs | complete
+    let found = ^rg --no-config --no-ignore --fixed-strings --files-with-matches -- $cid ...$dirs | complete
     match $found.exit_code {
         0 => { $found.stdout | lines | where $it != "" }
         1 => { [] } # rg's "no matches", not a failure
@@ -97,33 +100,45 @@ export def candidates [root: path cid: string --scan]: nothing -> list<path> {
 # role is the endpoint's key, a dot, and the field inside — `cid_from.about`.
 # The record may itself be an operand of a bigger record (`answer` is that
 # shape), so the step repeats, and the role grows one field per level.
+#
+# A candidate is kept only if it is a file of the graph by the graph's own
+# rules: `links/<cid>.json` (seal's rule, so a reading and a seal catalogue the
+# same set) or a store name that parses as an address. That filter is what
+# makes the search and the scan agree — rg recurses into subdirectories and
+# sees dotfiles, a listing does neither, and neither of those is a graph file.
+# The `op` key needs no exclusion here: its value is a verb the format defines,
+# and `touching` accepts nothing but a CID v0.
 export def touches [root: path cid: string --scan]: nothing -> table {
     let seeds = candidates $root $cid --scan=$scan
-    let in_links = $seeds | where {|f| ($f | path dirname) == (links-dir $root) }
-    let in_store = $seeds | where {|f| ($f | path dirname) == (particles-dir $root) }
 
-    let direct = $in_links | each {|f|
-        let rec = read-link $f
-        $rec
-        | columns
-        | where {|key| ($rec | get $key) == $cid }
-        | each {|key| {link: ($f | path parse | get stem) role: $key} }
-    } | flatten
-
-    let indirect = $in_store | each {|f|
-        let record_cid = $f | path basename | split row "." | first
-        let rec = deref-file $f $record_cid
-        if $rec == null { [] } else {
+    let direct = $seeds
+        | where {|f| ($f | path dirname) == (links-dir $root) and ($f | path basename | str ends-with ".json") }
+        | each {|f|
+            let rec = read-link $f
             $rec
             | columns
-            | where {|key| $key != "op" and ($rec | get $key) == $cid }
-            | each {|key|
-                touches $root $record_cid --scan=$scan
-                | each {|row| {link: $row.link role: (role-path $row.role $key)} }
-            }
-            | flatten
+            | where {|key| ($rec | get $key) == $cid }
+            | each {|key| {link: ($f | path parse | get stem) role: $key} }
         }
-    } | flatten
+        | flatten
+
+    let indirect = $seeds
+        | where {|f| ($f | path dirname) == (particles-dir $root) and (store-cid $f) != null }
+        | each {|f|
+            let record_cid = store-cid $f
+            let rec = deref-file $f $record_cid
+            if $rec == null { [] } else {
+                $rec
+                | columns
+                | where {|key| ($rec | get $key) == $cid }
+                | each {|key|
+                    touches $root $record_cid --scan=$scan
+                    | each {|row| {link: $row.link role: (role-path $row.role $key)} }
+                }
+                | flatten
+            }
+        }
+        | flatten
 
     $direct ++ $indirect
 }

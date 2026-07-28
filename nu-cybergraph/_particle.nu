@@ -6,6 +6,7 @@
 
 use _layout.nu [particles-dir particle-path PARTICLE_EXT_RE]
 use _validate.nu [CID_V0_RE]
+use _fs.nu list-files
 use _deps/cid-v0.nu [cid-v0]
 
 # The store grouped by address: {<cid>: [<path> …]} from one directory
@@ -16,18 +17,27 @@ use _deps/cid-v0.nu [cid-v0]
 # quadratic in the store (43s over 567 links). A single lookup still costs one
 # listing, exactly what it cost before.
 export def store-index [root: path]: nothing -> record {
-    let dir = particles-dir $root
-    if not ($dir | path exists) { return {} }
-    ls $dir | get name | reduce --fold {} {|p acc|
-        let base = $p | path basename
-        let cid = $base | split row "." | first
-        let ext = $base | str substring (($cid | str length) + 1)..
-        if ($base != $cid) and ($ext !~ $PARTICLE_EXT_RE) {
+    list-files (particles-dir $root) | reduce --fold {} {|p acc|
+        let cid = store-cid $p
+        if $cid == null {
             $acc
         } else {
             $acc | upsert $cid (($acc | get --optional $cid | default []) ++ [$p])
         }
     }
+}
+
+# The address a store filename claims — `<cid>` or `<cid>.<ext>` — or null when
+# the name is not a store file at all. The one place that rule is spelled out,
+# so the index and a reader sorting search hits cannot disagree about what
+# belongs to the store.
+export def store-cid [file: path]: nothing -> any {
+    let base = $file | path basename
+    let cid = $base | split row "." | first
+    if $cid !~ $CID_V0_RE { return null }
+    let ext = $base | str substring (($cid | str length) + 1)..
+    if ($base != $cid) and ($ext !~ $PARTICLE_EXT_RE) { return null }
+    $cid
 }
 
 # All store files addressing a CID: `<cid>` bare or `<cid>.<ext>`. The store
