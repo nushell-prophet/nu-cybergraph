@@ -1,11 +1,11 @@
 # Create link records in a signer's repo, and read the graph they make.
 
 use _repo.nu graph-root
-use _record.nu [link-bytes link-cid]
+use _record.nu [link-bytes link-cid read-link]
 use _layout.nu [links-dir link-path]
 use _particle.nu [resolve-particle store-index]
 use _signer.nu [own-signer]
-use _read.nu [read-links deref record-mentions role-path]
+use _read.nu [read-links deref touches]
 use _validate.nu [CID_V0_RE]
 
 # Write a new link record to links/<cid>.json, named by its own content address.
@@ -41,37 +41,19 @@ export def add [
     {cid: $cid path: $out record: $rec}
 }
 
-# One pass over the graph: every link, what its endpoints say, and every CID
-# they name. `list` and `touching` are two views of this one table, so the
-# dereferencing rule lives in one place.
-def statements [root: path]: nothing -> table {
-    let index = store-index $root
-    read-links $root | each {|l|
-        let src = deref $index $l.cid_from
-        let tgt = deref $index $l.cid_to
-        {
-            cid: $l.cid
-            cid_from: $l.cid_from
-            cid_to: $l.cid_to
-            signer: $l.signer
-            op: (if $src == null { null } else { $src | get --optional op })
-            src: $src
-            tgt: $tgt
-            names: (
-                [{cid: $l.cid_from role: "cid_from"} {cid: $l.cid_to role: "cid_to"}]
-                ++ (operands $index $src "cid_from")
-                ++ (operands $index $tgt "cid_to")
-            )
-        }
+# One link, read: the triple as stored, then what its endpoints say. The one
+# place the decoding rule lives, so `list` and `touching` cannot drift.
+def statement [index: record l: record]: nothing -> record {
+    let src = deref $index $l.cid_from
+    {
+        cid: $l.cid
+        cid_from: $l.cid_from
+        cid_to: $l.cid_to
+        signer: $l.signer
+        op: (if $src == null { null } else { $src | get --optional op })
+        src: $src
+        tgt: (deref $index $l.cid_to)
     }
-}
-
-# The CIDs an endpoint's record names, each labelled by the endpoint it hangs
-# off: `cid_from.about`, `cid_to.cid_from`. Null record — a plain endpoint —
-# names nothing beyond itself.
-def operands [index: record rec: any prefix: string]: nothing -> table {
-    if $rec == null { return [] }
-    record-mentions $index $rec | each {|m| {cid: $m.cid role: (role-path $prefix $m.path)} }
 }
 
 # The whole local graph as a table, one row per link record: the triple as
@@ -89,30 +71,42 @@ def operands [index: record rec: any prefix: string]: nothing -> table {
 export def list [
     --repo: path # Repo root (default: git root of current directory)
 ]: nothing -> table {
-    statements (graph-root $repo) | reject names
+    let root = graph-root $repo
+    let index = store-index $root
+    read-links $root | each {|l| statement $index $l }
 }
 
 # Every link that names this CID, one row per place it is named — bj003's
 # primitive: given a CID, which edges touch it.
 #
-# `role` is where it sits: `cid_from` or `cid_to` for an endpoint of the edge
-# itself, `cid_from.about` for an operand inside an instruction's source
+# `role` is where it sits: `cid_from`, `cid_to` or `signer` for the record's
+# own fields, `cid_from.about` for an operand inside an instruction's source
 # record, `cid_to.cid_from` for a field of the edge a `confirm` speaks about.
 # The distinction is the whole answer: as `cid_to` of an update the file is the
 # new version, as `cid_from.about` it is the replaced one. A link that names
 # the CID twice returns twice — one act stating the same address in two
 # positions is a fact about the act, not a duplicate to be swept up.
+#
+# The walk goes upward from the CID, over the files that name it, so a query
+# costs the neighbourhood and not the graph. `--scan` reads every record
+# instead of asking `rg` to narrow the candidates first; same rows, and the
+# tests pin that equality.
 @example "everything said about a file" { link touching QmQXupHE6VPzpoBTivNXAAGwigJE68n4TeVUSxYnFL78GV }
 export def touching [
     cid: string # CID v0 of the file or record the statements are about
     --repo: path # Repo root (default: git root of current directory)
+    --scan # read every record instead of narrowing with rg (same answer, slower)
 ]: nothing -> table {
     if $cid !~ $CID_V0_RE {
         error make {msg: $"not a CID v0: ($cid) — link touching takes the bare 46-char CID"}
     }
-    statements (graph-root $repo)
-    | each {|s| $s.names | where cid == $cid | each {|n| $s | reject names | insert role $n.role | move role --after cid } }
-    | flatten
+    let root = graph-root $repo
+    let hits = touches $root $cid --scan=$scan
+    if ($hits | is-empty) { return [] }
+    let index = store-index $root
+    $hits
+    | sort-by link role
+    | each {|h| statement $index ({cid: $h.link} | merge (read-link (link-path $root $h.link))) | insert role $h.role | move role --after cid }
 }
 
 # Count what the graph says about a CID: one row per (verb, position), with the
@@ -133,8 +127,9 @@ export def touching [
 export def tally [
     cid: string # CID v0 of the file or record the statements are about
     --repo: path # Repo root (default: git root of current directory)
+    --scan # read every record instead of narrowing with rg (same answer, slower)
 ]: nothing -> table {
-    touching $cid --repo $repo
+    touching $cid --repo $repo --scan=$scan
     | group-by {|r| [($r.op | default "—") $r.role] | to json --raw }
     | items {|_ rows| {
         op: ($rows | first | get op)

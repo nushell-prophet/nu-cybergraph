@@ -92,6 +92,40 @@ def "tally counts links and signers per verb and position, and never their sum" 
 }
 
 @test
+def "the rg-narrowed reading and the full scan return the same rows" [] {
+    let tmp = $in.tmp
+    link add $A $B --signer $S --repo $tmp
+    convention update-file $B $C --signer $S --repo $tmp
+    convention confirm $A $B --signer $S2 --repo $tmp
+    convention answer $B "why?" "because" --signer $S --repo $tmp
+    # rg only drops files that cannot contain the CID, so the two must agree.
+    # This is what keeps the fast path from becoming a second implementation.
+    assert equal (link touching $B --repo $tmp) (link touching $B --repo $tmp --scan)
+    assert equal (link tally $B --repo $tmp) (link tally $B --repo $tmp --scan)
+}
+
+@test
+def "a signer is named by every link it signed" [] {
+    let tmp = $in.tmp
+    link add $A $B --signer $S --repo $tmp
+    link add $A $C --signer $S --repo $tmp
+    link add $B $C --signer $S2 --repo $tmp
+    let signed = link touching $S --repo $tmp
+    assert equal ($signed | get role | uniq) ["signer"]
+    assert equal ($signed | length) 2
+}
+
+@test
+def "a file that only quotes a CID states nothing about it" [] {
+    let tmp = $in.tmp
+    # The text search finds this file; reading it decides. A chapter naming a
+    # CID in prose is not an edge, and no verification step would make it one.
+    let quoting = particle add $"see ($B) for the earlier version" --repo $tmp
+    link add $quoting $C --signer $S --repo $tmp
+    assert equal (link touching $B --repo $tmp) []
+}
+
+@test
 def "a published file that is not a canonical record is not an instruction" [] {
     let tmp = $in.tmp
     # A JSON object with a non-string value is not the format's record form, so

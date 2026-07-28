@@ -117,16 +117,18 @@ An edge is opaque on purpose: `X → Y` says nothing about what X is. Reading it
 | command | what it answers |
 |---|---|
 | `link list` | the whole graph, one row per record: `cid_from`, `cid_to`, `signer` as stored, then `op`, `src`, `tgt` — the verb the source declares and the endpoints' own records, where this repo holds them |
-| `link touching <cid>` | which links name this CID, and **where**: `role` is `cid_from`, `cid_to`, or a dotted path into an instruction's record (`cid_from.about`, `cid_to.cid_from`) |
+| `link touching <cid>` | which links name this CID, and **where**: `role` is `cid_from`, `cid_to`, `signer`, or a dotted path into an instruction's record (`cid_from.about`, `cid_to.cid_from`) |
 | `link tally <cid>` | one row per verb and position: how many links say it, and how many distinct signers signed them |
 
-`role` is the part a CID alone cannot carry. As `cid_to` of an `update` a file is the new version; as `cid_from.about` it is the one being replaced; as `cid_to.cid_from` it is an endpoint of an edge somebody confirmed. A link that names the same CID in two positions comes back twice — that is a fact about the act, not a duplicate.
+`role` is the part a CID alone cannot carry. As `cid_to` of an `update` a file is the new version; as `cid_from.about` it is the one being replaced; as `cid_to.cid_from` it is an endpoint of an edge somebody confirmed; as `signer` it is the identity that signed the link, which is how a signer's own work becomes countable. A link that names the same CID in two positions comes back twice — that is a fact about the act, not a duplicate.
+
+`touching` walks **upward** from the CID over the files that name it, so a query costs the neighbourhood instead of the graph. An operand's CID is a literal string in every record that mentions it (bj002 again), so `rg` narrows the candidate files first when it is on PATH — 0.5s instead of 41s over the journal's 567-link graph. The search only narrows: a file that does not contain the string cannot name the CID, and every file that survives is read, hashed back to its name, and parsed exactly as it would have been. A file that merely *quotes* a CID in prose is found by the search and dropped by the reading — search never decides. `--scan` skips `rg` and reads every record; same rows, and `tests/test_read.nu` pins that equality so the fast path cannot become a second implementation. Without `rg` installed, `--scan` is what runs anyway.
 
 Counts stay separate and are never summed. Repeats and confirms are two signals — repeating an edge claims you did the work yourself, confirming leans on whoever did — so a reader reports two numbers, and bj002's formula keeps them apart as `f(repeats, confirms, denies, signer_weights, time_decay)`. Instructions force the distinction: several signers can propose an update from the one source `{"cid_from":A,"cid_to":B,"op":"update"}`, and repetitions cannot pick between their versions, because repeating someone else's update claims you derived it yourself. Confirmations are what tell the proposals apart. Summing is a reading policy and belongs to the reader.
 
 The aggregate is not the end of the line — it is the next file. `link tally <cid> | to json | nu-cybergraph particle add` publishes the count as a self-addressed file, and `link add` hangs it off what it counts: the aggregate becomes an ordinary vertex others can quote, confirm or deny, without recomputing it.
 
-Two limits, both deliberate. Own links only (`links/`) — an imported bundle is another signer's copy, checked by `verify` against its birth seal, and mixing it in would silently turn "what this signer said" into "what everyone said", which is the distinction aggregation rests on; so `signers` reads 1 in a fresh repo. And every file the reader opens is hashed back to the CID that names it, which is the cost: a full `link list` over the journal's 567-link graph checks ~1600 addresses and takes ~20 seconds.
+Two limits, both deliberate. Own links only (`links/`) — an imported bundle is another signer's copy, checked by `verify` against its birth seal, and mixing it in would silently turn "what this signer said" into "what everyone said", which is the distinction aggregation rests on; so `signers` reads 1 in a fresh repo. And every file the reader opens is hashed back to the CID that names it, which is the cost that remains: `link list` reads the whole graph by definition and takes ~20 seconds over 567 links, and `touching` a CID whose neighbourhood *is* the graph — a signer, named by every link it signed — costs the same.
 
 ## Birth certificate
 
@@ -153,6 +155,7 @@ Three honest limits. The custody bounds are upper bounds: the chain proves each 
 ## Dependencies
 
 - [nu-multiproof](https://codeberg.org/nushell-prophet/nu-multiproof/) as a live sibling checkout at `../../ai-sandbox-dev-container/nu-multiproof` — resolved in exactly one place, the `nu-cybergraph/_deps/` shims; edit them if your checkout lives elsewhere. Not a submodule: the two repos are co-developed and a pin would lag.
+- `rg` ([ripgrep](https://github.com/BurntSushi/ripgrep)), optional and only for `link touching`/`link tally`: it narrows which files the reader opens. Absent, the same commands read every record and return the same rows — nothing depends on it for correctness, which is why it can be optional at all.
 - `git` and `ssh-keygen`, nothing else: per-file, per-directory and root CIDs are all computed in pure nushell, so no `ipfs` CLI is needed.
 
 ## Testing
