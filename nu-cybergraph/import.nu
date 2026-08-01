@@ -40,7 +40,7 @@ export def main [
         error make {msg: $"already imported: ($dest)"}
     }
     mkdir ($dest | path dirname)
-    cp -r ($bundle | path expand) $dest
+    cp --recursive ($bundle | path expand) $dest
 
     # The receipt commits to the bundle AS LANDED (its manifest is recomputed
     # from dest, not the source) and chains to the last custody layer present.

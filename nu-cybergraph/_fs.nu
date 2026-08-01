@@ -30,7 +30,7 @@ export def list-files [
     let here = $entries
         | where type != dir
         | get name
-        | where {|f| $suffix == "" or ($f | path basename | str ends-with $suffix) }
+        | where ($suffix == "" or ($it | path basename | str ends-with $suffix))
     if not $recursive {
         return $here
     }

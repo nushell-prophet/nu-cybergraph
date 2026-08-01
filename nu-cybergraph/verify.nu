@@ -28,10 +28,10 @@ export def main [
             # so a resolved home must never be re-resolved.
             verify-bundle (bundle $link_cid --repo $repo --out ($tmp | path join bundle))
         } catch {|e|
-            rm -rf $tmp
+            rm --recursive --force $tmp
             error make {msg: $e.msg}
         }
-        rm -rf $tmp
+        rm --recursive --force $tmp
         [$result]
     } else {
         # The same link CID can arrive from several signers (identical record,

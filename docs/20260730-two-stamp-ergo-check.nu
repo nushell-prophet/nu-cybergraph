@@ -56,7 +56,7 @@ print ok" | save --force ($tmp | path join collide.nu)
 # Only the diagnostic and the flagged text are shown: the rest of the error is
 # absolute paths, which would churn the diff on every refresh.
 do { ^nu ($tmp | path join collide.nu) } | complete
-| $"exit ($in.exit_code): ($in.stderr | lines | where {|l| ($l | str contains 'nu::parser') or ($l | str contains 'seal status') } | str trim | str join ' | ')"
+| $"exit ($in.exit_code): ($in.stderr | lines | where (($it | str contains 'nu::parser') or ($it | str contains 'seal status')) | str trim | str join ' | ')"
 | print $in
 # => exit 1: Error: nu::parser::extra_positional | 274 |     seal status
 
@@ -288,7 +288,7 @@ let vb = nu-cybergraph verify $plain.cid --repo $b.repo | first
 # The signer fingerprint that `bundle.nu:47` recovers by parsing a filename —
 # `^tree-root\.txt\.(?<fp>.+)\.sig$` — still matches what a real seal writes.
 ls ($h1 | path join multiproofs) | get name | path basename
-| where {|f| $f | str ends-with ".sig" }
+| where ($it | str ends-with ".sig")
 | each {|f| $f | parse --regex '^tree-root\.txt\.(?<fp>.+)\.sig$' | get fp?.0? | is-not-empty }
 | $"every snapshot signature name parses into a fingerprint: ($in | all {|x| $x })"
 | print $in

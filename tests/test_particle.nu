@@ -166,7 +166,7 @@ def "link add resolves text endpoints to published files" [] {
 def "link add passes CID endpoints through without publishing anything" [] {
     link add $A $B --repo $in.tmp --signer $N | ignore
     # only links/ was written: no particles dir means no file was minted
-    assert (not ((particles-dir $in.root) | path exists))
+    assert not ((particles-dir $in.root) | path exists)
 }
 
 @test

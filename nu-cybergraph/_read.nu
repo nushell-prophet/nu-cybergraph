@@ -76,7 +76,7 @@ export def deref [index: record cid: string]: nothing -> any {
 # without --all hides a dotfile): both sides are filtered by the graph's own
 # filename rules in `touches`, which is where the two are made to agree.
 export def candidates [root: path cid: string --scan]: nothing -> list<path> {
-    let dirs = [(links-dir $root) (particles-dir $root)] | where {|d| $d | path exists }
+    let dirs = [(links-dir $root) (particles-dir $root)] | where ($it | path exists)
     if ($dirs | is-empty) { return [] }
     if $scan or (which rg | is-empty) {
         return ($dirs | each {|d| list-files $d } | flatten)
@@ -112,25 +112,25 @@ export def touches [root: path cid: string --scan]: nothing -> table {
     let seeds = candidates $root $cid --scan=$scan
 
     let direct = $seeds
-        | where {|f| ($f | path dirname) == (links-dir $root) and ($f | path basename | str ends-with ".json") }
+        | where (($it | path dirname) == (links-dir $root) and ($it | path basename | str ends-with ".json"))
         | each {|f|
             let rec = read-link $f
             $rec
             | columns
-            | where {|key| ($rec | get $key) == $cid }
+            | where (($rec | get $it) == $cid)
             | each {|key| {link: ($f | path parse | get stem) role: $key} }
         }
         | flatten
 
     let indirect = $seeds
-        | where {|f| ($f | path dirname) == (particles-dir $root) and (store-cid $f) != null }
+        | where (($it | path dirname) == (particles-dir $root) and (store-cid $it) != null)
         | each {|f|
             let record_cid = store-cid $f
             let rec = deref-file $f $record_cid
             if $rec == null { [] } else {
                 $rec
                 | columns
-                | where {|key| ($rec | get $key) == $cid }
+                | where (($rec | get $it) == $cid)
                 | each {|key|
                     touches $root $record_cid --scan=$scan
                     | each {|row| {link: $row.link role: (role-path $row.role $key)} }

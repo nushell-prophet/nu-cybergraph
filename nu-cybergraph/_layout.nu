@@ -75,8 +75,8 @@ export def receipts-dir [root: path]: nothing -> path {
 # caller reads "unknown link" for a link sitting right there.
 export def imported-copies [root: path link_cid: string]: nothing -> list<path> {
     list-dirs (imported-dir $root)
-    | each {|signer| $signer | path join $link_cid }
-    | where {|d| $d | path exists }
+    | each { path join $link_cid }
+    | where ($it | path exists)
 }
 
 # receipts/<cid>.receipt.json — the custody receipt's manifest path, relative

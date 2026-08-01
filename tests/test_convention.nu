@@ -197,9 +197,8 @@ def "every convention publishes its records as self-addressed files" [] {
 
     let particles = ls (particles-dir ($tmp | path join cybergraph))
     # Filename == CID v0 of the file's own bytes, for every file written.
-    let misaddressed = $particles | where {|p|
-        ($p.name | path basename) != (open --raw $p.name | into binary | cid-v0)
-    }
+    let misaddressed = $particles
+        | where ($it.name | path basename) != (open --raw $it.name | into binary | cid-v0)
     assert equal ($misaddressed | length) 0
 
     # The record is its own preimage: dereferencing the source of a deny edge

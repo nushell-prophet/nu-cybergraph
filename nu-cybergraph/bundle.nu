@@ -44,7 +44,7 @@ def assemble-seal-artifacts [root: path out: path root_hex: string] {
     # Anchored regex, greedy middle: a fingerprint cannot contain ".sig", but
     # the bare `<file>.sig` form must not parse as one either.
     let signers = list-files $snap --suffix ".sig"
-        | each {|s| $s | path basename | parse --regex '^tree-root\.txt\.(?<fp>.+)\.sig$' | get --optional 0.fp }
+        | each { path basename | parse --regex '^tree-root\.txt\.(?<fp>.+)\.sig$' | get --optional 0.fp }
     let registered = list-files ($root | path join multiproofs pubkeys) --suffix ".pub"
         | each {|f| {path: $f fingerprint: (open --raw $f | pubkey fingerprint)} }
     let copied = $signers | each {|fp|
@@ -62,7 +62,7 @@ def assemble-seal-artifacts [root: path out: path root_hex: string] {
     # statement. Plain content match — discovery only; verify re-checks the
     # commitment cryptographically.
     let ots_bundles = list-dirs ($root | path join multiproofs ots-timestamps)
-        | where {|d| $d | path basename | str starts-with "tree-root." }
+        | where ($it | path basename | str starts-with "tree-root.")
         | where {|d|
             let frozen = $d | path join tree-root.txt
             ($frozen | path exists) and (open --raw $frozen | str contains $root_hex)
@@ -72,7 +72,7 @@ def assemble-seal-artifacts [root: path out: path root_hex: string] {
     } else {
         mkdir ($out | path join multiproofs ots-timestamps)
         $ots_bundles | each {|d|
-            cp -r $d ($out | path join multiproofs ots-timestamps ($d | path basename))
+            cp --recursive $d ($out | path join multiproofs ots-timestamps ($d | path basename))
         }
     }
 }
@@ -166,7 +166,7 @@ def assemble-bundle [root: path out: path link_cid: string to: any key: any] {
     if not ($rcert | path exists) {
         error make {msg: $"no frozen receipt proof for ($link_cid) — run `nu-cybergraph seal` after import, then re-export"}
     }
-    cp -r ($hits | first) $out
+    cp --recursive ($hits | first) $out
 
     let receipt = read-receipt ($root | path join (receipt-relpath $link_cid))
     let index = (custody-layers $out | length) + 1

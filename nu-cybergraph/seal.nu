@@ -60,7 +60,7 @@ export def main [
     # is that claim made portable — the statement `bundle` re-exports.
     let stage = [$LINKS_DIR $CERTS_DIR $SEALS_DIR $IMPORTED_DIR $RECEIPTS_DIR]
         | each {|d| $root | path join $d }
-        | where {|d| ($d | path exists) and (ls $d | is-not-empty) }
+        | where (($it | path exists) and (ls $it | is-not-empty))
     if ($stage | is-not-empty) {
         ^git -C $root add -- ...$stage
     }
@@ -71,7 +71,7 @@ export def main [
     # Freeze birth certificates for links that don't have one yet.
     mkdir (certs-dir $root)
     let newborn = list-files (links-dir $root) --suffix ".json"
-        | where {|f| not ((cert-path $root (($f | path parse).stem)) | path exists) }
+        | where (not ((cert-path $root (($it | path parse).stem)) | path exists))
     for f in $newborn {
         let proof = merkle prove ($f | path relative-to $root) --repo $root
         mv $proof (cert-path $root (($f | path parse).stem))
@@ -82,7 +82,7 @@ export def main [
     # beside it and later seals must not touch it. (*.receipt.cert.json does
     # not end with .receipt.json — the suffix skips already-frozen proofs.)
     let new_receipts = list-files (receipts-dir $root) --suffix ".receipt.json"
-        | where {|f| not ((receipt-cert-path $root ($f | path basename | str replace ".receipt.json" "")) | path exists) }
+        | where (not ((receipt-cert-path $root ($it | path basename | str replace ".receipt.json" "")) | path exists))
     for f in $new_receipts {
         let proof = merkle prove ($f | path relative-to $root) --repo $root
         mv $proof (receipt-cert-path $root ($f | path basename | str replace ".receipt.json" ""))
@@ -98,7 +98,7 @@ export def main [
         # Both sig spellings nu-multiproof's _sig.nu knows: the named
         # `<file>.<fingerprint>.sig` and the bare `<file>.sig`.
         list-files ($root | path join multiproofs) --suffix ".sig"
-        | where {|s| $s | path basename | str starts-with "tree-root.txt." }
+        | where ($it | path basename | str starts-with "tree-root.txt.")
         | each {|s| cp $s $snap }
     }
 

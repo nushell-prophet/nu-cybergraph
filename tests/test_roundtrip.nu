@@ -103,7 +103,7 @@ def "birth, seal, bundle, import, verify — the full link journey" [] {
 def signer-cid [home: path]: nothing -> string {
     let pub = ls ($home | path join multiproofs pubkeys)
         | get name
-        | where {|f| $f | str ends-with ".pub" }
+        | where ($it | str ends-with ".pub")
         | first
     open --raw $pub | into binary | cid-v0
 }
@@ -162,14 +162,14 @@ def "custody chain: each re-export appends a provable, ordered layer" [] {
     # Stripping a middle layer breaks the chain loudly (indices no longer
     # start at 1, and C's prev would point at a missing receipt)
     let stripped = $tmp_dir | path join stripped
-    cp -r $c_out $stripped
-    rm -r ($stripped | path join custody $"1-($b_receipt.custodian | str substring 0..11)")
+    cp --recursive $c_out $stripped
+    rm --recursive ($stripped | path join custody $"1-($b_receipt.custodian | str substring 0..11)")
     assert error {|| verify-bundle $stripped }
 
     # Tampering with a layer's receipt bytes fails its content proof AND the
     # next layer's prev hash — the chain pins every receipt's exact bytes
     let tampered = $tmp_dir | path join tampered
-    cp -r $c_out $tampered
+    cp --recursive $c_out $tampered
     let target = $tampered | path join custody $"1-($b_receipt.custodian | str substring 0..11)" receipts $"($born.cid).receipt.json"
     open --raw $target | str replace --regex '"received_at":"\d{4}' '"received_at":"2099' | save --raw --force $target
     let tv = verify-bundle $tampered
@@ -207,7 +207,7 @@ def "handoff makes direction a signed claim, woven into the custody chain" [] {
     # open one. Only the recipient's SEAL makes a handoff permanent (the
     # strip-after-seal case is caught, tested at the end of this test).
     let laundered = $tmp_dir | path join laundered
-    cp -r $a_out $laundered
+    cp --recursive $a_out $laundered
     rm ($laundered | path join $"($born.cid).handoff.json")
     glob ($laundered | path join $"($born.cid).handoff.json.*.sig") | each {|f| rm $f }
     let m_imported = import $laundered --repo $m.repo
@@ -246,7 +246,7 @@ def "handoff makes direction a signed claim, woven into the custody chain" [] {
 
     # Stripping the author's handoff breaks B's sealed receipt — detected
     let stripped = $tmp_dir | path join stripped
-    cp -r $c_out $stripped
+    cp --recursive $c_out $stripped
     rm ($stripped | path join $"($born.cid).handoff.json")
     glob ($stripped | path join $"($born.cid).handoff.json.*.sig") | each {|f| rm $f }
     assert not (verify-bundle $stripped | get valid)
@@ -329,7 +329,7 @@ def "a repo path holding glob metacharacters still seals, exports and imports" [
     let sealed = seal --repo $a.repo --no-stamp
     assert equal $sealed.newborn 1
     # `ls`, not `glob`: the assertion must not repeat the bug it is pinning
-    assert equal (ls $sealed.snapshot | get name | where {|f| $f | str ends-with ".sig"} | length) 1
+    assert equal (ls $sealed.snapshot | get name | where ($it | str ends-with ".sig") | length) 1
 
     let out = bundle $born.cid --repo $a.repo --out ($tmp_dir | path join out) --to (signer-cid $b.home)
     assert (verify $born.cid --repo $a.repo | first | get valid)
@@ -449,7 +449,7 @@ def "a handoff that is tampered, unsigned, or misclaiming is refused" [] {
     # Tampered signed bytes: the claims stay coherent (handed_at is not a
     # checked claim), only the signature no longer covers the file
     let bad_sig = $tmp_dir | path join bad-sig
-    cp -r $a_out $bad_sig
+    cp --recursive $a_out $bad_sig
     let f = $bad_sig | path join $handoff_name
     open --raw $f | str replace --regex '"handed_at":"\d{4}' '"handed_at":"2099' | save --raw --force $f
     let v = verify-bundle $bad_sig
@@ -466,7 +466,7 @@ def "a handoff that is tampered, unsigned, or misclaiming is refused" [] {
     # "no valid signature by the handoff's `from` signer", which is a verdict
     # about a signature that was never there to weigh.
     let no_sig = $tmp_dir | path join no-sig
-    cp -r $a_out $no_sig
+    cp --recursive $a_out $no_sig
     glob ($no_sig | path join $"($handoff_name).*.sig") | each {|s| rm $s }
     let e2 = try { verify-bundle $no_sig | ignore; null } catch {|e| $e.msg }
     assert ($e2 != null and ($e2 | str contains "no signature files found")) $"unsigned handoff did not throw: ($e2)"
@@ -474,7 +474,7 @@ def "a handoff that is tampered, unsigned, or misclaiming is refused" [] {
 
     # `from` claims an identity other than the holder it travels with
     let wrong_from = $tmp_dir | path join wrong-from
-    cp -r $a_out $wrong_from
+    cp --recursive $a_out $wrong_from
     let f3 = $wrong_from | path join $handoff_name
     open --raw $f3 | str replace $born.record.signer $P1 | save --raw --force $f3
     let v3 = verify-bundle $wrong_from
@@ -483,7 +483,7 @@ def "a handoff that is tampered, unsigned, or misclaiming is refused" [] {
 
     # The author's handoff must pin receipt null — a non-null hash mismatches
     let wrong_receipt = $tmp_dir | path join wrong-receipt
-    cp -r $a_out $wrong_receipt
+    cp --recursive $a_out $wrong_receipt
     let f4 = $wrong_receipt | path join $handoff_name
     open --raw $f4 | str replace '"receipt":null' $'"receipt":"($FAKE_SHA)"' | save --raw --force $f4
     let v4 = verify-bundle $wrong_receipt
@@ -500,7 +500,7 @@ def "a handoff that is tampered, unsigned, or misclaiming is refused" [] {
     assert (verify-bundle $b_out | get valid)
 
     let wrong_layer = $tmp_dir | path join wrong-layer
-    cp -r $b_out $wrong_layer
+    cp --recursive $b_out $wrong_layer
     let lf = $wrong_layer | path join custody $"1-(signer-cid $b.home | str substring 0..11)" $handoff_name
     open --raw $lf | str replace --regex '"receipt":"[0-9a-f]{64}"' $'"receipt":"($FAKE_SHA)"' | save --raw --force $lf
     let lv = verify-bundle $wrong_layer
@@ -528,7 +528,7 @@ def "custody layer names cannot lie — forged dirname, duplicated custodian, re
 
     # Well-formed dirname claiming another signer: dirname-vs-receipt throw
     let forged = $tmp_dir | path join forged
-    cp -r $b_out $forged
+    cp --recursive $b_out $forged
     mv ($forged | path join custody $"1-($b12)") ($forged | path join custody $"1-($a12)")
     let err = try { verify-bundle $forged | ignore; null } catch {|e| $e.msg }
     assert ($err != null and ($err | str contains "does not match its receipt's custodian"))
@@ -537,8 +537,8 @@ def "custody layer names cannot lie — forged dirname, duplicated custodian, re
     # and binding check out — its receipt chains to nothing while the chain
     # demands layer 1's hash. Refused by `prev`, not by naming.
     let dup = $tmp_dir | path join dup
-    cp -r $b_out $dup
-    cp -r ($dup | path join custody $"1-($b12)") ($dup | path join custody $"2-($b12)")
+    cp --recursive $b_out $dup
+    cp --recursive ($dup | path join custody $"1-($b12)") ($dup | path join custody $"2-($b12)")
     let v = verify-bundle $dup
     assert not $v.valid
     assert ($v.custody | first | get valid)
@@ -548,7 +548,7 @@ def "custody layer names cannot lie — forged dirname, duplicated custodian, re
     # pins the non-strip contiguity case (the middle-strip case is covered
     # in the custody chain test above)
     let renum = $tmp_dir | path join renum
-    cp -r $b_out $renum
+    cp --recursive $b_out $renum
     mv ($renum | path join custody $"1-($b12)") ($renum | path join custody $"2-($b12)")
     let err2 = try { verify-bundle $renum | ignore; null } catch {|e| $e.msg }
     assert ($err2 != null and ($err2 | str contains "not contiguous"))
