@@ -82,6 +82,70 @@ def bound [sigs: table pubs: table claimed: string]: nothing -> bool {
     $pubs | any {|p| ($p.bytes | cid-v0) == $claimed and $p.fingerprint in $signers }
 }
 
+# WHEN the claimed signer endorsed — the other half of `bound`. nu-multiproof
+# now stamps every signature over the root statement into the same OTS bundle as
+# the root itself (nu-multiproof a38415e), so `merkle verify` returns an
+# `endorsements` row per signature that verified. `ots` dates the record's bytes;
+# this dates the act of signing them. Without it a valid signature could have
+# been made at any time, including after the key was compromised — and that is
+# the claim a cybergraph makes, since a link is an assertion by a signer and not
+# just a file that existed.
+#
+# Matched through the same pubkey table as the binding, never through a file
+# name: upstream keys the rows by fingerprint (the principal a key signs under),
+# and `bound`'s own docstring records what a name-based match cost last time.
+#
+# null means NOT BOUND, not undated: with no valid signature there is nothing to
+# date, while `absent` inside a returned row is the undated case — an endorsement
+# nobody stamped.
+#
+# One signer can have SEVERAL rows, so the best one is chosen rather than the
+# first. Upstream builds a row per valid signature FILE, not per signer, and a
+# key legitimately has more than one: both sig spellings its `sig-files-for`
+# discovers can sit in one bundle (`seal.nu` snapshots both on purpose), and a
+# randomized key — ECDSA, ecdsa-sk — makes fresh signature bytes on every seal,
+# so re-signing unchanged content yields another valid file rather than the same
+# one. Whichever the filesystem happened to list first was then reported, which
+# is invisible while every status reads `absent` and a wrong answer the moment
+# one of the files is stamped and another is not.
+#
+# Same rule as nu-multiproof's `pick-stamp`, and for the same reason: the claim
+# is "the signer endorsed this no later than T", so the earliest anchor is the
+# strongest available and every later one follows from it. Not upstream's
+# function itself — it lives in `_stamps.nu`, internal to the repo that owns it.
+#
+# THREE tiers where upstream has two, and the third is the one this function
+# exists for. Upstream picks among candidate proofs, so an unstamped file gives
+# it an empty list and never an `absent` candidate — it only ever chooses between
+# anchored and pending. Here the rows are per signature FILE and already carry a
+# status, so one signer really can hold a `pending` row beside an `absent` one:
+# a randomized key signs twice, and only one of those files got stamped. Ranking
+# `absent` with `pending` would then report "real but undated" for an endorsement
+# whose digest did reach a calendar — under-reporting, never a date invented, but
+# still the wrong answer and exactly what "the best one is chosen" denies.
+def endorsed-by [ends: table pubs: table claimed: string]: nothing -> any {
+    let fingerprints = $pubs | where ($it.bytes | cid-v0) == $claimed | get fingerprint
+    let rows = $ends | where signer in $fingerprints
+    # Preference order concatenated, then taken from the front: anchored (lowest
+    # block) before pending before whatever is left. `$rows` last is the `absent`
+    # tier and repeats the earlier ones harmlessly — only index 0 is read.
+    $rows | where status == "anchored" | sort-by height
+    | append ($rows | where status == "pending")
+    | append $rows
+    | get --optional 0
+}
+
+# One stamp status as one cell: "anchored 912345", "pending", "absent".
+#
+# Copied rather than imported: upstream's `format-stamp` lives in its
+# `_stamps.nu`, and an `_` module is internal to the repo that owns it —
+# `_deps/` shims the public modules only. Typed `record` on purpose: passing
+# null throws here instead of printing "absent" for a signer with no valid
+# signature at all, which is a different verdict and already has its own line.
+def stamp-cell [stamp: record]: nothing -> string {
+    if $stamp.height? == null { $stamp.status } else { $"($stamp.status) ($stamp.height)" }
+}
+
 # A proof dir's outgoing handoff, if present — null when the dir has none
 # (exporting without naming a recipient is legal). Checks the signed
 # direction claim: shape, the claims it travels with (this link, this
@@ -166,6 +230,7 @@ def verify-custody [bundle: path link_cid: string author: string root_handoff: a
             error make {msg: $"custody layer dirname ($layer.dir | path basename) does not match its receipt's custodian"}
         }
         let custodian_bound = bound $v.signatures $checked.pubs $receipt.custodian
+        let custodian_endorsed = endorsed-by $v.endorsements $checked.pubs $receipt.custodian
         let files_ok = $receipt.files == $birth_files
         let prev_expected = if $prev_hash == "" { null } else { $prev_hash }
         let prev_ok = $receipt.prev == $prev_expected
@@ -195,8 +260,8 @@ def verify-custody [bundle: path link_cid: string author: string root_handoff: a
             custodian: $receipt.custodian
             received_at: $receipt.received_at
             bound: $custodian_bound
+            endorsed: $custodian_endorsed
             root: $v.root
-            ots: $v.ots
             handoff: $own_handoff
             valid: $valid
             error: $error
@@ -216,10 +281,16 @@ export def verify-bundle [bundle: path]: nothing -> record {
     # never reach the binding check.
     let rec = read-link ($bundle | path join $v.leaf.filepath)
     let signer_bound = bound $v.signatures $birth.pubs $rec.signer
+    let signer_endorsed = endorsed-by $v.endorsements $birth.pubs $rec.signer
     # No `\(`: that is an escape only in `$"…"`. Inside the `'…'` here the
     # backslash is literal, and it printed as one. Parens need no escaping in a
     # single-quoted string — nothing interpolates there.
-    print $"signer:    (if $signer_bound { 'bound' } else { 'NOT BOUND (no valid signature by the claimed signer)' })"
+    let signer_line = if $signer_bound {
+        $"bound, endorsement (stamp-cell $signer_endorsed)"
+    } else {
+        'NOT BOUND (no valid signature by the claimed signer)'
+    }
+    print $"signer:    ($signer_line)"
 
     let link_cid = $v.leaf.filepath | path parse | get stem
     let root_handoff = check-handoff $bundle $link_cid $rec.signer null $birth.pubs
@@ -241,9 +312,23 @@ export def verify-bundle [bundle: path]: nothing -> record {
         print $"handoff:   addressed to ($handed_to)"
     }
 
+    # `ots` is dropped, not renamed or defaulted. It is upstream's content anchor,
+    # and `seal.nu` always passes --no-content-anchor, so in a cybergraph bundle it
+    # is `absent` on every row — forever. A permanently empty field is worse than
+    # noise here: `absent` reads as "this link carries no timestamp" when the link
+    # IS dated, by `signer.endorsed`. Leaving it would re-pose the one question
+    # dropping the second anchor exists to answer — which of these two is the time.
+    #
+    # `endorsements` stays: it lists every signer who endorsed this root, which is
+    # a different question from when THIS record's signer did. One answer each,
+    # not two answers to one.
+    #
+    # Upstream still PRINTS `ots: absent` from `merkle verify`. Silencing that
+    # needs a change there, not a filter here.
     $v
+    | reject ots
     | insert record $rec
-    | insert signer {cid: $rec.signer bound: $signer_bound}
+    | insert signer {cid: $rec.signer bound: $signer_bound endorsed: $signer_endorsed}
     | insert handoff $root_handoff
     | insert custody $custody
     | insert handed_to $handed_to

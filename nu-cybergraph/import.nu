@@ -73,6 +73,9 @@ export def main [
         path: $dest
         receipt: $receipt_path
         custody: ($v.custody | length)
-        ots: $v.ots.status
+        # The link's date, and the only one: the anchor over the signature that
+        # endorsed it. Reached without a `?` because the refusal above already
+        # rejected an unbound signer, and a bound one always has a row.
+        endorsed: $v.signer.endorsed.status
     }
 }

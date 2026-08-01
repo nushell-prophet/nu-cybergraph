@@ -14,6 +14,7 @@ use ../nu-cybergraph/verify.nu
 use ../nu-cybergraph/_verify-helpers.nu [verify-bundle]
 use ../nu-cybergraph/_deps/cid-v0.nu [cid-v0]
 use ../nu-cybergraph/_deps/pubkey.nu [pubkey]
+use ../nu-cybergraph/_deps/ssh-sign.nu [ssh-sign]
 
 const P1 = "QmUQUHEmv651XCBhiWUQpx2zf4PDts1aXL324ZFyV4QZPF"
 const P2 = "QmW9519sfmW2MvDb4TU4dKtiFAXm1UPDvE7JrMaBjprVHp"
@@ -28,16 +29,22 @@ def cleanup [] {
     rm --recursive --force $in.tmp_dir
 }
 
-# A signer repo: sha256 git backend (the spec's recommendation), one ed25519
-# key registered as both git signing key and cybergraph identity.
-def make-signer [tmp_dir: path name: string]: nothing -> record {
+# A signer repo: sha256 git backend (the spec's recommendation), one key
+# registered as both git signing key and cybergraph identity.
+#
+# --key-type exists for one case: ed25519 signatures are deterministic (RFC
+# 8032), so re-signing the same bytes with the same key reproduces the same
+# signature file. A test that needs one key to hold TWO different valid
+# signatures over one root must use a randomized algorithm — ecdsa here, which is
+# also what the editor's own ecdsa-sk key does in the field.
+def make-signer [tmp_dir: path name: string --key-type: string = "ed25519"]: nothing -> record {
     let repo = $tmp_dir | path join $name
     mkdir $repo
     ^git init --object-format=sha256 -q $repo
     ^git -C $repo config user.name $name
     ^git -C $repo config user.email $"($name)@test"
     let key = $tmp_dir | path join $"key-($name)"
-    ^ssh-keygen -t ed25519 -f $key -N "" -C $name -q
+    ^ssh-keygen -t $key_type -f $key -N "" -C $name -q
     ^git -C $repo config user.signingKey $key
     init --repo $repo
     {repo: $repo home: ($repo | path join cybergraph) key: $key pub: $"($key).pub"}
@@ -64,7 +71,14 @@ def "birth, seal, bundle, import, verify — the full link journey" [] {
     assert $own.valid
     assert $own.signer.bound
     assert equal $own.record $born.record
-    assert equal $own.ots.status "absent"
+    # One anchor, one claim: when the signer endorsed this. Upstream's `ots` —
+    # the content anchor — is dropped rather than reported as permanently
+    # `absent`, which would read as "this link has no timestamp".
+    assert ("ots" not-in ($own | columns)) "the content anchor is back in the verify record"
+    # Under --no-stamp the endorsement is `absent` — real, and nobody stamped it
+    # — but `endorsed` is a RECORD and not null, which is what says a valid
+    # signature by the claimed signer exists at all.
+    assert equal $own.signer.endorsed.status "absent"
 
     # Export and import into B
     let bundle_dir = bundle $born.cid --repo $a.repo --out ($tmp_dir | path join out-bundle)
@@ -108,6 +122,191 @@ def signer-cid [home: path]: nothing -> string {
     open --raw $pub | into binary | cid-v0
 }
 
+# What an OpenTimestamps calendar returns from POST /digest: the tail of the
+# timestamp chain, here a bare pending attestation naming the public calendar.
+#
+# Mirrors nu-multiproof's `build-calendar-response` fixture, copied rather than
+# imported: that file is another repo's test internals, and `_deps/` shims its
+# library modules only. It describes the OTS wire answer, not a format this repo
+# owns — and if it ever drifts, upstream's parser rejects it and the test using
+# it fails loudly rather than passing on a fixture nobody checks.
+def calendar-response []: nothing -> binary {
+    let url = "https://a.pool.opentimestamps.org" | into binary
+    let len = $url | bytes length
+    0x[00]
+    | bytes add --end 0x[83dfe30d2ef90c8e]
+    | bytes add --end ($len + 1 | into binary --endian little | bytes at 0..0)
+    | bytes add --end ($len | into binary --endian little | bytes at 0..0)
+    | bytes add --end $url
+}
+
+# An ed25519 keypair whose fingerprint sorts before `ceiling`. Only a key, no
+# repo: a co-signer needs nothing but key material and a line in pubkeys/.
+# "" = not found yet, the same sentinel shape verify-custody uses for `prev`:
+# a `mut` cannot change type, and `loop`+`return` does not satisfy the declared
+# return type (the checker reads the loop as producing nothing).
+def generate-key-before [tmp_dir: path ceiling: string]: nothing -> record {
+    # Capped, because the draw is unbounded: the chance a fresh fingerprint sorts
+    # below `ceiling` is ceiling-as-a-fraction-of-the-hex-space, so the attempt
+    # count is 1/p — uniform in p, hence divergent in expectation. An author key
+    # that sorts very low would keygen for tens of seconds and read as a hang.
+    # 200 fails loudly instead, and only for a ceiling under ~1/200 of the space.
+    const MAX_TRIES = 200
+    mut n = 0
+    mut key = ""
+    while $key == "" {
+        if $n >= $MAX_TRIES {
+            error make {msg: $"no ed25519 fingerprint below ($ceiling) in ($MAX_TRIES) tries — the ceiling sorts too low for this test to arrange its ordering"}
+        }
+        let candidate = $tmp_dir | path join $"cokey-($n)"
+        ^ssh-keygen -t ed25519 -f $candidate -N "" -C $"co($n)" -q
+        if (open --raw $"($candidate).pub" | pubkey fingerprint) < $ceiling {
+            $key = $candidate
+        }
+        $n = $n + 1
+    }
+    {key: $key pub: $"($key).pub"}
+}
+
+# The only test in this suite that reaches a REAL stamp. Everything else seals
+# --no-stamp, so every anchor reads `absent` and is never exercised as anything
+# but a missing one.
+@test
+def "a stamped seal dates the endorsement and anchors nothing else" [] {
+    let tmp_dir = $in.tmp_dir
+    let a = make-signer $tmp_dir "a"
+    let born = link add $P1 $P2 --repo $a.repo
+    let response = $tmp_dir | path join calendar-response.bin
+    calendar-response | save --raw --force $response
+    seal --repo $a.repo --response-file $response | ignore
+
+    let out = bundle $born.cid --repo $a.repo --out ($tmp_dir | path join out)
+    # ONE proof rides in the export, and it is the one over the signature. The
+    # root statement is deliberately left undated (`seal.nu` always passes
+    # --no-content-anchor), so a reader is never handed two dates and no rule
+    # for choosing between them.
+    let ots_dir = ls ($out | path join multiproofs ots-timestamps) | get name | first
+    let proofs = ls $ots_dir | get name | path basename | where ($it | str ends-with ".ots") | sort
+    assert equal ($proofs | length) 1 $"the export carries ($proofs | length) proofs, not just the signature's"
+    assert ("tree-root.ots" not-in $proofs) "the root statement was anchored — --no-content-anchor did not reach upstream"
+    # The frozen root copy still ships: bundle.nu finds the OTS directory by
+    # matching it against the root hex, so minting must keep writing it.
+    assert (($ots_dir | path join tree-root.txt) | path exists)
+
+    let v = verify-bundle $out
+    assert $v.valid
+    # `pending` and not `absent`: the digest reached a calendar. This is the
+    # link's date — a link is an assertion by a signer, so the anchor over the
+    # signature is the claim, and the record's bytes carry no separate one.
+    assert equal $v.signer.endorsed.status "pending"
+    assert equal $v.signer.endorsed.signer (open --raw $a.pub | pubkey fingerprint)
+    assert ("ots" not-in ($v | columns)) "the content anchor is back in the verify record"
+}
+
+@test
+def "with a co-signer present, the endorsement reported belongs to the record signer" [] {
+    let tmp_dir = $in.tmp_dir
+    let a = make-signer $tmp_dir "a"
+    let born = link add $P1 $P2 --repo $a.repo
+    seal --repo $a.repo --no-stamp | ignore
+    let out = bundle $born.cid --repo $a.repo --out ($tmp_dir | path join out)
+
+    # A second registered key signs the same root statement out of band —
+    # upstream dates every signature that verifies, so the bundle now carries
+    # two endorsements and only one of them is this record's author.
+    #
+    # The co-signer's fingerprint must sort BEFORE the author's, or this test
+    # does not discriminate: rows arrive in signature-file order, the file name
+    # carries the fingerprint, so with the author's key first a positional pick
+    # would return the right answer for the wrong reason — about half of runs.
+    # ed25519 keygen is milliseconds, so re-rolling the key is the cheap way to
+    # fix the order; nothing else about the co-signer needs a repo.
+    let a_fp = open --raw $a.pub | pubkey fingerprint
+    let co = generate-key-before $tmp_dir $a_fp
+    let pubdir = $out | path join multiproofs pubkeys
+    let co_fp = open --raw $co.pub | pubkey fingerprint
+    open --raw $co.pub | pubkey canonical | save --raw ($pubdir | path join $"($co_fp).pub")
+    ssh-sign sign ($out | path join multiproofs tree-root.txt) --key $co.key --pubkeys-dir $pubdir | ignore
+
+    let v = verify-bundle $out
+    assert $v.valid
+    assert equal ($v.endorsements | get signer | sort) ([$a_fp $co_fp] | sort)
+    # Asserted, not assumed: if row order ever stops following the file name,
+    # this fails loudly instead of quietly weakening the check below it.
+    assert equal ($v.endorsements | first | get signer) $co_fp "the co-signer's row is not first — the check below no longer discriminates"
+    # So the correct answer is NOT position 0. The row is chosen by key material
+    # through the pubkey table: picking positionally would date the author's
+    # link by whenever the co-signer happened to sign.
+    assert equal $v.signer.endorsed.signer $a_fp
+}
+
+# The case the pick rule exists for: ONE signer holding a stamped signature and
+# an unstamped one, where taking the first row reports the wrong answer.
+#
+# Built with ecdsa because ed25519 signatures are deterministic — re-signing the
+# same root reproduces the same bytes, and one key could never hold two different
+# valid signatures. The layout is arranged so a positional pick is WRONG:
+# `tree-root.txt.<fingerprint>.sig` sorts before `tree-root.txt.sig` (hex digits
+# below `s`), so the fingerprint-named file is row 0 and it is the one left
+# unstamped, while the bare spelling carries the bytes the stamp covers.
+@test
+def "an unstamped signature does not hide the signers stamped one" [] {
+    let tmp_dir = $in.tmp_dir
+    let a = make-signer $tmp_dir "a" --key-type ecdsa
+    let born = link add $P1 $P2 --repo $a.repo
+    let response = $tmp_dir | path join calendar-response.bin
+    calendar-response | save --raw --force $response
+    seal --repo $a.repo --response-file $response | ignore
+    let out = bundle $born.cid --repo $a.repo --out ($tmp_dir | path join out)
+
+    let mp = $out | path join multiproofs
+    let a_fp = open --raw $a.pub | pubkey fingerprint
+    let named = $mp | path join $"tree-root.txt.($a_fp).sig"
+    # The stamped bytes move to the bare spelling; the fingerprint name gets a
+    # fresh signature the existing proof does not cover.
+    let stamped = open --raw $named | into binary
+    ssh-sign sign ($mp | path join tree-root.txt) --key $a.key --pubkeys-dir ($mp | path join pubkeys) | ignore
+    $stamped | save --raw --force ($mp | path join "tree-root.txt.sig")
+
+    let v = verify-bundle $out
+    assert $v.valid
+    assert equal ($v.endorsements | get signer | uniq) [$a_fp] "the two signatures are not by one key"
+    # Both statuses are present, and the WRONG one is first — without that this
+    # test would pass against a positional pick and prove nothing.
+    assert equal ($v.endorsements | get status) ["absent" "pending"] "the unstamped row is not first — this test no longer discriminates"
+    # The signer's endorsement IS dated: a digest reached a calendar for one of
+    # their signatures, so reporting `absent` would understate what the bundle
+    # proves.
+    assert equal $v.signer.endorsed.status "pending"
+}
+
+# Two valid signature files by ONE key — the case that makes "a bound signer has
+# exactly one endorsement row" false. Both spellings upstream's `sig-files-for`
+# discovers are legal in a bundle, and `seal` snapshots both on purpose, so a
+# stranger's bundle can carry them without being malformed.
+@test
+def "two signature spellings by one key do not fork the endorsement" [] {
+    let tmp_dir = $in.tmp_dir
+    let a = make-signer $tmp_dir "a"
+    let born = link add $P1 $P2 --repo $a.repo
+    seal --repo $a.repo --no-stamp | ignore
+    let out = bundle $born.cid --repo $a.repo --out ($tmp_dir | path join out)
+
+    let mp = $out | path join multiproofs
+    let named = ls $mp | get name | where ($it | str ends-with ".sig") | first
+    cp $named ($mp | path join "tree-root.txt.sig")
+
+    let v = verify-bundle $out
+    let a_fp = open --raw $a.pub | pubkey fingerprint
+    assert $v.valid
+    # Two rows, one signer — upstream builds a row per signature FILE
+    assert equal ($v.endorsements | length) 2
+    assert equal ($v.endorsements | get signer | uniq) [$a_fp]
+    # ...and one answer out of them, still the author's
+    assert equal $v.signer.endorsed.signer $a_fp
+    assert equal $v.signer.endorsed.status "absent"
+}
+
 @test
 def "custody chain: each re-export appends a provable, ordered layer" [] {
     let tmp_dir = $in.tmp_dir
@@ -120,6 +319,9 @@ def "custody chain: each re-export appends a provable, ordered layer" [] {
     let b = make-signer $tmp_dir "b"
     let b_imported = import $a_out --repo $b.repo
     assert equal $b_imported.custody 0
+    # import reports the one anchor there is — when the signer endorsed it
+    assert ("ots" not-in ($b_imported | columns)) "import is back to reporting a content anchor"
+    assert equal $b_imported.endorsed "absent"
     let b_receipt = open --raw $b_imported.receipt | from json
     assert equal $b_receipt.prev null
     assert equal $b_receipt.custodian (signer-cid $b.home)
@@ -151,6 +353,13 @@ def "custody chain: each re-export appends a provable, ordered layer" [] {
     assert equal ($v.custody | get index) [1 2]
     assert equal ($v.custody | get custodian) [(signer-cid $b.home) (signer-cid $c.home)]
     assert ($v.custody | all { $in.bound })
+    # Every layer dates its own custodian's endorsement, the same way the birth
+    # row dates the author's. Without this the chain proved WHO held the link
+    # and when the bytes existed, but never when the custodian signed for them.
+    assert ($v.custody | all { $in.endorsed != null }) "a custody layer lost its custodian's endorsement"
+    assert equal ($v.custody | get endorsed.status) ["absent" "absent"]
+    # ...and carries no content anchor either, same rule as the birth row
+    assert ($v.custody | all { "ots" not-in ($in | columns) }) "a custody layer is back to carrying a content anchor"
 
     # ...and the chain survives a fourth hop's import + repo-level verify
     let d = make-signer $tmp_dir "d"
@@ -308,6 +517,11 @@ def "a pubkey filed under the fingerprint of another key cannot borrow its autho
     let v = verify-bundle $out
     assert equal ($v.signatures | where valid | get signer) [$mallory_fp]
     assert not $v.signer.bound "the victim's signer CID was bound to mallory's signature"
+    # And no endorsement date either, though the bundle carries one: mallory's
+    # signature is valid, so upstream lists it in `endorsements`. Reporting that
+    # row as the victim's would date an endorsement the victim never made.
+    assert equal ($v.endorsements | get signer) [$mallory_fp]
+    assert equal $v.signer.endorsed null "an unbound signer was handed someone else's endorsement"
     assert not $v.valid
     let c = make-signer $tmp_dir "carol"
     assert error {|| import $out --repo $c.repo }

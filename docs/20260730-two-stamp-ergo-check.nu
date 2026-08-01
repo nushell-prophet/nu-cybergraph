@@ -5,6 +5,19 @@
 # endorsement for free, and it carries one real defect that bites operator
 # scripts.
 #
+# SUPERSEDED IN PART, and kept running rather than frozen. This was the check
+# that let the two-stamp branch in; what it recommended was then taken further
+# than it proposed. Section 5 says nothing here acts on an endorsement — that is
+# no longer true, `verify` now reports `signer.endorsed` and `import` returns it.
+# And the two anchors this file weighs are now one: `seal` passes
+# --no-content-anchor on every run, so the root statement is deliberately left
+# undated and upstream's `ots` field is dropped from the verify record. The
+# reasoning for that is in the branch's commit bodies, not here. What stays true
+# is everything this file EXECUTES, which is why it is still refreshed instead of
+# being marked historical — the section-3 evidence pinned in
+# `two-stamp-ergo-evidence.nuon` is a record of a live run on 2026-07-30 and
+# describes the layout of that day, not of today.
+#
 # This file is a dotnu embeds document: every `| print $in` line below is
 # executed and its real output written underneath as `# =>` comments. Refresh
 # with `dotnu embeds-update docs/20260730-two-stamp-ergo-check.nu`, then read
@@ -26,26 +39,43 @@ const CG = "/Users/user/git/cy-container/nu-cybergraph"
 # ─────────────────────────────────────────────────────────────────────────────
 # 1. What we are testing against
 #
-# The branch is 26 commits of seal/merkle/ots work. Only five files under
-# nu-multiproof/ changed; the four modules we import that are NOT in this list —
-# cid-v0, pubkey, init, ssh-sign — are byte-identical to main.
+# The branch was 26 commits of seal/merkle/ots work, and when this was first run
+# it touched five files under nu-multiproof/, none of them cid-v0, pubkey, init
+# or ssh-sign — so the four modules we import were byte-identical to main.
+#
+# The count below has since grown to ten, and those four are now in it. That is
+# not the branch changing: `main` moved on under it, through a topiary pass and a
+# return-type sweep (nu-multiproof 95e69f9), so a three-dot diff now reports work
+# that landed after this check rather than work this branch proposed. The point
+# the line was making is spent — it is kept because it dates the comparison.
 
 ^git -C $MP diff --stat main...two-stamp-ergo -- nu-multiproof/ | print $in
-# =>  nu-multiproof/_fs.nu     |  12 ++-
-# =>  nu-multiproof/_stamps.nu |  94 +++++++++++++++++++++++
-# =>  nu-multiproof/merkle.nu  |  73 ++++++++++--------
-# =>  nu-multiproof/ots.nu     | 139 +++++++++++++++++++++++++++++++---
-# =>  nu-multiproof/seal.nu    | 190 +++++++++++++++++++++++++++++++++++++++++++++--
-# =>  5 files changed, 462 insertions(+), 46 deletions(-)
+# =>  nu-multiproof/_fs.nu         |  12 ++-
+# =>  nu-multiproof/_stamps.nu     |  94 +++++++++++++++++++++
+# =>  nu-multiproof/cid-v0.nu      |   4 +-
+# =>  nu-multiproof/init.nu        |   2 +-
+# =>  nu-multiproof/merkle.nu      |  87 +++++++++++--------
+# =>  nu-multiproof/ots.nu         | 147 +++++++++++++++++++++++++++++---
+# =>  nu-multiproof/pubkey.nu      |   2 +-
+# =>  nu-multiproof/seal.nu        | 194 +++++++++++++++++++++++++++++++++++++++++--
+# =>  nu-multiproof/ssh-sign.nu    |   4 +-
+# =>  nu-multiproof/tree-hashes.nu |   4 +-
+# =>  10 files changed, 484 insertions(+), 66 deletions(-)
 
 # ─────────────────────────────────────────────────────────────────────────────
-# 2. The one real defect: a parse-time collision, new on this branch
+# 2. The one real defect: a parse-time collision — REPORTED, AND FIXED UPSTREAM
 #
-# Upstream's new `seal status` carries an @example whose body calls `seal
+# Upstream's new `seal status` carried an @example whose body called `seal
 # status`. Nushell parses an example body against whatever `seal` is in scope.
 # Import a file-shim `seal.nu` first — which is exactly what `_deps/` does — and
-# the module fails to parse. nu-cybergraph's `seal` takes no positional, so
-# `status` reads as an extra argument.
+# the module failed to parse. nu-cybergraph's `seal` takes no positional, so
+# `status` read as an extra argument.
+#
+# The probe below now prints `exit 0` and an empty diagnostic, which is the fix
+# landing: nu-multiproof a38415e made every @example body call its command the
+# way a user types it — `nu-multiproof seal status`, not a bare `seal status`.
+# The probe is kept rather than deleted, because it is now the regression test
+# for that fix and it costs one subprocess.
 
 let tmp = mktemp --directory
 
@@ -58,7 +88,7 @@ print ok" | save --force ($tmp | path join collide.nu)
 do { ^nu ($tmp | path join collide.nu) } | complete
 | $"exit ($in.exit_code): ($in.stderr | lines | where (($it | str contains 'nu::parser') or ($it | str contains 'seal status')) | str trim | str join ' | ')"
 | print $in
-# => exit 1: Error: nu::parser::extra_positional | 274 |     seal status
+# => exit 0: 
 
 # Reverse the two imports and it parses clean — which is why the test suite and
 # the acceptance test never see it. `_deps/` shims import single files, and
@@ -235,11 +265,11 @@ $"newborn certificates: ($sealed.newborn), links on disk: (nu-cybergraph link li
 # Verify goes through the portable bundle a stranger would get, never through
 # this repo's current tree-root.txt.
 let v = nu-cybergraph verify $plain.cid --repo $a.repo | first
-{valid: $v.valid, signer_bound: $v.signer.bound, ots: $v.ots.status, endorsements: ($v.endorsements | length)} | print $in
+{valid: $v.valid, signer_bound: $v.signer.bound, endorsed: $v.signer.endorsed.status, endorsements: ($v.endorsements | length)} | print $in
 # => ╭──────────────┬────────╮
 # => │ valid        │ true   │
 # => │ signer_bound │ true   │
-# => │ ots          │ absent │
+# => │ endorsed     │ absent │
 # => │ endorsements │ 1      │
 # => ╰──────────────┴────────╯
 
@@ -258,14 +288,13 @@ $v | columns | print $in
 # => │  4 │ leaf             │
 # => │  5 │ content_verified │
 # => │  6 │ signatures       │
-# => │  7 │ ots              │
-# => │  8 │ endorsements     │
-# => │  9 │ error            │
-# => │ 10 │ record           │
-# => │ 11 │ signer           │
-# => │ 12 │ handoff          │
-# => │ 13 │ custody          │
-# => │ 14 │ handed_to        │
+# => │  7 │ endorsements     │
+# => │  8 │ error            │
+# => │  9 │ record           │
+# => │ 10 │ signer           │
+# => │ 11 │ handoff          │
+# => │ 12 │ custody          │
+# => │ 13 │ handed_to        │
 # => ╰────┴──────────────────╯
 
 # Handoff, import, custody: A hands the link to B, B imports it, seals to freeze
@@ -316,3 +345,11 @@ rm --recursive --force $tmp
 # `check-handoff` still read `signatures`. Making `import` refuse an undated
 # endorsement would be a real code change, and the acceptance test does not ask
 # for one.
+#
+# OUTDATED, kept as the record of what was decided on 2026-07-30. Reading the
+# endorsement is exactly what happened next: `verify` returns `signer.endorsed`,
+# each custody layer carries its custodian's, and `import` reports it. Still true
+# is the last sentence — nothing ENFORCES it. `bound` and `check-handoff` read
+# `signatures`, no anchor is a condition of `valid`, and whether `import` should
+# refuse an undated endorsement remains open, for the reason given here: a fresh
+# stamp reads `pending` for hours and the acceptance test does not ask.

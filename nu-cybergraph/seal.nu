@@ -20,8 +20,18 @@ use _deps/merkle.nu [merkle]
 export def main [
     --repo: path # Target git repo root (default: git root of current directory)
     --no-stamp # Skip OTS timestamping (stamping is the point — tests only)
+    --response-file: path # TESTS ONLY: take the calendar's answer from this file instead of posting the digest
 ]: nothing -> record {
     let root = graph-root $repo
+
+    # Refused rather than given a precedence, and before anything is staged: with
+    # --no-stamp the whole stamping step is skipped, so the calendar answer is
+    # read by nobody and a test written that way LOOKS like it stamped while
+    # asserting nothing. Upstream refuses its own contradictory pair with the
+    # same argument (nu-multiproof/seal.nu, --no-stamp vs --no-content-anchor).
+    if $no_stamp and $response_file != null {
+        error make {msg: "--no-stamp and --response-file are alternatives: --no-stamp skips stamping entirely, so the calendar answer would be read by no one"}
+    }
 
     # Upstream's seal now asks its registration question before rewriting
     # anything (nu-multiproof 923daa1), so the fingerprint pre-check that
@@ -65,7 +75,32 @@ export def main [
         ^git -C $root add -- ...$stage
     }
 
-    let sealed = seal --repo $root --no-stamp=$no_stamp
+    # --no-content-anchor is passed unconditionally, and this repo exposes no flag
+    # of its own for it: one form is the whole point. A bundle holding an anchor
+    # over tree-root.txt AND one over the signature over it does not say which
+    # dates the statement — both are true, neither is derived from the other on
+    # disk — so each reader answers for itself which is the time, what a
+    # disagreement means, and whether verification needs one or both. An option
+    # here would put those three questions back.
+    #
+    # A link is an assertion by a signer, so the endorsement anchor IS the claim;
+    # an anchor over the root alone dates bytes without saying who asserted them.
+    # Upstream keeps both by default on purpose (nu-multiproof de3c2dd) — an
+    # archive that must stay checkable with no key material wants the content
+    # anchor, because deriving content-time through the signature inherits every
+    # way SSH verification can rot. That trade is taken here knowingly.
+    #
+    # Tied to $no_stamp rather than passed bare: upstream refuses the two flags
+    # together, because --no-stamp skips step 4 entirely while --no-content-anchor
+    # runs it over the signatures only. So the rule reads "whenever this repo
+    # stamps at all, it stamps signatures only" — which is the invariant, not a
+    # flag combination.
+    #
+    # --response-file is forwarded, not re-implemented: it is upstream's own test
+    # seam, and without it nothing here could reach a real stamp offline — every
+    # test seals --no-stamp, so every anchor read `absent`. It must never appear
+    # in a real seal: the anchor would attest a fixture, not a calendar's answer.
+    let sealed = seal --repo $root --no-stamp=$no_stamp --no-content-anchor=(not $no_stamp) --response-file $response_file
     let root_hex = $sealed.merkle_root
 
     # Freeze birth certificates for links that don't have one yet.
