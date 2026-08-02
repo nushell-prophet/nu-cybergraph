@@ -112,6 +112,42 @@ def "birth, seal, bundle, import, verify — the full link journey" [] {
     assert (verify $born.cid --repo $a.repo | first | get valid)
 }
 
+# A bundle arriving without its record is refused either way — this is about
+# WHICH refusal. `merkle verify` resolves the leaf, finds nothing there, and
+# returns a row saying so; `verify-bundle` then opened the same absent path and
+# died with `nu::shell::io::not_found`, throwing away the verdict the layer
+# below had already computed. Through `verify` the operator saw two words,
+# `File not found`, with no path, no bundle and no link.
+@test
+def "a bundle whose record file is absent returns a verdict, not a crash" [] {
+    let tmp_dir = $in.tmp_dir
+    let a = make-signer $tmp_dir "a"
+    let born = link add $P1 $P2 --repo $a.repo
+    seal --repo $a.repo --no-stamp | ignore
+    let out = bundle $born.cid --repo $a.repo --out ($tmp_dir | path join out)
+
+    rm ($out | path join links $"($born.cid).json")
+
+    let v = verify-bundle $out
+    assert not $v.valid
+    # The reason names the file, and it is upstream's — not a second copy of
+    # the same rule written here.
+    assert ($v.error | str contains $born.cid) $"the error does not name the leaf: ($v.error)"
+    assert ($v.error | str contains "absent on disk") $"the error does not say what is wrong: ($v.error)"
+    # The shape is the shape every other verdict has, so a caller reading the
+    # record never branches on how the bundle failed.
+    assert equal $v.record null
+    assert not $v.signer.bound
+    assert equal $v.custody []
+    assert ("ots" not-in ($v | columns)) "the content anchor is back in the verify record"
+
+    # And the refusal survives the layer above: `import` reports it as a
+    # refusal to import, not as a crash.
+    let b = make-signer $tmp_dir "b"
+    let err = try { import $out --repo $b.repo; null } catch {|e| $e.msg }
+    assert ($err | str contains "refusing to import") $"import did not refuse cleanly: ($err)"
+}
+
 # `verify` on an own link builds a bundle in a temp dir and cleans it up. The
 # cleanup used to re-raise a reconstruction of the error instead of the error,
 # so everything below the top frame was dropped: with ssh-keygen off PATH the

@@ -277,6 +277,33 @@ export def verify-bundle [bundle: path]: nothing -> record {
     let birth = verify-proof-dir $bundle
     let v = $birth.v
 
+    # When the leaf is not a readable regular file, `merkle verify` has already
+    # decided the bundle is invalid AND written the reason. Reading the record
+    # anyway threw `nu::shell::io::not_found` from `open`, so the structured
+    # verdict that names the actual defect never reached the caller — the layer
+    # that knew why computed the answer and then discarded it.
+    #
+    # Keyed on the TYPE, not on a list of statuses: upstream returns a bool when
+    # the path resolved to a real file (true = bytes match, false = they do not)
+    # and a string naming the divergence otherwise — missing, symlink, outside,
+    # directory, unverifiable. A status added upstream is covered without an
+    # edit here, and the enumeration cannot drift out of sync.
+    #
+    # `false` deliberately continues: the file IS there and readable, and
+    # `read-link` enforces a different contract from the merkle proof — bytes
+    # against their own filename. A present but non-canonical record must keep
+    # throwing its own message, so this must never become a `try` around the
+    # read.
+    if ($v.content_verified | describe) != "bool" {
+        return ($v
+            | reject ots
+            | insert record null
+            | insert signer {cid: null bound: false endorsed: null}
+            | insert handoff null
+            | insert custody []
+            | insert handed_to null)
+    }
+
     # read-link throws on a record that fails self-addressing — tampered bytes
     # never reach the binding check.
     let rec = read-link ($bundle | path join $v.leaf.filepath)
