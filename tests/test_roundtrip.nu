@@ -11,7 +11,7 @@ use ../nu-cybergraph/seal.nu
 use ../nu-cybergraph/bundle.nu
 use ../nu-cybergraph/import.nu
 use ../nu-cybergraph/verify.nu
-use ../nu-cybergraph/_verify-helpers.nu [verify-bundle]
+use ../nu-cybergraph/verify-bundle.nu
 use ../nu-cybergraph/_deps/cid-v0.nu [cid-v0]
 use ../nu-cybergraph/_deps/pubkey.nu [pubkey]
 use ../nu-cybergraph/_deps/ssh-sign.nu [ssh-sign]
@@ -110,6 +110,47 @@ def "birth, seal, bundle, import, verify — the full link journey" [] {
     assert equal (open --raw $cert | hash sha256) $before
     # ...and the old link still verifies against its archived root
     assert (verify $born.cid --repo $a.repo | first | get valid)
+}
+
+# The README's portability claim, run as a stranger runs it: a bundle arrives,
+# and the recipient checks it with no repo, no registered key and no network.
+# Every other test here verifies from inside a repo that has been through
+# `init`, so none of them can tell a real portability property from a
+# dependency on local state that happens to be there.
+@test
+def "a recipient with no repo of their own can verify a bundle they received" [] {
+    let tmp_dir = $in.tmp_dir
+    let a = make-signer $tmp_dir "a"
+    let born = link add $P1 $P2 --repo $a.repo
+    seal --repo $a.repo --no-stamp | ignore
+    let out = bundle $born.cid --repo $a.repo --out ($tmp_dir | path join out)
+
+    # The recipient's whole world: a directory that arrived. No init has run
+    # anywhere near it, and `cd` never happens — the command is given a path.
+    let received = $tmp_dir | path join received
+    cp --recursive $out $received
+
+    let v = verify-bundle $received
+    assert $v.valid
+    assert $v.signer.bound
+    assert equal $v.record $born.record
+    assert equal $v.signer.endorsed.status "absent"
+}
+
+# The argument is a path typed by hand, so the two ways of getting it wrong
+# answer about the ARGUMENT. Without this the first glob inside reports "found
+# 0 *.cert.json", which reads as a verdict on a bundle that was never opened.
+@test
+def "a path that is not a bundle directory is refused as a bad argument" [] {
+    let tmp_dir = $in.tmp_dir
+    let missing = $tmp_dir | path join nope
+    let err = try { verify-bundle $missing; null } catch {|e| $e.msg }
+    assert ($err | str contains "no such bundle directory")
+
+    let a_file = $tmp_dir | path join not-a-dir
+    "" | save --raw $a_file
+    let err2 = try { verify-bundle $a_file; null } catch {|e| $e.msg }
+    assert ($err2 | str contains "is not a directory")
 }
 
 # The repo's signer identity: CID of its single registered (canonical) pubkey.

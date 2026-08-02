@@ -6,3 +6,4 @@ export use seal.nu
 export use bundle.nu
 export use import.nu
 export use verify.nu
+export use verify-bundle.nu

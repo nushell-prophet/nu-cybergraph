@@ -33,6 +33,7 @@ nu-cybergraph bundle Qm…link             # portable bundle → exports/<cid>/ 
 nu-cybergraph bundle Qm…link --to Qm…signer # …plus a signed handoff naming the recipient
 nu-cybergraph import path/to/bundle      # verify, keep under imported/<signer>/<cid>/, write custody receipt
 nu-cybergraph verify Qm…link             # own or imported, always against the birth seal
+nu-cybergraph verify-bundle path/to/bundle # a bundle you received: check it with no repo of your own
 ```
 
 ## Link record format
@@ -142,7 +143,7 @@ Two limits, both deliberate. Own links only (`links/`) — an imported bundle is
 
 ## Bundles, import, provenance
 
-`bundle <link-cid>` assembles the portable artifact set in the layout nu-multiproof pins under "Verifying without the origin repo": the record at its `links/` path, the certificate, the birth seal's root statement + signatures, the signer pubkeys, and the OTS bundles committing to that root. Anyone verifies it offline with no access to the origin repo.
+`bundle <link-cid>` assembles the portable artifact set in the layout nu-multiproof pins under "Verifying without the origin repo": the record at its `links/` path, the certificate, the birth seal's root statement + signatures, the signer pubkeys, and the OTS bundles committing to that root. Anyone verifies it offline with no access to the origin repo: `verify-bundle <dir>` is that command, and it needs nothing else — no repo, no registered key, no network. It returns the same record `verify` returns for a link held locally, because it is the same check; `verify` on an own link builds a bundle in a temp dir and runs exactly this. `import` also verifies, but it is the stronger act — it needs an initialized repo with a registered pubkey and it writes a custody receipt, so it is what you run to *take* a bundle, not to *check* one.
 
 `import <bundle>` verifies first (merkle structure, signature, record self-addressing, canonical pubkey form, signer binding, and every custody layer — below) and refuses invalid bundles loudly. A valid bundle lands intact under `imported/<signer-cid>/<link-cid>/` — it remains the link's authority for authorship and birth time forever, and the copy is read-only: re-export passes it along unchanged. Import also writes a **custody receipt** at `receipts/<link-cid>.receipt.json`, outside the read-only copy: `{link, signer, custodian, received_at, files, prev, handoff}`, where `files` is a path+sha256 manifest of the birth-bundle files as received, `prev` is the sha256 of the previous custody layer's receipt file (null for the first custodian), and `handoff` is the sha256 of the handoff the bundle arrived by (null when it arrived without one). The next `seal` catalogues the receipt and freezes its inclusion proof as `receipts/<link-cid>.receipt.cert.json` — the same freeze rule as birth certificates: the first seal sets the earliest provable custody bound.
 
