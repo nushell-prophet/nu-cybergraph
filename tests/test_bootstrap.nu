@@ -52,6 +52,46 @@ def "init is idempotent: re-run reports, never duplicates" [] {
     assert (($r.repo | path join cybergraph certs) | path exists)
 }
 
+# `init` says its job is to establish the signer identity, so a run that
+# establishes none has not done it. It used to print `cybergraph layout ready`
+# over an empty trust list and exit clean; the first `link add` then said
+# `run nu-cybergraph init first`, naming the command that had just succeeded.
+@test
+def "init refuses when it registered no signer" [] {
+    let tmp_dir = $in.tmp_dir
+    let repo = $tmp_dir | path join keyless
+    mkdir $repo
+    ^git init --object-format=sha256 -q $repo
+    ^git -C $repo config user.name t
+    ^git -C $repo config user.email t@t
+
+    let err = try { init --repo $repo; null } catch {|e| $e.msg }
+    assert ($err != null) "init reported success with an empty pubkeys/"
+    # Both routes out are named, because the operator has heard of neither.
+    assert ($err | str contains "user.signingKey")
+    assert ($err | str contains "--pubkey")
+    # And it refuses before claiming a layout: no links/ to suggest otherwise.
+    assert not (($repo | path join cybergraph links) | path exists)
+}
+
+# The other half of the same rule: a key passed explicitly is a registration,
+# so the refusal above must not fire on a repo whose git config names nothing.
+@test
+def "init with an explicit pubkey needs no git signing key" [] {
+    let tmp_dir = $in.tmp_dir
+    let repo = $tmp_dir | path join explicit
+    mkdir $repo
+    ^git init --object-format=sha256 -q $repo
+    ^git -C $repo config user.name t
+    ^git -C $repo config user.email t@t
+    let key = $tmp_dir | path join explicit-key
+    ^ssh-keygen -t ed25519 -f $key -N "" -q
+
+    init --repo $repo --pubkey $"($key).pub"
+    assert (($repo | path join cybergraph links) | path exists)
+    assert equal (ls ($repo | path join cybergraph multiproofs pubkeys) | length) 1
+}
+
 @test
 def "seal before init fails fast, before anything is written" [] {
     let r = make-bare-repo $in.tmp_dir
