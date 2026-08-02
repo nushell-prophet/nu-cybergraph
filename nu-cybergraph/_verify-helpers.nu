@@ -35,8 +35,22 @@ def canonical-pubkeys [dir: path]: nothing -> table {
         # with a PATH holding no ssh-keygen), sending the operator after the
         # wrong problem. Same shape as upstream's own canonical-file, and the
         # same correction as 115d567 one layer up.
+        #
+        # The wrapper adds the file name and NO verb. It used to prefix upstream's
+        # message with "is not an SSH public key", which asserts exactly what
+        # upstream's own tail then denies — the operator read "…/x.pub is not an
+        # SSH public key: ssh-keygen is not on PATH … This is a toolchain problem,
+        # not a problem with the key." One sentence, two verdicts.
+        #
+        # Any verb is wrong here, because the two throws disagree about what
+        # happened. Missing ssh-keygen means nothing was decided at all; a padded
+        # copy of a real key (upstream's RSA_PADDED_MODULUS) means OpenSSH read
+        # the key FINE and re-encoded it differently — "cannot read it" would be
+        # the same contradiction reversed. Upstream knows which of the two it is
+        # and says so; it only cannot know which file it was handed. So the
+        # wrapper supplies the one missing fact and leaves the verdict alone.
         let canon = try { $raw | pubkey canonical } catch {|e|
-            error make {msg: $"($pub.path) is not an SSH public key: ($e.msg)"}
+            error make {msg: $"($pub.path): ($e.msg)"}
         }
         if $pub.bytes != ($canon | into binary) {
             error make {msg: $"non-canonical pubkey file: ($pub.path) — expected `<type> <base64>` + newline, no comment, no BOM"}
@@ -142,7 +156,12 @@ def endorsed-by [ends: table pubs: table claimed: string]: nothing -> any {
 # `_deps/` shims the public modules only. Typed `record` on purpose: passing
 # null throws here instead of printing "absent" for a signer with no valid
 # signature at all, which is a different verdict and already has its own line.
-def stamp-cell [stamp: record]: nothing -> string {
+#
+# Exported for the tests alone. Its output goes to `print`, so an end-to-end
+# test can reach the anchored data path but never the string this builds from
+# it — and the copy above means the version upstream pins by test is not the
+# version this repo runs. So the formatting is pinned here directly.
+export def stamp-cell [stamp: record]: nothing -> string {
     if $stamp.height? == null { $stamp.status } else { $"($stamp.status) ($stamp.height)" }
 }
 

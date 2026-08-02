@@ -8,7 +8,8 @@ use ../nu-cybergraph/seal.nu
 use ../nu-cybergraph/link.nu
 use ../nu-cybergraph/verify.nu
 use ../nu-cybergraph/_record.nu [link-bytes]
-use ../nu-cybergraph/_fs.nu [copy-file copy-tree]
+use ../nu-cybergraph/_fs.nu [copy-file copy-tree list-files list-dirs move-file]
+use ../nu-cybergraph/_layout.nu [certs-dir]
 use ../nu-cybergraph/_deps/pubkey.nu [pubkey]
 
 const P1 = "QmUQUHEmv651XCBhiWUQpx2zf4PDts1aXL324ZFyV4QZPF"
@@ -213,9 +214,148 @@ def "seal with an unregistered signing key names the fix" [] {
     let err = try { seal --repo $r.repo --no-stamp; null } catch {|e| $e.msg }
     assert ($err != null) "seal accepted a key that is not registered"
     assert ($err | str contains $"init --pubkey ($other | path expand).pub")
-    # multiproof's own check fires only after it has rewritten these
+    # These two asserts pass BECAUSE upstream asks its registration question
+    # first: nu-multiproof 923daa1 moved the ask to the top of its `seal`, ahead
+    # of the manifest rewrite, so a refused seal leaves no manifest and no root
+    # statement behind. The comment here used to say the opposite — that the
+    # check fired only after the rewrite — which was true before that commit and
+    # was left behind when `d9a1d41` deleted this repo's own pre-check.
     assert not (($r.repo | path join cybergraph multiproofs tree-hashes.csv) | path exists)
     assert not (($r.repo | path join cybergraph multiproofs tree-root.txt) | path exists)
+}
+
+# A repeated seal is not a no-op, and this pins it as behaviour rather than as a
+# comment. `seal` ends by writing `seals/<root12>/`, holding that seal's root
+# statement and signature; because `seals/` is staged, the next seal catalogues
+# that directory, so its manifest differs and its root differs. No fixpoint
+# exists: the directory is named after a root computed from a tree that would
+# have to already contain it.
+#
+# Pinned because two things rest on it. The documented cost — an empty seal
+# spends a signature and, with stamping on, a calendar round trip — and the
+# snapshot guard in `seal.nu`, which is safe only because a root never recurs.
+# If someone drops `seals/` from the staging list, this test is what says the
+# guard just became live code that has never run.
+@test
+def "a seal with nothing new still mints a new root" [] {
+    let r = make-bare-repo $in.tmp_dir
+    init --repo $r.repo
+    link add $P1 $P2 --repo $r.repo | ignore
+
+    let seals = 1..4 | each {|_| seal --repo $r.repo --no-stamp }
+    let roots = $seals | get sealed.merkle_root
+    assert equal ($roots | uniq | length) 4 $"roots repeated across four seals: ($roots)"
+    # Only the first seal has a link to certify — the other three add nothing but
+    # their own snapshot, which is the whole point.
+    assert equal ($seals | get newborn) [1 0 0 0]
+    assert equal (list-dirs ($r.repo | path join cybergraph seals) | length) 4
+
+    # And the growth those extra roots cost, as rows under seals/ in the manifest.
+    # Three snapshots are catalogued by the time the fourth seal builds its
+    # manifest — its own is written afterwards — at three rows each: the
+    # directory, tree-root.txt, and ONE signature. The last is this repo's
+    # single-signer case; a second registered key would make it four rows per
+    # snapshot, because seal copies every `tree-root.txt.*.sig` it finds.
+    let manifest = open --raw ($r.repo | path join cybergraph multiproofs tree-hashes.csv)
+        | from csv --no-infer
+    let under_seals = $manifest | where filepath =~ '^seals/'
+    assert equal ($under_seals | length) 9 $"expected 3 snapshots at 3 rows each, got: ($under_seals | get filepath)"
+}
+
+# Asking only whether something EXISTS at the cert path let any node there answer
+# "already certified". Measured, for a directory and for an empty file alike:
+# seal reported success with newborn=0, the link went uncertified but WAS
+# catalogued under that root, and the next seal — once the node was gone — froze
+# a certificate naming a LATER root. The birth invariant broken with no error.
+#
+# All three shapes in one test because they are one rule, and the rule is not
+# "is it a file" but "is it the frozen proof for THIS link".
+@test
+def "a node that is not this links frozen proof is refused before anything is staged" [] {
+    let r = make-bare-repo $in.tmp_dir
+    init --repo $r.repo
+    let born = link add $P1 $P2 --repo $r.repo
+    let cert = $r.repo | path join cybergraph certs $"($born.cid).cert.json"
+    mkdir (certs-dir $r.repo)
+
+    # 1. a directory
+    mkdir $cert
+    "junk\n" | save --raw ($cert | path join filler.txt)
+    let e1 = try { seal --repo $r.repo --no-stamp; null } catch {|e| $e.msg }
+    assert ($e1 != null) "seal reported success while the link went uncertified"
+    assert ($e1 | str contains $born.cid) $"the refusal should name the path in the way: ($e1)"
+    # Refused BEFORE staging, so the recovery is just removing the node. When
+    # the check ran later, certs/ was already in git's index and the operator
+    # who deleted the directory hit `tracked paths do not resolve to regular
+    # files` from upstream, naming the file they had just removed.
+    assert ((^git -C $r.repo diff --cached --name-only | str trim) | is-empty) "the failed seal left certs/ staged"
+    rm --recursive --force $cert
+
+    # 2. an empty file — a truncated write or an interrupted move, and the more
+    #    likely accident of the two
+    "" | save --raw $cert
+    let e2 = try { seal --repo $r.repo --no-stamp; null } catch {|e| $e.msg }
+    assert ($e2 != null) "an empty file passed as a frozen certificate"
+    assert ($e2 | str contains $born.cid)
+    rm $cert
+
+    # 3. a real proof, but for a different link
+    let other = link add $P1 $P3 --repo $r.repo
+    seal --repo $r.repo --no-stamp | ignore
+    let other_cert = $r.repo | path join cybergraph certs $"($other.cid).cert.json"
+    assert ($other_cert | path exists) "the fixture needs a genuine proof to misfile"
+    rm $cert
+    cp $other_cert $cert
+    let e3 = try { seal --repo $r.repo --no-stamp; null } catch {|e| $e.msg }
+    assert ($e3 != null) "a proof for another link passed as this links certificate"
+    assert ($e3 | str contains $other.cid) $"the refusal should name the record actually certified: ($e3)"
+
+    # And the repo still seals once the misfiled proof is gone: every refusal
+    # above has to be recoverable by removing what was named, nothing more.
+    rm $cert
+    let ok = seal --repo $r.repo --no-stamp
+    assert equal $ok.newborn 1
+    assert equal (open $cert | get leaf.filepath) $"links/($born.cid).json"
+}
+
+# The one thing that distinguishes the two orderings of `seal`'s writes. On the
+# success path the snapshot and the freeze loops produce byte-identical results
+# whichever runs first, so only a failure INSIDE a loop can pin it — and the
+# damage was never in the failure itself, it was in what the failure left behind.
+#
+# A gitignored link is the lever: `list-files` walks the filesystem and sees it,
+# `merkle prove` walks the manifest (git ls-files) and does not, so the loop
+# throws part-way through with at least one certificate already frozen.
+@test
+def "a freeze loop that fails still leaves the snapshot its certificates name" [] {
+    let r = make-bare-repo $in.tmp_dir
+    init --repo $r.repo
+    let a = link add $P1 $P2 --repo $r.repo
+    let b = link add $P1 $P3 --repo $r.repo
+
+    # The loop takes links in listing order, so hiding the LAST one guarantees
+    # the first is certified before the throw. Sorting here is what makes that
+    # deterministic rather than a property of how `ls` happened to answer.
+    let victim = [$a.cid $b.cid] | sort | last
+    $"cybergraph/links/($victim).json\n" | save --raw ($r.repo | path join .gitignore)
+
+    let err = try { seal --repo $r.repo --no-stamp; null } catch {|e| $e.msg }
+    assert ($err != null) "merkle prove found a link that git does not track"
+    assert ($err | str contains $victim) $"error should name the untracked link: ($err)"
+
+    # The damage this ordering removes: a certificate frozen under a root whose
+    # snapshot was never written, while tree-root.txt had already moved on. The
+    # certificate names its root, and that root must still be on disk — otherwise
+    # `bundle` and `verify` for this link are dead and no re-seal can revive them,
+    # because the retry mints a different root.
+    let frozen = list-files ($r.repo | path join cybergraph certs) --suffix ".cert.json"
+    assert ($frozen | is-not-empty) "the loop threw before freezing anything — the lever missed"
+    for c in $frozen {
+        let named = open $c | get root
+        let snap = $r.repo | path join cybergraph seals ($named | str substring 0..<12)
+        assert ($snap | path exists) $"certificate ($c | path basename) names root ($named) with no snapshot"
+        assert (($snap | path join tree-root.txt) | path exists) $"snapshot ($named) holds no root statement"
+    }
 }
 
 # The copy helpers, on hostile input directly. Every other test reaches them
@@ -259,6 +399,60 @@ def "copy-file refuses to overwrite a file that is already there" [] {
     let err = try { copy-file $src $dst; null } catch {|e| $e.msg }
     assert ($err != null) "copy-file overwrote an existing file"
     assert equal (open --raw $dst) "must not be clobbered\n"
+}
+
+# The same rule for `mv`, and for the same reason: seal's freeze loops move a
+# proof into `certs/`, and a proof frozen at birth is the link's earliest
+# provable time bound — rewriting one moves that bound later with no error.
+#
+# Tested here rather than through `seal`, following the copy helpers above: at
+# the seal sites the only shape that still reaches this guard is the race
+# between the newborn filter and the move, which a test cannot stage in-process.
+#
+# All three occupied shapes, because `mv` destroys differently in each: over a
+# file it clobbers, over a directory it moves the file INSIDE, and over a
+# symlink it replaces the link node with a regular file. Only the first is what
+# the parked note described; the other two were found while writing the refusal.
+@test
+def "move-file refuses every shape of an occupied destination" [] {
+    let tmp_dir = $in.tmp_dir
+    let src = $tmp_dir | path join proof.json
+
+    "incoming\n" | save --force --raw $src
+    let frozen = $tmp_dir | path join frozen.cert.json
+    "the birth proof\n" | save --raw $frozen
+    let e1 = try { move-file $src $frozen; null } catch {|e| $e.msg }
+    assert ($e1 != null) "move-file clobbered a frozen file"
+    assert equal (open --raw $frozen) "the birth proof\n"
+    assert ($src | path exists) "the source was consumed by a refused move"
+
+    "incoming\n" | save --force --raw $src
+    let occupied_dir = $tmp_dir | path join taken.cert.json
+    mkdir $occupied_dir
+    let e2 = try { move-file $src $occupied_dir; null } catch {|e| $e.msg }
+    assert ($e2 != null) "move-file moved a proof inside a directory standing at the destination"
+    assert ($e2 | str contains "dir") $"the refusal should name what is in the way: ($e2)"
+    assert (list-files $occupied_dir | is-empty) "a proof landed inside the directory"
+
+    "incoming\n" | save --force --raw $src
+    let dangling = $tmp_dir | path join gone.cert.json
+    ^ln -s ($tmp_dir | path join nowhere) $dangling
+    # This is the case that decides `path type` over `path exists`: an
+    # exists-based guard reads a dangling link as free, and `mv` then replaces
+    # the link node with a regular file. So the assertion is that the link is
+    # STILL a link afterwards — `path exists` alone cannot express the defect.
+    assert not ($dangling | path exists) "the fixture is not dangling — the test proves nothing"
+    let e3 = try { move-file $src $dangling; null } catch {|e| $e.msg }
+    assert ($e3 != null) "move-file consumed a dangling symlink"
+    assert equal ($dangling | path type) "symlink" "the symlink node was replaced by the move"
+
+    # And it still moves when the destination is genuinely free — the refusal
+    # must not have become total.
+    "incoming\n" | save --force --raw $src
+    let free = $tmp_dir | path join fresh.cert.json
+    move-file $src $free
+    assert equal (open --raw $free) "incoming\n"
+    assert not ($src | path exists) "the source survived a completed move"
 }
 
 @test

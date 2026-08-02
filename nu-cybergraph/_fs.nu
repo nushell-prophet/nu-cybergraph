@@ -94,6 +94,53 @@ export def copy-file [src: path dst: path]: nothing -> nothing {
     open --raw $src | into binary | save --raw $landed
 }
 
+# Move one file to a destination that must be free. Raises instead of landing
+# on whatever is already there.
+#
+# `mv` destroys silently in every shape the destination can take — measured on
+# 0.114.1. Over a file it clobbers: `mv new.json keep.json` returned no error
+# and keep.json held the new bytes. Over a directory it moves the file INSIDE,
+# so a proof ends up one level down under a name nothing looks for. Over a
+# symlink, live or dangling, it REPLACES the link node with a regular file (it
+# does not write through to the target — the target keeps its bytes, and a
+# dangling one is never created).
+#
+# Both callers are seal's freeze loops, and their contract is that a proof
+# frozen at birth is never rewritten — that root is the link's earliest provable
+# time bound, and a rewrite silently moves it later. Their only protection was a
+# `where not exists` list computed earlier in the same function, so anything
+# arriving between that filter and the move destroyed a frozen proof with no
+# error at all. One filter cannot hold that line; the refusal belongs at the
+# move, which is the moment the contract actually breaks.
+#
+# What that leaves live at the seal sites is the race window alone — a
+# concurrent seal, or an operator writing into certs/ during the loop. Anything
+# already standing there when the seal starts is refused earlier, by seal's own
+# pre-staging sweep, which is where a wrong node gets a message naming the link
+# it was supposed to certify. The helper still refuses every shape, because it
+# is the general contract and these two are not its only future callers.
+#
+# Not `mv --no-clobber`: it neither moves nor errors (measured — source stayed,
+# destination kept its bytes, no error raised), so the link would go silently
+# uncertified. That is the same class of failure this helper exists to remove.
+#
+# `path type` and not `path exists`: a dangling symlink reads as absent under
+# `path exists` (measured: exists false, type symlink), so an exists-based guard
+# would let the move through and `mv` would consume the link node without a
+# word. `path type` answers null only when there is genuinely nothing there.
+#
+# Compared in place rather than bound to a variable: `path type` declares a
+# string return, so `let t = $p | path type` on an absent path raises "Type
+# mismatch, expected string, got nothing" before any check runs (0.114.1).
+# Inside the branch the value is known non-null, so binding there is safe.
+export def move-file [src: path dst: path]: nothing -> nothing {
+    if ($dst | path type) != null {
+        let occupied = $dst | path type
+        error make {msg: $"refusing to move ($src) onto ($dst): a ($occupied) is already there, and what this module has frozen it does not rewrite. Nothing was moved — the source is still at ($src). Before deleting what stands there, note that a re-seal mints a new merkle root, so the certificate written then would name a later root than the link's birth seal"}
+    }
+    mv $src $dst
+}
+
 # Copy a directory tree and prove the destination holds the same files with the
 # same bytes. $dst must not already exist — it becomes the copy, and it is
 # removed again if the copy turns out short, so a refusal leaves no half-built

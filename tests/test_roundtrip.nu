@@ -1,7 +1,12 @@
 # End-to-end: signer A births a link, seals, exports the bundle; signer B
 # verifies and imports it offline. Ports the bostrom-journal bj003 smoke
-# experiment into a pinned test. All seals run --no-stamp
-# (offline); OTS is exercised by nu-multiproof's own suite.
+# experiment into a pinned test.
+#
+# Offline throughout. Most seals pass --no-stamp and skip stamping; a few pass
+# --response-file, which feeds the calendar's answer from a local fixture and so
+# reaches a real (pending) stamp with no network. A calendar can only ever answer
+# pending, so the anchored case is reached by building a Bitcoin attestation here
+# — the one OTS byte format this file writes for itself.
 use std/assert
 use std/testing *
 
@@ -12,6 +17,8 @@ use ../nu-cybergraph/bundle.nu
 use ../nu-cybergraph/import.nu
 use ../nu-cybergraph/verify.nu
 use ../nu-cybergraph/verify-bundle.nu
+use ../nu-cybergraph/_verify-helpers.nu [stamp-cell]
+use ../nu-cybergraph/_fs.nu [list-files list-dirs]
 use ../nu-cybergraph/_deps/cid-v0.nu [cid-v0]
 use ../nu-cybergraph/_deps/pubkey.nu [pubkey]
 use ../nu-cybergraph/_deps/ssh-sign.nu [ssh-sign]
@@ -312,6 +319,43 @@ def calendar-response []: nothing -> binary {
     | bytes add --end $url
 }
 
+# A Bitcoin-anchored OTS proof over $hash, at block 123456. The other half of
+# the calendar fixture above: `--response-file` can only ever produce `pending`,
+# because a calendar answers with a pending attestation and confirmation happens
+# hours later in a block. So the anchored branch is unreachable from any seal
+# this suite can run, and the proof has to be built.
+#
+# Copied from nu-multiproof's `_ots-fixtures.nu build-bitcoin-ots`, for the same
+# reason `calendar-response` is: it describes the OTS wire format, not something
+# this repo owns.
+#
+# Its drift behaviour is NOT the same, though, and the difference matters when
+# this test one day fails. A calendar answer goes through `ots stamp`, which
+# re-parses what it built and throws. This one is read back by upstream's
+# `scan-stamps`, which CATCHES a parse error, prints "note: skipping unparsable
+# OTS file" and drops the proof — so drift shows up as a status of `absent`
+# where the test wants `anchored`, with the real reason in a note above the
+# failure rather than in it.
+#
+# The height is hardcoded as its varint rather than encoded, because encoding it
+# would mean importing upstream's `_varint.nu` — another repo's internals, which
+# `_deps/` deliberately does not shim. 123456 -> 0xc0 0xc4 0x07, prefixed by its
+# own length; verified against upstream's `encode-varint`.
+const OTS_HEADER = 0x[00 4f70656e54696d657374616d7073 0000 50726f6f66 00 bf89e2e884e89294]
+const ATT_BITCOIN_TAG = 0x[0588960d73d71901]
+const BLOCK_123456 = 0x[03 c0 c4 07]
+
+def bitcoin-ots [hash: binary]: nothing -> binary {
+    $OTS_HEADER
+    | bytes add --end 0x[01 08]
+    | bytes add --end $hash
+    | bytes add --end 0x[f1 02 aabb]
+    | bytes add --end 0x[08]
+    | bytes add --end 0x[00]
+    | bytes add --end $ATT_BITCOIN_TAG
+    | bytes add --end $BLOCK_123456
+}
+
 # An ed25519 keypair whose fingerprint sorts before `ceiling`. Only a key, no
 # repo: a co-signer needs nothing but key material and a line in pubkeys/.
 # "" = not found yet, the same sentinel shape verify-custody uses for `prev`:
@@ -340,30 +384,93 @@ def generate-key-before [tmp_dir: path ceiling: string]: nothing -> record {
     {key: $key pub: $"($key).pub"}
 }
 
-# The only test in this suite that reaches a REAL stamp. Everything else seals
-# --no-stamp, so every anchor reads `absent` and is never exercised as anything
-# but a missing one.
+# The three shapes a stamp cell can take, asserted directly on the formatter.
+#
+# Why not through `verify-bundle`: `stamp-cell`'s result goes to `print`, so an
+# end-to-end test reaches the data (the test below does) but never the string.
+# And because this function is a deliberate COPY of upstream's `format-stamp`,
+# the version upstream pins by test is not the version this repo runs — which is
+# exactly how the anchored branch stayed unexecuted while the suite was green.
+#
+# The shapes are the ones upstream's `pick-stamp` actually emits — it always
+# sets `height`, null while unanchored (nu-multiproof `_stamps.nu`), so
+# present-but-null is what the `height?` guard is really for. A record with no
+# `height` key at all cannot arrive, and asserting on one would pin tolerance
+# for input that does not exist.
 @test
-def "a stamped seal dates the endorsement and anchors nothing else" [] {
-    let tmp_dir = $in.tmp_dir
+def "a stamp cell carries the block height when there is one" [] {
+    assert equal (stamp-cell {status: "absent" ots: null height: null}) "absent"
+    assert equal (stamp-cell {status: "pending" ots: "x.ots" height: null}) "pending"
+    assert equal (stamp-cell {status: "anchored" ots: "x.ots" height: 912345}) "anchored 912345"
+}
+
+# A sealed, exported bundle carrying one real (pending) stamp, plus the paths
+# both stamp tests then work over. Extracted because they set up identically and
+# each has to find the same two files by the same rule.
+def stamped-bundle [tmp_dir: path]: nothing -> record {
     let a = make-signer $tmp_dir "a"
     let born = link add $P1 $P2 --repo $a.repo
     let response = $tmp_dir | path join calendar-response.bin
     calendar-response | save --raw --force $response
     seal --repo $a.repo --response-file $response | ignore
-
     let out = bundle $born.cid --repo $a.repo --out ($tmp_dir | path join out)
+
+    let ots_dir = list-dirs ($out | path join multiproofs ots-timestamps) | first
+    let stamps = list-files $ots_dir --suffix ".ots"
     # ONE proof rides in the export, and it is the one over the signature. The
     # root statement is deliberately left undated (`seal.nu` always passes
     # --no-content-anchor), so a reader is never handed two dates and no rule
-    # for choosing between them.
-    let ots_dir = ls ($out | path join multiproofs ots-timestamps) | get name | first
-    let proofs = ls $ots_dir | get name | path basename | where ($it | str ends-with ".ots") | sort
-    assert equal ($proofs | length) 1 $"the export carries ($proofs | length) proofs, not just the signature's"
-    assert ("tree-root.ots" not-in $proofs) "the root statement was anchored — --no-content-anchor did not reach upstream"
+    # for choosing between them. Asserted here rather than in a caller because
+    # `first` below is only meaningful once there is exactly one.
+    assert equal ($stamps | length) 1 $"the export carries ($stamps | length) proofs, not just the signature's"
+    let stamp = $stamps | first
+    # Discovery keys on the stamp's content commitment, so a replacement proof
+    # must commit to the sha256 of the file it dates — the SIGNATURE, because
+    # this repo anchors the endorsement and never the root statement.
+    let sig = $ots_dir | path join ($stamp | path basename | str replace --regex '\.ots$' '.sig')
+    assert ($sig | path exists) $"no signature beside the stamp: ($stamp)"
+    {signer: $a link: $born out: $out ots_dir: $ots_dir stamp: $stamp sig: $sig}
+}
+
+# The anchored data path, end to end. `--response-file` cannot reach it — a
+# calendar replies `pending` and confirmation happens later in a block — so the
+# proof is built offline and put where discovery finds it. `ots upgrade` is the
+# real route to this state and it renames over the same path, so a single
+# anchored proof there is what a reader genuinely meets.
+@test
+def "an endorsement anchored in a block is reported with that block" [] {
+    let s = stamped-bundle $in.tmp_dir
+    assert equal (verify-bundle $s.out | get signer.endorsed.status) "pending"
+
+    bitcoin-ots (open --raw $s.sig | hash sha256 | decode hex) | save --raw --force $s.stamp
+    let after = verify-bundle $s.out
+    assert $after.valid "the bundle stopped verifying once its stamp was anchored"
+    assert equal $after.signer.endorsed.status "anchored"
+    assert equal $after.signer.endorsed.height 123456
+    # And the cell the operator reads, over the record this run produced
+    assert equal (stamp-cell $after.signer.endorsed) "anchored 123456"
+
+    # What this test also shows, and the reason README calls the block bound the
+    # provable one only against a proof you checked yourself: the stamp is not
+    # signed and not in the sealed manifest, so the bundle still reports
+    # `valid: true` with an attestation no block contains. `verify` is an offline
+    # structural check; confirming the block needs upstream's `ots verify`.
+    assert not (($s.out | path join multiproofs tree-hashes.csv) | path exists)
+}
+
+# The only test in this suite that reaches a REAL stamp through the seal path.
+# Everything else seals --no-stamp, so every anchor reads `absent` and is never
+# exercised as anything but a missing one.
+@test
+def "a stamped seal dates the endorsement and anchors nothing else" [] {
+    let tmp_dir = $in.tmp_dir
+    let s = stamped-bundle $tmp_dir
+    let a = $s.signer
+    let out = $s.out
+    assert ("tree-root.ots" not-in ($s.stamp | path basename)) "the root statement was anchored — --no-content-anchor did not reach upstream"
     # The frozen root copy still ships: bundle.nu finds the OTS directory by
     # matching it against the root hex, so minting must keep writing it.
-    assert (($ots_dir | path join tree-root.txt) | path exists)
+    assert (($s.ots_dir | path join tree-root.txt) | path exists)
 
     let v = verify-bundle $out
     assert $v.valid
@@ -477,6 +584,41 @@ def "two signature spellings by one key do not fork the endorsement" [] {
     # ...and one answer out of them, still the author's
     assert equal $v.signer.endorsed.signer $a_fp
     assert equal $v.signer.endorsed.status "absent"
+}
+
+# The receipt half of seal's frozen-proof sweep. A custody receipt freezes under
+# the same rule as a birth certificate — the first seal that catalogues it sets
+# the earliest provable custody bound — so the same silent break applies: a
+# wrong node at the receipt cert path used to read as "already frozen", and the
+# receipt then froze under a later root than the seal that first catalogued it.
+#
+# Lives here and not beside the link case in test_bootstrap.nu because a receipt
+# needs a real import to exist, and the import fixtures are here.
+@test
+def "a wrong node at the receipt cert path is refused like a birth certificate" [] {
+    let tmp_dir = $in.tmp_dir
+    let a = make-signer $tmp_dir "a"
+    let born = link add $P1 $P2 --repo $a.repo
+    seal --repo $a.repo --no-stamp | ignore
+    let a_out = bundle $born.cid --repo $a.repo --out ($tmp_dir | path join a-out)
+
+    let b = make-signer $tmp_dir "b"
+    import $a_out --repo $b.repo | ignore
+    assert equal (seal --repo $b.repo --no-stamp | get receipts) 1
+    let frozen = $b.home | path join receipts $"($born.cid).receipt.cert.json"
+    assert ($frozen | path exists) "the fixture needs a frozen receipt proof"
+
+    # Truncated, as an interrupted write leaves it. The proof is gone but the
+    # path is still occupied, which is exactly what bare existence cannot tell.
+    "" | save --force --raw $frozen
+    let err = try { seal --repo $b.repo --no-stamp; null } catch {|e| $e.msg }
+    assert ($err != null) "an empty file passed as a frozen receipt proof"
+    assert ($err | str contains $born.cid) $"the refusal should name the receipt: ($err)"
+
+    # And the recovery is removing it — the refusal must not have staged anything
+    rm $frozen
+    assert equal (seal --repo $b.repo --no-stamp | get receipts) 1
+    assert equal (open $frozen | get leaf.filepath) $"receipts/($born.cid).receipt.json"
 }
 
 @test
@@ -800,6 +942,40 @@ def "a broken toolchain is refused as a toolchain problem, not as a bad key" [] 
     }
     assert ($err != null) "a bundle verified with no ssh-keygen on PATH"
     assert ($err | str contains "toolchain problem") $"the refusal blamed the key: ($err)"
+    # Containing the right tail is not enough — the wrapper used to PREFIX it
+    # with a verdict of its own ("… is not an SSH public key: …"), so one
+    # sentence asserted what its own ending denied. Asserted as a property, not
+    # as this repo's wording: the wrapper must supply the file name and no verb.
+    assert ($err | str contains ($out | path join multiproofs pubkeys)) $"the refusal does not name the file: ($err)"
+    assert not ($err | str contains "is not an SSH public key") $"the wrapper decided about the key before upstream did: ($err)"
+}
+
+# The other throw out of `pubkey canonical`, and the reason the wrapper adds no
+# verb at all. This vector is a padded copy of a real RSA key (upstream's
+# RSA_PADDED_MODULUS): OpenSSH LOADS it and fingerprints it identically, then
+# re-encodes it differently — so "cannot read this as a key" would be as wrong
+# here as "is not an SSH public key" was on the missing-toolchain branch. One
+# wrapper serves both only by staying silent about what happened.
+const RSA_PADDED_MODULUS = "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABAgAAxMZ8FFYbCIeusNTiBhxcq9Ka4qJ8R6BxJpEnYA7zKPOrw2qx8DvPB+ckOGYUXFEwUuKS2DGxjHhkHx0AWySOD/F2q7IMrO03zGfaCau/7b0p7fOcX5F4sYUkkzJpdw/NBQL4UuIT450m6mmlXgXFund7ggxqYm12fXrXnfZ2NT7FbbLxE+e6KCfKhoeHt5apMAlyWgihgGOM6rU2SgBI7JtD3ArnhQ7jfc1k082MvV2bnKnBmgQ7Ja8pYseQFvNUMDs1pZBO57pFhgoLki1Hs5rPMq9TVPWdhwZcLd4VQuQS6jzqw1keeY4RELhlfEVWQU+i2lX1XT6oTQNZSU5/Yw=="
+
+@test
+def "a second encoding of a real key is refused without calling it unreadable" [] {
+    let tmp_dir = $in.tmp_dir
+    let a = make-signer $tmp_dir "a"
+    let born = link add $P1 $P2 --repo $a.repo
+    seal --repo $a.repo --no-stamp | ignore
+    let out = bundle $born.cid --repo $a.repo --out ($tmp_dir | path join out)
+
+    let pub = glob ($out | path join multiproofs pubkeys *.pub) | first
+    $"($RSA_PADDED_MODULUS)\n" | save --raw --force $pub
+
+    let err = try { verify-bundle $out | ignore; null } catch {|e| $e.msg }
+    assert ($err != null) "a bundle carrying a second encoding of a key verified"
+    assert ($err | str contains "not the encoding OpenSSH writes") $"upstream's verdict was replaced: ($err)"
+    assert ($err | str contains $pub) $"the refusal does not name the file: ($err)"
+    # The whole point: OpenSSH read this key. A message saying otherwise would
+    # send the operator after a corrupt file that is not corrupt.
+    assert not ($err | str contains "cannot read") $"the refusal calls a readable key unreadable: ($err)"
 }
 
 @test
