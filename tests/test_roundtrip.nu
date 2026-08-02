@@ -148,6 +148,42 @@ def "a bundle whose record file is absent returns a verdict, not a crash" [] {
     assert ($err | str contains "refusing to import") $"import did not refuse cleanly: ($err)"
 }
 
+# The one failure here that produced a self-consistent lie. `cp` reports an
+# unreadable source on stderr and exits 0, so an import could land short; the
+# receipt's `files` manifest is recomputed FROM the landed copy, so it then
+# committed to the truncation, and every verification afterwards passed over
+# missing bytes. Nothing in the artifact recorded that anything was lost.
+#
+# Mode 000 and not a deleted file: a MISSING source does raise, which is why
+# this looked unreproducible at first. Unreadable is the case that is silent.
+@test
+def "an import that could not copy every file is refused, not truncated" [] {
+    let tmp_dir = $in.tmp_dir
+    let a = make-signer $tmp_dir "a"
+    let born = link add $P1 $P2 --repo $a.repo
+    seal --repo $a.repo --no-stamp | ignore
+    let out = bundle $born.cid --repo $a.repo --out ($tmp_dir | path join out)
+
+    # An extra file in the bundle that the importer cannot read. It is not part
+    # of the proof, which is the point: the loss has to be caught by the copy,
+    # because no verification downstream would ever miss it.
+    let unreadable = $out | path join extra.txt
+    "bytes the recipient must not silently lose\n" | save --raw $unreadable
+    ^chmod 000 $unreadable
+
+    let b = make-signer $tmp_dir "b"
+    let err = try { import $out --repo $b.repo; null } catch {|e| $e.msg }
+    ^chmod 644 $unreadable
+    assert ($err != null) "import succeeded over a file it could not copy"
+    assert ($err | str contains "extra.txt") $"the refusal does not name the lost file: ($err)"
+    # And no receipt, and no half-built copy: a refused import commits to
+    # nothing and leaves nothing. The stranded copy would matter — `import`
+    # refuses a destination that already exists, so it would make the retry
+    # impossible inside a tree this repo calls read-only.
+    assert not (($b.home | path join receipts $"($born.cid).receipt.json") | path exists)
+    assert not (($b.home | path join imported $born.record.signer $born.cid) | path exists)
+}
+
 # `verify` on an own link builds a bundle in a temp dir and cleans it up. The
 # cleanup used to re-raise a reconstruction of the error instead of the error,
 # so everything below the top frame was dropped: with ssh-keygen off PATH the
@@ -216,6 +252,36 @@ def "a path that is not a bundle directory is refused as a bad argument" [] {
     "" | save --raw $a_file
     let err2 = try { verify-bundle $a_file; null } catch {|e| $e.msg }
     assert ($err2 | str contains "is not a directory")
+}
+
+# The copy helpers raise, but a raise inside an `each` closure is re-wrapped as
+# "Eval block failed with pipeline input" and the real message never reaches
+# the operator. Three sites were converted to `for` for that reason; the OTS
+# copy was missed, and this is the only caller a test can reach it through.
+#
+# The OTS directory is fabricated rather than stamped: `--no-stamp` everywhere
+# in this suite means no calendar server is touched, and `bundle` matches an
+# OTS bundle to a root by plain content, so a directory naming the root is all
+# discovery needs. The test is about the copy, not about the timestamp.
+@test
+def "a bundle that could not copy an OTS file names the file" [] {
+    let tmp_dir = $in.tmp_dir
+    let a = make-signer $tmp_dir "a"
+    let born = link add $P1 $P2 --repo $a.repo
+    seal --repo $a.repo --no-stamp | ignore
+
+    let mp = $a.home | path join multiproofs
+    let root_hex = open --raw ($mp | path join tree-root.txt) | str trim
+    let ots = $mp | path join ots-timestamps $"tree-root.($root_hex)"
+    mkdir $ots
+    open --raw ($mp | path join tree-root.txt) | save --raw ($ots | path join tree-root.txt)
+    "proof bytes the export must not silently drop\n" | save --raw ($ots | path join tree-root.txt.ots)
+    ^chmod 000 ($ots | path join tree-root.txt.ots)
+
+    let err = try { bundle $born.cid --repo $a.repo --out ($tmp_dir | path join out); null } catch {|e| $e.msg }
+    ^chmod 644 ($ots | path join tree-root.txt.ots)
+    assert ($err != null) "bundle exported an OTS directory it could not copy"
+    assert ($err | str contains "tree-root.txt.ots") $"the refusal does not name the lost file: ($err)"
 }
 
 # The repo's signer identity: CID of its single registered (canonical) pubkey.

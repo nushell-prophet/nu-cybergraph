@@ -8,6 +8,8 @@ use ../nu-cybergraph/seal.nu
 use ../nu-cybergraph/link.nu
 use ../nu-cybergraph/verify.nu
 use ../nu-cybergraph/_record.nu [link-bytes]
+use ../nu-cybergraph/_fs.nu [copy-file copy-tree]
+use ../nu-cybergraph/_deps/pubkey.nu [pubkey]
 
 const P1 = "QmUQUHEmv651XCBhiWUQpx2zf4PDts1aXL324ZFyV4QZPF"
 const P2 = "QmW9519sfmW2MvDb4TU4dKtiFAXm1UPDvE7JrMaBjprVHp"
@@ -89,7 +91,15 @@ def "init with an explicit pubkey needs no git signing key" [] {
 
     init --repo $repo --pubkey $"($key).pub"
     assert (($repo | path join cybergraph links) | path exists)
-    assert equal (ls ($repo | path join cybergraph multiproofs pubkeys) | length) 1
+    let registered = ls ($repo | path join cybergraph multiproofs pubkeys) | get name
+    assert equal ($registered | length) 1
+    # The key that landed is the key named, not merely some key: counting one
+    # file would pass on a registration that ignored --pubkey entirely.
+    assert equal (
+        open --raw ($registered | first) | str trim
+    ) (
+        open --raw $"($key).pub" | pubkey canonical | str trim
+    ) "the registered key is not the one --pubkey named"
 }
 
 @test
@@ -206,4 +216,82 @@ def "seal with an unregistered signing key names the fix" [] {
     # multiproof's own check fires only after it has rewritten these
     assert not (($r.repo | path join cybergraph multiproofs tree-hashes.csv) | path exists)
     assert not (($r.repo | path join cybergraph multiproofs tree-root.txt) | path exists)
+}
+
+# The copy helpers, on hostile input directly. Every other test reaches them
+# through a happy-path `bundle`, `seal` or `import`, so a refusal that stopped
+# working would leave the suite green — and they exist for nothing BUT the
+# refusals. `cp` reports an unreadable source on stderr and exits 0, which is
+# the whole reason neither of these is a bare `cp`.
+#
+# Asserted on `debug`, not `msg`: nushell's own IO error says only "I/O error"
+# at the top and carries the kind and the path underneath. That the raise comes
+# from nushell rather than from a check here is the point — this pins the
+# CONTRACT, so a later rewrite back onto `cp` fails loudly.
+@test
+def "copy-file refuses a source it could not read" [] {
+    let tmp_dir = $in.tmp_dir
+    let src = $tmp_dir | path join secret.txt
+    "bytes that must not vanish quietly\n" | save --raw $src
+    ^chmod 000 $src
+    let dst = $tmp_dir | path join landing
+    mkdir $dst
+
+    let err = try { copy-file $src $dst; null } catch {|e| $e.debug }
+    ^chmod 644 $src
+    assert ($err != null) "copy-file accepted a copy that produced no file"
+    assert ($err | str contains "secret.txt") $"the refusal does not name the file: ($err)"
+    assert ($err | str contains "PermissionDenied") $"the refusal does not say what was wrong: ($err)"
+    assert not (($dst | path join secret.txt) | path exists) "a file landed for a source that could not be read"
+}
+
+# `cp` overwrote a destination silently; `save` refuses one. Pinned because the
+# change is deliberate — a copy landing on an existing file is a question here,
+# and clobbering a frozen certificate is a defect this repo already has parked.
+@test
+def "copy-file refuses to overwrite a file that is already there" [] {
+    let tmp_dir = $in.tmp_dir
+    let src = $tmp_dir | path join new.txt
+    "incoming\n" | save --raw $src
+    let dst = $tmp_dir | path join frozen.txt
+    "must not be clobbered\n" | save --raw $dst
+
+    let err = try { copy-file $src $dst; null } catch {|e| $e.msg }
+    assert ($err != null) "copy-file overwrote an existing file"
+    assert equal (open --raw $dst) "must not be clobbered\n"
+}
+
+@test
+def "copy-tree refuses a destination that already exists" [] {
+    let tmp_dir = $in.tmp_dir
+    let src = $tmp_dir | path join from
+    mkdir $src
+    "x\n" | save --raw ($src | path join a.txt)
+    # Something valuable already standing where the copy would go. `cp` would
+    # nest the copy inside it, and the cleanup on a short copy would then
+    # delete a directory this call never created.
+    let dst = $tmp_dir | path join precious
+    mkdir $dst
+    "do not delete me\n" | save --raw ($dst | path join keepme.txt)
+
+    let err = try { copy-tree $src $dst; null } catch {|e| $e.msg }
+    assert ($err != null) "copy-tree copied into an existing directory"
+    assert ($err | str contains "already exists")
+    assert (($dst | path join keepme.txt) | path exists) "the pre-existing directory was destroyed"
+}
+
+@test
+def "copy-tree refuses a tree holding something that is not a regular file" [] {
+    let tmp_dir = $in.tmp_dir
+    let src = $tmp_dir | path join withlink
+    mkdir $src
+    "x\n" | save --raw ($src | path join a.txt)
+    # Dangling on purpose: `open --raw` follows a link, so this used to come
+    # back as the two words `Not found` with nothing naming the bundle.
+    ^ln -s /nonexistent/nowhere ($src | path join dangling)
+
+    let err = try { copy-tree $src ($tmp_dir | path join to); null } catch {|e| $e.msg }
+    assert ($err != null) "copy-tree followed a symlink out of the tree"
+    assert ($err | str contains "dangling") $"the refusal does not name the link: ($err)"
+    assert ($err | str contains "not a regular file") $"the refusal does not say what is wrong: ($err)"
 }

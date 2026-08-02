@@ -12,7 +12,7 @@
 use _deps/ssh-sign.nu [ssh-sign]
 use _deps/pubkey.nu [pubkey]
 use _repo.nu graph-root
-use _fs.nu [list-files list-dirs]
+use _fs.nu [list-files list-dirs copy-file copy-tree]
 use _layout.nu [
     links-dir exports-dir cert-path cert-filename snapshot-dir imported-copies
     receipt-relpath receipt-cert-path receipt-cert-filename custody-dir custody-layer-dirname
@@ -32,7 +32,14 @@ def assemble-seal-artifacts [root: path out: path root_hex: string] {
         error make {msg: $"seal snapshot missing for root ($root_hex) — the proof predates the seals/ convention?"}
     }
     mkdir ($out | path join multiproofs pubkeys)
-    list-files $snap | each {|f| cp $f ($out | path join multiproofs) }
+    # `for`, not `each`: a raise inside an `each` closure comes back as "Eval
+    # block failed with pipeline input", so copy-file's message would be lost.
+    # These are the root statement and its signatures — the files a dropped
+    # copy would remove from the export while `assert-complete-bundle`, which
+    # only counts root certificates, still called the bundle complete.
+    for f in (list-files $snap) {
+        copy-file $f ($out | path join multiproofs)
+    }
 
     # Signer pubkeys, found by KEY MATERIAL. The middle segment of a sig name is
     # the signer's fingerprint (nu-multiproof b6d7b11: `sig-path-for` names the
@@ -50,7 +57,7 @@ def assemble-seal-artifacts [root: path out: path root_hex: string] {
     let copied = $signers | each {|fp|
         let hit = $registered | where fingerprint == $fp
         if ($hit | is-empty) { null } else {
-            cp ($hit | first | get path) ($out | path join multiproofs pubkeys)
+            copy-file ($hit | first | get path) ($out | path join multiproofs pubkeys)
             $fp
         }
     }
@@ -71,8 +78,13 @@ def assemble-seal-artifacts [root: path out: path root_hex: string] {
         print "note: no OTS bundle for this root (sealed with --no-stamp?) — the bundle's timestamp will report absent"
     } else {
         mkdir ($out | path join multiproofs ots-timestamps)
-        $ots_bundles | each {|d|
-            cp --recursive $d ($out | path join multiproofs ots-timestamps ($d | path basename))
+        # `for`, not `each`, for the reason the two copies above give: a raise
+        # inside an `each` closure comes back as "Eval block failed with
+        # pipeline input". Measured here with one OTS file unreadable —
+        # copy-tree caught the short copy, and those five words were the whole
+        # message the operator got.
+        for d in $ots_bundles {
+            copy-tree $d ($out | path join multiproofs ots-timestamps ($d | path basename))
         }
     }
 }
@@ -147,8 +159,8 @@ def assemble-bundle [root: path out: path link_cid: string to: any key: any] {
         # Own link: the birth bundle
         let proof = open --raw $cert | from json
         mkdir (links-dir $out)
-        cp ($root | path join $proof.leaf.filepath) (links-dir $out)
-        cp $cert ($out | path join (cert-filename $link_cid))
+        copy-file ($root | path join $proof.leaf.filepath) (links-dir $out)
+        copy-file $cert ($out | path join (cert-filename $link_cid))
         assemble-seal-artifacts $root $out $proof.root
         if $to != null {
             # The author has no receipt — their handoff pins nothing but the link
@@ -166,15 +178,15 @@ def assemble-bundle [root: path out: path link_cid: string to: any key: any] {
     if not ($rcert | path exists) {
         error make {msg: $"no frozen receipt proof for ($link_cid) — run `nu-cybergraph seal` after import, then re-export"}
     }
-    cp --recursive ($hits | first) $out
+    copy-tree ($hits | first) $out
 
     let receipt = read-receipt ($root | path join (receipt-relpath $link_cid))
     let index = (custody-layers $out | length) + 1
     let layer = custody-dir $out | path join (custody-layer-dirname $index $receipt.custodian)
     let proof = open --raw $rcert | from json
     mkdir ($layer | path join ((receipt-relpath $link_cid) | path dirname))
-    cp ($root | path join (receipt-relpath $link_cid)) ($layer | path join (receipt-relpath $link_cid))
-    cp $rcert ($layer | path join (receipt-cert-filename $link_cid))
+    copy-file ($root | path join (receipt-relpath $link_cid)) ($layer | path join (receipt-relpath $link_cid))
+    copy-file $rcert ($layer | path join (receipt-cert-filename $link_cid))
     assemble-seal-artifacts $root $layer $proof.root
     if $to != null {
         # A custodian's handoff pins their receipt — the exact chain state handed over

@@ -11,6 +11,7 @@
 
 use _repo.nu graph-root
 use _layout.nu [imported-dir receipts-dir receipt-relpath handoff-filename]
+use _fs.nu [copy-tree]
 use _receipt.nu [receipt-bytes bundle-manifest custody-layers]
 use _signer.nu [own-signer]
 use _verify-helpers.nu [verify-bundle]
@@ -40,7 +41,11 @@ export def main [
         error make {msg: $"already imported: ($dest)"}
     }
     mkdir ($dest | path dirname)
-    cp --recursive ($bundle | path expand) $dest
+    # copy-tree, not `cp --recursive`: `cp` reports an unreadable source on
+    # stderr and exits 0, and the receipt below is recomputed FROM $dest — so a
+    # silently short copy would be frozen as the canonical file set, with every
+    # later verification passing over the truncation.
+    copy-tree $bundle $dest
 
     # The receipt commits to the bundle AS LANDED (its manifest is recomputed
     # from dest, not the source) and chains to the last custody layer present.

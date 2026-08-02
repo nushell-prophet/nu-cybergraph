@@ -6,7 +6,7 @@
 # newer roots and must not touch existing certificates.
 
 use _repo.nu graph-root
-use _fs.nu list-files
+use _fs.nu [list-files copy-file]
 use _layout.nu [links-dir certs-dir cert-path snapshot-dir receipts-dir receipt-cert-path LINKS_DIR CERTS_DIR SEALS_DIR IMPORTED_DIR RECEIPTS_DIR]
 use _record.nu [read-link]
 use _deps/seal.nu [seal]
@@ -129,12 +129,22 @@ export def main [
     let snap = snapshot-dir $root $root_hex
     if not ($snap | path exists) {
         mkdir $snap
-        cp ($root | path join multiproofs tree-root.txt) $snap
+        copy-file ($root | path join multiproofs tree-root.txt) $snap
         # Both sig spellings nu-multiproof's _sig.nu knows: the named
         # `<file>.<fingerprint>.sig` and the bare `<file>.sig`.
-        list-files ($root | path join multiproofs) --suffix ".sig"
-        | where ($it | path basename | str starts-with "tree-root.txt.")
-        | each {|s| cp $s $snap }
+        #
+        # `for`, not `each`: a raise inside an `each` closure comes back as
+        # "Eval block failed with pipeline input" and copy-file's message would
+        # never reach the operator. This snapshot is written once and never
+        # rebuilt (the guard above), so a signature lost here is frozen — every
+        # later `bundle` and `verify` for this root would fail forever with no
+        # way back.
+        for s in (
+            list-files ($root | path join multiproofs) --suffix ".sig"
+            | where ($it | path basename | str starts-with "tree-root.txt.")
+        ) {
+            copy-file $s $snap
+        }
     }
 
     {sealed: $sealed newborn: ($newborn | length) receipts: ($new_receipts | length) snapshot: $snap}
