@@ -22,16 +22,24 @@ export def main [
         # portable bundle and check that, so "verifies here" always means
         # "verifies anywhere".
         let tmp = mktemp --directory
+        # `finally`, not `catch` + re-raise. The cleanup was always right; the
+        # re-raise was not. `error make {msg: $e.msg}` rebuilds the error from
+        # one field, so help, label, code and location are dropped and the span
+        # ends up pointing at the cleanup handler — and when the failure was
+        # raised deeper than one level, `$e.msg` is nushell's own wrapper text,
+        # so the whole message became `Eval block failed with pipeline input`.
+        # Measured: with ssh-keygen off PATH this printed exactly that and
+        # nothing else, and diagnosing it needed a bypass around `verify`.
+        # `finally` runs on both paths and re-raises nothing, so there is no
+        # copy of the error to lose anything.
         let result = try {
             # Pass the caller's $repo through, not the resolved $root:
             # graph-root is not idempotent (it always appends cybergraph/),
             # so a resolved home must never be re-resolved.
             verify-bundle (bundle $link_cid --repo $repo --out ($tmp | path join bundle))
-        } catch {|e|
+        } finally {
             rm --recursive --force $tmp
-            error make {msg: $e.msg}
         }
-        rm --recursive --force $tmp
         [$result]
     } else {
         # The same link CID can arrive from several signers (identical record,

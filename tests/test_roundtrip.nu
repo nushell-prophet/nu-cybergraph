@@ -112,6 +112,35 @@ def "birth, seal, bundle, import, verify — the full link journey" [] {
     assert (verify $born.cid --repo $a.repo | first | get valid)
 }
 
+# `verify` on an own link builds a bundle in a temp dir and cleans it up. The
+# cleanup used to re-raise a reconstruction of the error instead of the error,
+# so everything below the top frame was dropped: with ssh-keygen off PATH the
+# operator saw `Eval block failed with pipeline input` and nothing about
+# OpenSSH, and diagnosing it took a bypass around `verify`.
+#
+# Asserted on `debug`, not on `msg`: `msg` is nushell's own wrapper text either
+# way, because the raise happens inside an `each` several frames down. The
+# chain is what the rewrap destroyed, and `debug` is where the chain is.
+@test
+def "a verify that fails deep still carries the real cause" [] {
+    let tmp_dir = $in.tmp_dir
+    let a = make-signer $tmp_dir "a"
+    let born = link add $P1 $P2 --repo $a.repo
+    seal --repo $a.repo --no-stamp | ignore
+
+    # A PATH holding git and nothing else. Reading the bundle's pubkeys needs
+    # ssh-keygen, so the failure lands well below `verify` — which is the only
+    # kind of failure the old rewrap could destroy.
+    let bin = $tmp_dir | path join bin
+    mkdir $bin
+    ^ln -sf (which git | get 0.path) ($bin | path join git)
+    let err = with-env {PATH: [$bin]} {
+        try { verify $born.cid --repo $a.repo; null } catch {|e| $e.debug }
+    }
+    assert ($err != null) "verify succeeded with no ssh-keygen on PATH"
+    assert ($err | str contains "ssh-keygen is not on PATH") $"the cause did not survive the cleanup: ($err)"
+}
+
 # The README's portability claim, run as a stranger runs it: a bundle arrives,
 # and the recipient checks it with no repo, no registered key and no network.
 # Every other test here verifies from inside a repo that has been through
