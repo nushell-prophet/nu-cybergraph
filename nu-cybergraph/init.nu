@@ -10,7 +10,7 @@ use _deps/init.nu [init]
 export def main [
     --repo: path # Target git repo root (default: git root of current directory)
     --pubkey: path # SSH public key to register (default: signing key from git config)
-] {
+]: nothing -> nothing {
     # The graph always lives in <repo>/cybergraph/ — one service dir in an
     # arbitrary-shaped repo (see graph-root).
     mkdir ((repo-root $repo) | path join cybergraph)

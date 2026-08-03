@@ -35,7 +35,7 @@ use _handoff.nu [handoff-bytes HANDOFF_SCHEMA]
 # Copy one seal's verification artifacts into a proof dir: the snapshot's
 # root statement + signatures, the signer pubkeys, and the OTS bundles
 # committing to that root. Shared by the birth bundle and custody layers.
-def assemble-seal-artifacts [root: path out: path root_hex: string] {
+def assemble-seal-artifacts [root: path out: path root_hex: string]: nothing -> nothing {
     let snap = snapshot-dir $root $root_hex
     if not ($snap | path exists) {
         error make {msg: $"seal snapshot missing for root ($root_hex) — the proof predates the seals/ convention?"}
@@ -104,7 +104,7 @@ def assemble-seal-artifacts [root: path out: path root_hex: string] {
 # particle rather than another link (an "about" edge names a link CID
 # instead, and `particle-find` then just returns nothing — trying both ends
 # uniformly is simpler than asking each verb which of its fields is which).
-def assemble-particles [root: path out: path rec: record] {
+def assemble-particles [root: path out: path rec: record]: nothing -> nothing {
     for cid in ([$rec.cid_from $rec.cid_to] | uniq) {
         let file = particle-find $root $cid --optional
         if $file != null {
@@ -149,7 +149,7 @@ def resolve-handoff-key [root: path key: any]: nothing -> path {
 # the repo's key, not through a seal: the bundle leaves at export time,
 # before any later seal could catalogue the handoff — a detached signature
 # is the only immediate, local authentication available.
-def write-handoff [root: path dir: path link_cid: string to: string receipt_hash: any key: path] {
+def write-handoff [root: path dir: path link_cid: string to: string receipt_hash: any key: path]: nothing -> nothing {
     let handoff = {
         schema: $HANDOFF_SCHEMA
         link: $link_cid
@@ -160,7 +160,11 @@ def write-handoff [root: path dir: path link_cid: string to: string receipt_hash
     }
     let file = $dir | path join (handoff-filename $link_cid)
     handoff-bytes $handoff | save --raw $file
-    ssh-sign sign $file --key $key --pubkeys-dir ($root | path join multiproofs pubkeys)
+    # `ignore`: upstream hands back the .sig path, which no caller reads — and
+    # dropping it is what lets every writer in this file share one contract,
+    # `nothing -> nothing`, instead of one of them leaking a value into
+    # assemble-bundle's return type.
+    ssh-sign sign $file --key $key --pubkeys-dir ($root | path join multiproofs pubkeys) | ignore
 }
 
 # The writer's own exit check — the same root-cert test import runs first.
@@ -169,7 +173,7 @@ def write-handoff [root: path dir: path link_cid: string to: string receipt_hash
 # Whatever the cause, a partial bundle must not leave the repo with exit 0.
 # Removing it is main's job, not this one's: every failure below the "already
 # exists" check leaves the same debris, so one cleanup covers them all.
-def assert-complete-bundle [out: path] {
+def assert-complete-bundle [out: path]: nothing -> nothing {
     let certs = list-files $out --suffix ".cert.json"
     if ($certs | length) != 1 {
         error make {msg: $"bundle came out incomplete: ($certs | length) *.cert.json at the root instead of 1 — partial bundle removed, re-run the export"}
@@ -178,7 +182,7 @@ def assert-complete-bundle [out: path] {
 
 # Everything that writes into the destination dir. Split out of main so the
 # whole of it sits under one cleanup: from here down, any raise leaves debris.
-def assemble-bundle [root: path out: path link_cid: string to: any key: any links_only: bool] {
+def assemble-bundle [root: path out: path link_cid: string to: any key: any links_only: bool]: nothing -> nothing {
     let cert = cert-path $root $link_cid
     if ($cert | path exists) {
         # Own link: the birth bundle

@@ -29,7 +29,7 @@ use _deps/merkle.nu [merkle]
 # it is not reintroduced here.
 #
 # The optional cell path is what makes that possible: an EMPTY .json file does
-# not raise in `open`, it returns nothing (measured), and `get leaf?.filepath?`
+# not raise in `open`, it returns nothing (measured), and `get --optional`
 # turns both that and a well-formed file of the wrong shape into null — which is
 # a verdict this function can phrase, naming the link that went uncertified.
 def assert-frozen-proof [proof: path leaf: string]: nothing -> nothing {
@@ -37,7 +37,7 @@ def assert-frozen-proof [proof: path leaf: string]: nothing -> nothing {
     if ($proof | path type) != "file" {
         error make {msg: $"($proof) is a ($proof | path type), not the frozen proof for ($leaf) — remove it and seal again"}
     }
-    let named = open $proof | get leaf?.filepath?
+    let named = open $proof | get --optional leaf.filepath
     if $named == null {
         error make {msg: $"($proof) carries no leaf.filepath, so it is not a frozen proof for ($leaf) — remove it and seal again"}
     }

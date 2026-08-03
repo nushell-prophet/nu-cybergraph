@@ -6,9 +6,5 @@ export def main [] { }
 export def 'main test' [--fail] {
     use ../../ai-sandbox-dev-container/nutest/nutest
 
-    if $fail {
-        nutest run-tests --path tests/ --fail
-    } else {
-        nutest run-tests --path tests/
-    }
+    nutest run-tests --path tests/ --fail=$fail
 }

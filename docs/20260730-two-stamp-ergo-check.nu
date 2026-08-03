@@ -318,8 +318,8 @@ let vb = nu-cybergraph verify $plain.cid --repo $b.repo | first
 # `^tree-root\.txt\.(?<fp>.+)\.sig$` — still matches what a real seal writes.
 ls ($h1 | path join multiproofs) | get name | path basename
 | where ($it | str ends-with ".sig")
-| each {|f| $f | parse --regex '^tree-root\.txt\.(?<fp>.+)\.sig$' | get fp?.0? | is-not-empty }
-| $"every snapshot signature name parses into a fingerprint: ($in | all {|x| $x })"
+| all { parse --regex '^tree-root\.txt\.(?<fp>.+)\.sig$' | get --optional 0.fp | is-not-empty }
+| $"every snapshot signature name parses into a fingerprint: ($in)"
 | print $in
 # => every snapshot signature name parses into a fingerprint: true
 
