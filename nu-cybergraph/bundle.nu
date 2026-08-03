@@ -2,25 +2,34 @@
 # verify it offline, in the layout nu-multiproof's README pins under
 # "Verifying without the origin repo".
 #
-# An OWN link (has a birth certificate in certs/) exports the birth bundle.
+# An OWN link (has a birth certificate in certs/) exports the birth bundle,
+# plus the particle files its two ends address (when this repo holds them) —
+# without them an importer has the record but not the preimage of the
+# instruction it names (bj002 "Reading instructions"), and can only decode
+# the edge's meaning by scanning particles/ across every repo it can reach.
+# --links-only drops back to the record + certificate alone, the shape the
+# bundle had before this option existed.
 # An IMPORTED link re-exports: the foreign bundle copied unchanged — it stays
-# the authority for authorship and birth time — plus this repo's custody
-# layer appended under custody/<n>-<signer12>/. A custody layer is itself a
-# proof bundle in the same layout, over the receipt instead of the record,
-# so the same verification machinery covers both.
+# the authority for authorship and birth time, particles included if the
+# sender attached them — plus this repo's custody layer appended under
+# custody/<n>-<signer12>/. A custody layer is itself a proof bundle in the
+# same layout, over the receipt instead of the record, so the same
+# verification machinery covers both.
 
 use _deps/ssh-sign.nu [ssh-sign]
 use _deps/pubkey.nu [pubkey]
 use _repo.nu graph-root
 use _fs.nu [list-files list-dirs copy-file copy-tree]
 use _layout.nu [
-    links-dir exports-dir cert-path cert-filename snapshot-dir imported-copies
+    links-dir particles-dir exports-dir cert-path cert-filename snapshot-dir imported-copies
     receipt-relpath receipt-cert-path receipt-cert-filename custody-dir custody-layer-dirname
     handoff-filename
 ]
 use _validate.nu [CID_V0_RE]
+use _record.nu [read-link]
 use _receipt.nu [read-receipt custody-layers]
 use _signer.nu [own-signer]
+use _particle.nu [particle-find]
 use _handoff.nu [handoff-bytes HANDOFF_SCHEMA]
 
 # Copy one seal's verification artifacts into a proof dir: the snapshot's
@@ -89,6 +98,22 @@ def assemble-seal-artifacts [root: path out: path root_hex: string] {
     }
 }
 
+# Copy the particle files a link record's two ends address, for whichever of
+# them this repo actually holds a file for. cid_from is always the preimage
+# of the record's instruction; cid_to is one too for edges that name a
+# particle rather than another link (an "about" edge names a link CID
+# instead, and `particle-find` then just returns nothing — trying both ends
+# uniformly is simpler than asking each verb which of its fields is which).
+def assemble-particles [root: path out: path rec: record] {
+    for cid in ([$rec.cid_from $rec.cid_to] | uniq) {
+        let file = particle-find $root $cid --optional
+        if $file != null {
+            mkdir (particles-dir $out)
+            copy-file $file (particles-dir $out)
+        }
+    }
+}
+
 # Resolve the handoff signing key: --key, else the GRAPH REPO's git config.
 # Why not leave it to `ssh-sign sign`, whose --key already defaults from git
 # config: upstream resolves it in the current directory (`resolve-signing-key`
@@ -153,15 +178,19 @@ def assert-complete-bundle [out: path] {
 
 # Everything that writes into the destination dir. Split out of main so the
 # whole of it sits under one cleanup: from here down, any raise leaves debris.
-def assemble-bundle [root: path out: path link_cid: string to: any key: any] {
+def assemble-bundle [root: path out: path link_cid: string to: any key: any links_only: bool] {
     let cert = cert-path $root $link_cid
     if ($cert | path exists) {
         # Own link: the birth bundle
         let proof = open --raw $cert | from json
         mkdir (links-dir $out)
-        copy-file ($root | path join $proof.leaf.filepath) (links-dir $out)
+        let record_file = $root | path join $proof.leaf.filepath
+        copy-file $record_file (links-dir $out)
         copy-file $cert ($out | path join (cert-filename $link_cid))
         assemble-seal-artifacts $root $out $proof.root
+        if not $links_only {
+            assemble-particles $root $out (read-link $record_file)
+        }
         if $to != null {
             # The author has no receipt — their handoff pins nothing but the link
             write-handoff $root $out $link_cid $to null $key
@@ -204,6 +233,7 @@ export def main [
     --out: path # Bundle destination (default: exports/<link_cid>)
     --to: string # Recipient signer CID — adds a signed handoff (default: none, an open export)
     --key: path # SSH private key for the handoff signature (default: from git config user.signingKey)
+    --links-only # own link only: without particles, record + certificate alone (no-op re-exporting an imported link — its particles, if any, are the sender's foreign bytes, copied unchanged either way)
 ]: nothing -> path {
     let root = graph-root $repo
     if $to != null and $to !~ $CID_V0_RE {
@@ -223,7 +253,7 @@ export def main [
     # for every cause rather than the one a pre-check could name. The error is
     # re-raised raw: labels, help and location are the operator's evidence.
     try {
-        assemble-bundle $root $out $link_cid $to $key
+        assemble-bundle $root $out $link_cid $to $key $links_only
         assert-complete-bundle $out
     } catch {|e|
         rm --recursive --force $out

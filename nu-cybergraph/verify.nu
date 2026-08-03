@@ -36,7 +36,9 @@ export def main [
             # Pass the caller's $repo through, not the resolved $root:
             # graph-root is not idempotent (it always appends cybergraph/),
             # so a resolved home must never be re-resolved.
-            verify-bundle (bundle $link_cid --repo $repo --out ($tmp | path join bundle))
+            # --links-only: verify-bundle never reads particles/, so copying
+            # the ends' particle files here would only be discarded with $tmp.
+            verify-bundle (bundle $link_cid --repo $repo --out ($tmp | path join bundle) --links-only)
         } finally {
             rm --recursive --force $tmp
         }

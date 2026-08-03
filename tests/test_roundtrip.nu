@@ -119,6 +119,45 @@ def "birth, seal, bundle, import, verify — the full link journey" [] {
     assert (verify $born.cid --repo $a.repo | first | get valid)
 }
 
+# bj002's own point about instructions: the record names cid_from/cid_to, but
+# without their bytes an importer holds an address and not the preimage —
+# gm-vote's connector had to fall back to scanning particles/ across every
+# local repo it could reach to decode a verb like {"op":"agree"}. So a bundle
+# now carries the ends it holds a file for, by default; --links-only is the
+# escape hatch back to the old, particle-free shape.
+@test
+def "bundle carries the ends particles by default, links-only drops them" [] {
+    let tmp_dir = $in.tmp_dir
+    let a = make-signer $tmp_dir "a"
+    let born = link add "cyber" "bostrom" --repo $a.repo
+    seal --repo $a.repo --no-stamp | ignore
+
+    let out = bundle $born.cid --repo $a.repo --out ($tmp_dir | path join out)
+    let particle_names = list-files ($out | path join particles) | each { path basename }
+    assert equal ($particle_names | sort) ([$born.record.cid_from $born.record.cid_to] | sort)
+    assert equal (open --raw ($out | path join particles $born.record.cid_from)) "cyber"
+    assert equal (open --raw ($out | path join particles $born.record.cid_to)) "bostrom"
+
+    # The trip still verifies with the extra files, and imports clean.
+    let v = verify-bundle $out
+    assert $v.valid
+    let b = make-signer $tmp_dir "b"
+    import $out --repo $b.repo | ignore
+
+    let links_only_out = bundle $born.cid --repo $a.repo --out ($tmp_dir | path join out-links-only) --links-only
+    assert not (($links_only_out | path join particles) | path exists)
+    assert (verify-bundle $links_only_out | get valid)
+
+    # An end whose bytes are not local — P1/P2 are bare CID strings, never
+    # published as particle files — is silently skipped: a cyberlink naming a
+    # CID the bytes need not be local for is legitimate, so `bundle` ships
+    # whatever preimages it actually holds, not a promise every end resolves.
+    let unresolved = link add $P1 $P2 --repo $a.repo
+    seal --repo $a.repo --no-stamp | ignore
+    let out_unresolved = bundle $unresolved.cid --repo $a.repo --out ($tmp_dir | path join out-unresolved)
+    assert not (($out_unresolved | path join particles) | path exists)
+}
+
 # A bundle arriving without its record is refused either way — this is about
 # WHICH refusal. `merkle verify` resolves the leaf, finds nothing there, and
 # returns a row saying so; `verify-bundle` then opened the same absent path and
