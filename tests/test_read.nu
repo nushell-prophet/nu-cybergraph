@@ -29,8 +29,8 @@ def cleanup [] {
 @test
 def "a plain edge reads as a plain edge, an instruction reads as its verb" [] {
     let tmp = $in.tmp
-    link add $A $B --signer $S --repo $tmp
-    convention update-file $B $C --signer $S --repo $tmp
+    link add $A $B --signer $S --repo $tmp --allow-missing
+    convention update-file $B $C --signer $S --repo $tmp --allow-missing
 
     let plain = link list --repo $tmp | where cid_from == $A | first
     assert equal $plain.op null
@@ -46,9 +46,9 @@ def "a plain edge reads as a plain edge, an instruction reads as its verb" [] {
 @test
 def "touching names the position, which is what tells the two ends apart" [] {
     let tmp = $in.tmp
-    link add $A $B --signer $S --repo $tmp # B is a plain endpoint
-    convention update-file $B $C --signer $S --repo $tmp # B is the replaced file
-    convention confirm $A $B --signer $S --repo $tmp # B is inside the edge confirmed
+    link add $A $B --signer $S --repo $tmp --allow-missing # B is a plain endpoint
+    convention update-file $B $C --signer $S --repo $tmp --allow-missing # B is the replaced file
+    convention confirm $A $B --signer $S --repo $tmp --allow-missing # B is inside the edge confirmed
 
     let roles = link touching $B --repo $tmp | get role | sort
     assert equal $roles ["cid_from.about" "cid_to" "cid_to.cid_to"]
@@ -58,7 +58,7 @@ def "touching names the position, which is what tells the two ends apart" [] {
 def "touching reaches an operand two records deep" [] {
     let tmp = $in.tmp
     # answer: {cid_from: {about: B, op: question}, cid_to: Q, op: answer} → A
-    convention answer $B "why?" "because" --signer $S --repo $tmp
+    convention answer $B "why?" "because" --signer $S --repo $tmp --allow-missing
     let hit = link touching $B --repo $tmp
     assert equal ($hit | length) 1
     assert equal ($hit | first | get role) "cid_from.cid_from.about"
@@ -68,17 +68,17 @@ def "touching reaches an operand two records deep" [] {
 @test
 def "a link naming one CID twice is returned twice" [] {
     let tmp = $in.tmp
-    link add $A $A --signer $S --repo $tmp
+    link add $A $A --signer $S --repo $tmp --allow-missing
     assert equal (link touching $A --repo $tmp | get role | sort) ["cid_from" "cid_to"]
 }
 
 @test
 def "tally counts links and signers per verb and position, and never their sum" [] {
     let tmp = $in.tmp
-    link add $A $B --signer $S --repo $tmp # the edge
-    link add $A $B --signer $S2 --repo $tmp # the same edge, another signer
-    convention confirm $A $B --signer $S2 --repo $tmp # confirmation of it
-    convention update-file $B $C --signer $S --repo $tmp
+    link add $A $B --signer $S --repo $tmp --allow-missing # the edge
+    link add $A $B --signer $S2 --repo $tmp --allow-missing # the same edge, another signer
+    convention confirm $A $B --signer $S2 --repo $tmp --allow-missing # confirmation of it
+    convention update-file $B $C --signer $S --repo $tmp --allow-missing
 
     let t = link tally $B --repo $tmp
     let plain = $t | where op == null and role == "cid_to" | first
@@ -94,10 +94,10 @@ def "tally counts links and signers per verb and position, and never their sum" 
 @test
 def "the rg-narrowed reading and the full scan return the same rows" [] {
     let tmp = $in.tmp
-    link add $A $B --signer $S --repo $tmp
-    convention update-file $B $C --signer $S --repo $tmp
-    convention confirm $A $B --signer $S2 --repo $tmp
-    convention answer $B "why?" "because" --signer $S --repo $tmp
+    link add $A $B --signer $S --repo $tmp --allow-missing
+    convention update-file $B $C --signer $S --repo $tmp --allow-missing
+    convention confirm $A $B --signer $S2 --repo $tmp --allow-missing
+    convention answer $B "why?" "because" --signer $S --repo $tmp --allow-missing
     # rg only drops files that cannot contain the CID, so the two must agree.
     # This is what keeps the fast path from becoming a second implementation.
     assert equal (link touching $B --repo $tmp) (link touching $B --repo $tmp --scan)
@@ -117,7 +117,7 @@ def "the rg-narrowed reading and the full scan return the same rows" [] {
 @test
 def "a file that is not a graph file is ignored by both readings" [] {
     let ctx = $in
-    convention update-file $B $C --signer $S --repo $ctx.tmp
+    convention update-file $B $C --signer $S --repo $ctx.tmp --allow-missing
     let expected = link touching $B --repo $ctx.tmp
 
     $"mentions ($B)" | save --raw ($ctx.root | path join particles .note)
@@ -132,9 +132,9 @@ def "a file that is not a graph file is ignored by both readings" [] {
 @test
 def "a signer is named by every link it signed" [] {
     let tmp = $in.tmp
-    link add $A $B --signer $S --repo $tmp
-    link add $A $C --signer $S --repo $tmp
-    link add $B $C --signer $S2 --repo $tmp
+    link add $A $B --signer $S --repo $tmp --allow-missing
+    link add $A $C --signer $S --repo $tmp --allow-missing
+    link add $B $C --signer $S2 --repo $tmp --allow-missing
     let signed = link touching $S --repo $tmp
     assert equal ($signed | get role | uniq) ["signer"]
     assert equal ($signed | length) 2
@@ -146,7 +146,7 @@ def "a file that only quotes a CID states nothing about it" [] {
     # The text search finds this file; reading it decides. A chapter naming a
     # CID in prose is not an edge, and no verification step would make it one.
     let quoting = particle add $"see ($B) for the earlier version" --repo $tmp
-    link add $quoting $C --signer $S --repo $tmp
+    link add $quoting $C --signer $S --repo $tmp --allow-missing
     assert equal (link touching $B --repo $tmp) []
 }
 
@@ -156,9 +156,9 @@ def "a published file that is not a canonical record is not an instruction" [] {
     # A JSON object with a non-string value is not the format's record form, so
     # its fields are not operands and the edge is plain.
     let nested = particle add '{"about":{"cid":"x"},"op":"update"}' --repo $tmp
-    link add $nested $C --signer $S --repo $tmp
+    link add $nested $C --signer $S --repo $tmp --allow-missing
     let plain = particle add "just text" --repo $tmp
-    link add $plain $C --signer $S --repo $tmp
+    link add $plain $C --signer $S --repo $tmp --allow-missing
 
     assert equal (link list --repo $tmp | get op | uniq) [null]
 }
@@ -166,7 +166,7 @@ def "a published file that is not a canonical record is not an instruction" [] {
 @test
 def "the reader refuses a store file that does not hash to its name" [] {
     let ctx = $in
-    convention update-file $B $C --signer $S --repo $ctx.tmp
+    convention update-file $B $C --signer $S --repo $ctx.tmp --allow-missing
     let src = derive {about: $B, op: "update"}
     "tampered" | save --force --raw (particle-path $ctx.root $src)
     assert error {|| link list --repo $ctx.tmp }

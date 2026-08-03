@@ -3,21 +3,32 @@
 # arguments through.
 
 use _repo.nu graph-root
-use _particle.nu [particle-store particle-read]
+use _particle.nu [particle-store particle-read resolve-arg-bytes]
 use _validate.nu [CID_V0_RE]
 
 # Publish content as a self-addressed file under particles/ and return its
 # CID. Content comes as the argument or through the pipeline (string or raw
-# bytes — `open --raw file | particle add` publishes a file). Idempotent:
-# identical content is one file. Also the escape hatch for content that
-# looks like a CID: `particle add` never treats its input as an address.
+# bytes). Idempotent: identical content is one file. Also the escape hatch
+# for content that looks like a CID: `particle add` never treats its input
+# as an address.
+#
+# The argument form opens a string that names an existing local path and
+# publishes its bytes — most bare-argument callers who write a path mean
+# "publish this file", not "publish this path string" (see resolve-arg-bytes
+# for the full three-way rule, including the loud error on a path-shaped
+# argument that names nothing). `--literal` is the escape hatch for a path
+# string meant as content. Piping is unaffected either way: piped content is
+# always literal, even when it happens to be path-shaped — the pipe is
+# itself the deliberate-intent signal.
 @example "publish text as a file" { particle add "cyber" }
-@example "publish a file's bytes" { open --raw doc.md | particle add }
-@example "publish markdown, keep the extension" { open --raw doc.md | particle add --ext md }
+@example "publish a file's bytes" { particle add path/to/doc.md }
+@example "publish a path string itself, not the file it names" { particle add path/to/doc.md --literal }
+@example "publish markdown, keep the extension" { particle add path/to/doc.md --ext md }
 export def add [
-    content?: string # content to publish; omit to pipe content in
+    content?: string # content to publish, or a path to open and publish; omit to pipe content in
     --repo: path # Target repo root (default: git root of current directory)
     --ext: string # filename extension for the store file (e.g. md); the address stays the bare CID
+    --literal # treat the argument as literal content even if it names a path
 ]: [nothing -> string, string -> string, binary -> string] {
     let piped = $in
     let root = graph-root $repo
@@ -25,7 +36,7 @@ export def add [
         error make {msg: "content given both as an argument and by pipeline — pass one"}
     }
     let bytes = if $content != null {
-        $content | into binary
+        resolve-arg-bytes $content --literal=$literal
     } else if $piped != null {
         $piped | into binary
     } else {

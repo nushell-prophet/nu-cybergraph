@@ -128,7 +128,7 @@ def "nested graph home: init puts everything under cybergraph/ by default" [] {
     "arbitrary user file\n" | save ($r.repo | path join notes.md)
     ^git -C $r.repo add -A
 
-    let born = link add $P1 $P2 --repo $r.repo
+    let born = link add $P1 $P2 --repo $r.repo --allow-missing
     assert ($born.path | str contains $"cybergraph(char path_sep)links")
     let sealed = seal --repo $r.repo --no-stamp
     assert equal $sealed.newborn 1
@@ -143,24 +143,37 @@ def "nested graph home: init puts everything under cybergraph/ by default" [] {
 }
 
 @test
-def "link add refuses a repeat of the triple — one act, one file" [] {
+def "link add is idempotent on a repeat of the triple — one act, one file" [] {
     let r = make-bare-repo $in.tmp_dir
     init --repo $r.repo
-    let born = link add $P1 $P2 --repo $r.repo
+    let born = link add $P1 $P2 --repo $r.repo --allow-missing
 
-    # The record IS the triple, so a repeat is byte-identical: refused by the
-    # file's existence, naming the existing CID
-    let err = try { link add $P1 $P2 --repo $r.repo; null } catch {|e| $e.msg }
-    assert ($err != null) "duplicate triple was recorded"
-    assert ($err | str contains $born.cid)
+    # The record IS the triple, so a repeat is byte-identical: a no-op that
+    # returns the same CID, not a second file or an error.
+    let again = link add $P1 $P2 --repo $r.repo --allow-missing
+    assert equal $again $born
     assert equal (glob ($r.repo | path join cybergraph links *.json) | length) 1
+}
+
+@test
+def "link add refuses to treat a mismatched file at the triple own path as a repeat" [] {
+    let r = make-bare-repo $in.tmp_dir
+    init --repo $r.repo
+    let born = link add $P1 $P2 --repo $r.repo --allow-missing
+    swap-record $born.path (open --raw $born.path | from json | update cid_to $P3)
+
+    # The path exists, but it is not this triple's own bytes — a repeat check
+    # that only asked `path exists` would report success over a corrupted
+    # store; `link add` must fail the same way `seal` does above.
+    let err = try { link add $P1 $P2 --repo $r.repo --allow-missing; null } catch {|e| $e.msg }
+    assert ($err != null) "corrupted file at the triple's own path was accepted as a repeat"
 }
 
 @test
 def "seal refuses a link file that does not match its content address" [] {
     let r = make-bare-repo $in.tmp_dir
     init --repo $r.repo
-    let born = link add $P1 $P2 --repo $r.repo
+    let born = link add $P1 $P2 --repo $r.repo --allow-missing
     swap-record $born.path (open --raw $born.path | from json | update cid_to $P3)
 
     let err = try { seal --repo $r.repo --no-stamp; null } catch {|e| $e.msg }
@@ -175,7 +188,7 @@ def "seal refuses a link file that does not match its content address" [] {
 def "a record tampered after its birth seal aborts the next seal too" [] {
     let r = make-bare-repo $in.tmp_dir
     init --repo $r.repo
-    let born = link add $P1 $P2 --repo $r.repo
+    let born = link add $P1 $P2 --repo $r.repo --allow-missing
     assert equal (seal --repo $r.repo --no-stamp | get newborn) 1
 
     # Every seal re-attests the whole catalogue, so the check covers links that
@@ -240,7 +253,7 @@ def "seal with an unregistered signing key names the fix" [] {
 def "a seal with nothing new still mints a new root" [] {
     let r = make-bare-repo $in.tmp_dir
     init --repo $r.repo
-    link add $P1 $P2 --repo $r.repo | ignore
+    link add $P1 $P2 --repo $r.repo --allow-missing | ignore
 
     let seals = 1..4 | each {|_| seal --repo $r.repo --no-stamp }
     let roots = $seals | get sealed.merkle_root
@@ -274,7 +287,7 @@ def "a seal with nothing new still mints a new root" [] {
 def "a node that is not this links frozen proof is refused before anything is staged" [] {
     let r = make-bare-repo $in.tmp_dir
     init --repo $r.repo
-    let born = link add $P1 $P2 --repo $r.repo
+    let born = link add $P1 $P2 --repo $r.repo --allow-missing
     let cert = $r.repo | path join cybergraph certs $"($born.cid).cert.json"
     mkdir (certs-dir $r.repo)
 
@@ -300,7 +313,7 @@ def "a node that is not this links frozen proof is refused before anything is st
     rm $cert
 
     # 3. a real proof, but for a different link
-    let other = link add $P1 $P3 --repo $r.repo
+    let other = link add $P1 $P3 --repo $r.repo --allow-missing
     seal --repo $r.repo --no-stamp | ignore
     let other_cert = $r.repo | path join cybergraph certs $"($other.cid).cert.json"
     assert ($other_cert | path exists) "the fixture needs a genuine proof to misfile"
@@ -330,8 +343,8 @@ def "a node that is not this links frozen proof is refused before anything is st
 def "a freeze loop that fails still leaves the snapshot its certificates name" [] {
     let r = make-bare-repo $in.tmp_dir
     init --repo $r.repo
-    let a = link add $P1 $P2 --repo $r.repo
-    let b = link add $P1 $P3 --repo $r.repo
+    let a = link add $P1 $P2 --repo $r.repo --allow-missing
+    let b = link add $P1 $P3 --repo $r.repo --allow-missing
 
     # The loop takes links in listing order, so hiding the LAST one guarantees
     # the first is certified before the throw. Sorting here is what makes that

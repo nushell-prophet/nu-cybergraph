@@ -113,13 +113,82 @@ export def particle-store [root: path --ext: string]: binary -> string {
     $cid
 }
 
-# Resolve a text-or-CID argument: a CID v0 is used as-is; any other string is
-# published as a file and replaced by its CID. Content that itself looks like
-# a CID cannot pass through here as content — publish it with `particle add`
-# first and hand over the returned CID.
+# Whether a string names something on disk right now — `--no-symlink` so a
+# broken symlink (a real file on disk, however dead its target) still counts;
+# opening it below is what turns the missing target into a loud error.
+def path-exists-here [arg: string]: nothing -> bool {
+    $arg | path exists --no-symlink
+}
+
+# Whether a string reads as a path even though nothing lives there right now:
+# a directory separator, a dot-extension, or a dotfile name (`.env`,
+# `.gitignore` — no extension by `path parse`'s own reckoning, since it
+# treats the leading dot as the whole stem). The signal that a caller almost
+# certainly meant a file and mistyped it, not that the string is meant as
+# content — literal cyberlink content (a thesis, an argument, a question)
+# all but never starts with a dot or contains a separator.
+def looks-path-shaped [arg: string]: nothing -> bool {
+    ($arg =~ '[/\\]') or (($arg | path parse | get extension) != "") or ($arg | str starts-with '.')
+}
+
+# Resolve a string argument to the bytes it should publish. An existing path
+# is opened and its bytes returned — the common case, since a bare-argument
+# caller who writes a path all but always means "publish this file", not
+# "publish this path string". A path-shaped string that names nothing is
+# refused loudly: falling through to literal content would silently publish
+# a typo instead of catching it. `--literal` skips all of this and always
+# takes the string itself as content — the escape hatch for the one
+# legitimate case, a path string meant as content.
+#
+# The shared footgun check behind `particle add`'s positional argument and
+# `resolve-particle`'s text-or-CID argument: both take a plain string
+# argument, so without this a path string is stored as the path text, not
+# the bytes it names.
+export def resolve-arg-bytes [arg: string --literal]: nothing -> binary {
+    if $literal {
+        return ($arg | into binary)
+    }
+    if (path-exists-here $arg) {
+        open --raw $arg | into binary
+    } else if (looks-path-shaped $arg) {
+        error make {msg: $"($arg) looks like a path, but nothing exists there — check the path, or pass --literal to publish the string itself as content"}
+    } else {
+        $arg | into binary
+    }
+}
+
+# Resolve a text-or-CID argument: a CID v0 is checked against this repo's own
+# store before being used as-is; any other string is resolved to bytes (see
+# `resolve-arg-bytes` — a path is opened, anything else is literal) and
+# published as a file, replaced by its CID (so it is always local the moment
+# this returns). Content that itself looks like a CID cannot pass through
+# here as content — publish it with `particle add` first and hand over the
+# returned CID.
 # Not an --ignore-cid flag (cy's escape hatch) because: `particle add` composes
 # to the same result, and one uniform rule beats a flag on every write command.
-export def resolve-particle [root: path arg: string]: nothing -> string {
-    if $arg =~ $CID_V0_RE { return $arg }
-    $arg | into binary | particle-store $root
+#
+# `index` comes from the caller rather than being built here: a write can
+# resolve several arguments (link add's two endpoints, a convention's nested
+# operands), and this is the same store-index/index-find split `_read.nu`
+# already draws for reads — a scan per lookup was measured quadratic there
+# (43s over 567 links), and the write side walks the same particles/ dir.
+# One index per top-level write call, reused across every argument it
+# resolves.
+#
+# --allow-missing skips the local-file check on a CID argument. Without it, a
+# CID this repo holds no file for is refused: most of the time that CID is a
+# typo or a wrong copy-paste, and nothing about content-addressing can tell a
+# typo from a real reference to bytes held elsewhere — the two look identical
+# until something dereferences them, which may be never. Refusing by default
+# catches the common case at the point of the mistake; --allow-missing is the
+# escape hatch for the legitimate one, a forward reference to bytes this repo
+# does not (yet) hold.
+export def resolve-particle [root: path index: record arg: string --allow-missing --literal]: nothing -> string {
+    if $arg =~ $CID_V0_RE {
+        if not $allow_missing and (index-find $index $arg --optional) == null {
+            error make {msg: $"no local file for ($arg) — pass --allow-missing to reference a CID this repo does not hold bytes for"}
+        }
+        return $arg
+    }
+    (resolve-arg-bytes $arg --literal=$literal) | particle-store $root
 }

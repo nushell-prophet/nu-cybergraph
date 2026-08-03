@@ -60,6 +60,62 @@ def "particle add publishes a CID-shaped string as content" [] {
 }
 
 @test
+def "particle add opens an argument that names an existing path" [] {
+    let tmp = $in.tmp
+    let file = $tmp | path join "doc.md"
+    "hello" | save --raw $file
+    let expected = "hello" | into binary | cid-v0
+    assert equal (particle add $file --repo $tmp) $expected
+    assert equal (open --raw $file | particle add --repo $tmp) $expected
+}
+
+@test
+def "particle add --literal publishes a path string as its own bytes" [] {
+    let tmp = $in.tmp
+    let file = $tmp | path join "doc.md"
+    "hello" | save --raw $file
+    assert equal (particle add $file --repo $tmp --literal) ($file | into binary | cid-v0)
+}
+
+@test
+def "particle add refuses a path-shaped argument that names nothing" [] {
+    let tmp = $in.tmp
+    assert error {|| particle add ($tmp | path join "missing.md") --repo $tmp }
+    # A regular string sharing no path shape (no separator, no extension) is
+    # never mistaken for a missing path — it just publishes as content.
+    assert equal (particle add "missing" --repo $tmp) ("missing" | into binary | cid-v0)
+}
+
+# A dotfile name (`.env`, `.gitignore`) has no separator and, by `path
+# parse`'s own reckoning, no extension either — the leading dot is read as
+# the whole stem. Without its own check this class of typo would silently
+# publish the dotfile name as content instead of erroring.
+@test
+def "particle add refuses a dotfile-shaped argument that names nothing" [] {
+    let tmp = $in.tmp
+    assert error {|| particle add ".env" --repo $tmp }
+}
+
+@test
+def "particle add accepts a path-shaped string when piped" [] {
+    let tmp = $in.tmp
+    let file = $tmp | path join "doc.md"
+    "hello" | save --raw $file
+    assert equal ($file | particle add --repo $tmp) ($file | into binary | cid-v0)
+}
+
+# A broken symlink still names a path a caller meant to read — `path exists`
+# alone would miss it (it resolves the target, which is gone), so the guard
+# checks `--no-symlink` instead.
+@test
+def "particle add refuses a dangling symlink argument" [] {
+    let tmp = $in.tmp
+    let link = $tmp | path join "dangling"
+    ^ln -s ($tmp | path join "does-not-exist") $link
+    assert error {|| particle add $link --repo $tmp }
+}
+
+@test
 def "particle add --ext stores under <cid>.md and returns the bare CID" [] {
     let tmp = $in.tmp
     let cid = particle add "# doc" --ext md --repo $tmp
@@ -163,15 +219,78 @@ def "link add resolves text endpoints to published files" [] {
 }
 
 @test
+def "link add opens a text endpoint that names an existing path" [] {
+    let tmp = $in.tmp
+    let root = $in.root
+    let file = $tmp | path join "doc.md"
+    "hello" | save --raw $file
+    let r = link add $file "bostrom" --repo $tmp --signer $N | get record
+    assert equal $r.cid_from ("hello" | into binary | cid-v0)
+    assert equal (open --raw (particle-path $root $r.cid_from)) "hello"
+}
+
+@test
+def "link add --literal publishes a path-shaped endpoint as its own bytes" [] {
+    let tmp = $in.tmp
+    let file = $tmp | path join "doc.md"
+    "hello" | save --raw $file
+    let r = link add $file "bostrom" --repo $tmp --signer $N --literal | get record
+    assert equal $r.cid_from ($file | into binary | cid-v0)
+}
+
+@test
+def "link add refuses a path-shaped endpoint that names nothing" [] {
+    let tmp = $in.tmp
+    assert error {|| link add ($tmp | path join "missing.md") "bostrom" --repo $tmp --signer $N }
+}
+
+@test
 def "link add passes CID endpoints through without publishing anything" [] {
-    link add $A $B --repo $in.tmp --signer $N | ignore
+    link add $A $B --repo $in.tmp --signer $N --allow-missing | ignore
     # only links/ was written: no particles dir means no file was minted
     assert not ((particles-dir $in.root) | path exists)
 }
 
+# The default this repo's own resolve-particle enforces: a CID it holds no
+# file for is very likely a typo, not a deliberate reference to bytes held
+# elsewhere, and content-addressing gives no way to tell the two apart —
+# --allow-missing is the escape hatch for the legitimate case.
+@test
+def "link add refuses a CID endpoint this repo holds no file for" [] {
+    let tmp = $in.tmp
+    let err = try { link add $A $B --repo $tmp --signer $N; null } catch {|e| $e.msg }
+    assert ($err != null) "an unpublished CID endpoint was accepted with no flag"
+    assert ($err | str contains $A) $"the refusal does not name the missing CID: ($err)"
+    assert ($err | str contains "allow-missing") $"the refusal does not name its own escape hatch: ($err)"
+    # ...and the escape hatch actually works, same repo, no other change
+    link add $A $B --repo $tmp --signer $N --allow-missing | ignore
+}
+
+@test
+def "convention verbs refuse a CID operand this repo holds no file for" [] {
+    let tmp = $in.tmp
+    assert error {|| convention agree $A --repo $tmp --signer $N }
+    convention agree $A --repo $tmp --signer $N --allow-missing | ignore
+}
+
+# The check and its escape hatch both walk the whole address expression, not
+# just its top-level leaf — confirm's cyberlink form nests a signer CID
+# inside the target record, and answer nests a question record two levels
+# inside the source. Either bare CID missing locally must refuse without the
+# flag, and --allow-missing must reach it wherever it sits.
+@test
+def "allow-missing reaches an operand nested inside the address expression" [] {
+    let tmp = $in.tmp
+    assert error {|| convention confirm $A $B $N --repo $tmp --signer $N }
+    convention confirm $A $B $N --repo $tmp --signer $N --allow-missing | ignore
+
+    assert error {|| convention answer $A "q" "a" --repo $tmp --signer $N }
+    convention answer $A "q" "a" --repo $tmp --signer $N --allow-missing | ignore
+}
+
 @test
 def "convention verbs resolve text arguments before hashing" [] {
-    let q = convention question $A "why?" --repo $in.tmp --signer $N | get record
+    let q = convention question $A "why?" --repo $in.tmp --signer $N --allow-missing | get record
     assert equal $q.cid_from (derive {about: $A, op: "question"})
     assert equal $q.cid_to ("why?" | into binary | cid-v0)
     assert equal (open --raw (particle-path $in.root $q.cid_to)) "why?"

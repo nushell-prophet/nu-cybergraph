@@ -2,28 +2,38 @@
 
 use _repo.nu graph-root
 use _record.nu [link-bytes link-cid read-link]
-use _layout.nu [links-dir link-path]
+use _layout.nu [links-dir link-path imported-dir]
 use _particle.nu [resolve-particle store-index]
 use _signer.nu [own-signer]
 use _read.nu [read-links deref touches]
 use _validate.nu [CID_V0_RE]
+use _fs.nu [list-dirs]
 
 # Write a new link record to links/<cid>.json, named by its own content address.
 # An endpoint is any content-addressed file; its CID is the CID v0 of its bytes.
-# Both endpoints accept a CID or content: a non-CID argument is published as a
-# file under particles/ and its CID is linked (see _particle.nu).
-@example "link two files by the CIDs of their bytes" { link add QmUQUHEmv651XCBhiWUQpx2zf4PDts1aXL324ZFyV4QZPF QmW9519sfmW2MvDb4TU4dKtiFAXm1UPDvE7JrMaBjprVHp }
+# Both endpoints accept a CID or content: a non-CID argument is resolved to
+# bytes (a path is opened, anything else is literal — see resolve-arg-bytes)
+# and published as a file under particles/, its CID linked (see _particle.nu).
+# Idempotent: asserting the same triple again returns the existing record,
+# not an error. A CID endpoint must resolve to a file this repo holds — see
+# resolve-particle for why, and --allow-missing for the escape hatch to name a
+# CID whose bytes this repo does not (yet) hold.
+@example "link two files by the CIDs of their bytes" { link add QmUQUHEmv651XCBhiWUQpx2zf4PDts1aXL324ZFyV4QZPF QmW9519sfmW2MvDb4TU4dKtiFAXm1UPDvE7JrMaBjprVHp --allow-missing }
 @example "publish two texts as files and link them" { link add "cyber" "bostrom" }
+@example "link a file to text, by its path" { link add path/to/doc.md "reviewed" }
 export def add [
-    cid_from: string # source vertex: a CID v0, or content to publish as a file
-    cid_to: string # target vertex: a CID v0, or content to publish as a file
+    cid_from: string # source vertex: a CID v0, a path to publish, or content to publish as a file
+    cid_to: string # target vertex: a CID v0, a path to publish, or content to publish as a file
     --signer: string # Signer CID (default: CID of the single registered pubkey)
     --repo: path # Target repo root (default: git root of current directory)
+    --allow-missing # skip the local-file check on a CID endpoint (see resolve-particle)
+    --literal # treat a text endpoint as literal content even if it names a path
 ]: nothing -> record {
     let root = graph-root $repo
+    let index = store-index $root
     let rec = {
-        cid_from: (resolve-particle $root $cid_from)
-        cid_to: (resolve-particle $root $cid_to)
+        cid_from: (resolve-particle $root $index $cid_from --allow-missing=$allow_missing --literal=$literal)
+        cid_to: (resolve-particle $root $index $cid_to --allow-missing=$allow_missing --literal=$literal)
         signer: (if $signer != null { $signer } else { own-signer $root })
     }
     let cid = link-cid $rec
@@ -34,8 +44,19 @@ export def add [
     # cyberlink. Why no --reassert: a repeat is byte-identical, so there is
     # nothing new to store; re-assertion over time is a statement ABOUT the act
     # (e.g. `convention claimed-at`), not a second copy of it.
+    #
+    # Why a no-op and not an error: a repeat is the same act by the same
+    # triple-guard argument above, and an agent replaying a run interrupted
+    # mid-way has no way to tell "already done" from "rejected" except by
+    # re-deriving the CID itself first. The guard already makes a repeat
+    # harmless on disk; erroring on it only pushed that work onto the caller.
+    # `read-link` re-checks self-addressing and canonical form before the
+    # no-op returns — a file at this path that fails either is not "already
+    # asserted", it is a corrupted store, and that must fail loud here rather
+    # than be reported as a successful repeat.
     if ($out | path exists) {
-        error make {msg: $"signer already asserted this edge: ($cid)"}
+        read-link $out | ignore
+        return {cid: $cid path: $out record: $rec}
     }
     link-bytes $rec | save --raw $out
     {cid: $cid path: $out record: $rec}
@@ -74,6 +95,36 @@ export def list [
     let root = graph-root $repo
     let index = store-index $root
     read-links $root | each {|l| statement $index $l }
+}
+
+# Every link a landed import carries, one row per bundle under imported/,
+# decoded the same way `list` decodes its own graph — read-link's
+# self-address and canonical-form check, then operands dereferenced against
+# JUST that bundle's own particles/. A bundle is an island: `bundle` attaches
+# the ends' particles when the exporter held them (see its own doc comment),
+# so most edges decode fully from the bundle alone; this never reaches into
+# this repo's own particles/, which would blur "what the bundle proves" with
+# "what this repo separately happens to know" too.
+#
+# The companion reader to `list`'s own-links-only boundary above: `signer`
+# names whose claim a row is, and aggregating across signers — consensus,
+# tallies, dedup — is a reading policy for the caller to build on this
+# primitive, same as `tally` never sums across positions.
+@example "every link a landed bundle carries" { link imported }
+@example "what one signer said, decoded" { link imported | where signer == QmddrVz92VH3LqT2i7uXeK4AVh6LyU7zjDiLbSdChPsULr }
+export def imported [
+    --repo: path # Repo root (default: git root of current directory)
+]: nothing -> table {
+    let root = graph-root $repo
+    list-dirs (imported-dir $root)
+    | each {|signer_dir| list-dirs $signer_dir }
+    | flatten
+    | each {|bundle|
+        let index = store-index $bundle
+        read-links $bundle | each {|l| statement $index $l }
+    }
+    | flatten
+    | sort-by cid
 }
 
 # Every link that names this CID, one row per place it is named — bj003's
