@@ -121,7 +121,7 @@ Two derived names, not to be confused:
 
 A pubkey file's **name is decoration**. Identity comes from the bytes inside it. A verifier MUST NOT match a signer CID by filename — hash the file contents and compare.
 
-One graph home has exactly one registered key: zero and more than one are both errors, never a choice. The reference implementation enforces this where a command must derive the repo's own identity — writing a link with no explicit signer, or naming a recipient on export — while `seal` refuses only the zero case, so a second registered key surfaces at write time rather than at seal time.
+One graph home has exactly one registered key: zero and more than one are both errors, never a choice. The reference implementation enforces this at registration — `init` refuses a run that would establish a second key, and removes the key that run registered — and again wherever a command must derive the repo's own identity: writing a link with no explicit signer, or naming a recipient on export. `seal` refuses only the zero case, so a key placed in `pubkeys/` by hand still surfaces at write time rather than at seal time.
 
 ### 2.5 SSH signatures
 

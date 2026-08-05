@@ -45,6 +45,22 @@ def make-bare-repo [tmp_dir: path]: nothing -> record {
     {repo: $repo key: $key}
 }
 
+# Idempotence is about the SAME key. Upstream registration is additive, so
+# another key under `user.signingKey` used to be written beside the first and
+# the run exited clean over a trust list holding two — the state every write
+# command refuses. `init` establishes identity, so establishing a second one
+# has to fail, and has to put back what it added.
+@test
+def "init refuses to register a second key and undoes what it added" [] {
+    let r = make-bare-repo $in.tmp_dir
+    init --repo $r.repo
+    let key2 = $in.tmp_dir | path join key2
+    ^ssh-keygen -t ed25519 -f $key2 -N "" -q
+    ^git -C $r.repo config user.signingKey $key2
+    assert error {|| init --repo $r.repo }
+    assert equal (glob ($r.repo | path join cybergraph multiproofs pubkeys *.pub) | length) 1
+}
+
 @test
 def "init is idempotent: re-run reports, never duplicates" [] {
     let r = make-bare-repo $in.tmp_dir
