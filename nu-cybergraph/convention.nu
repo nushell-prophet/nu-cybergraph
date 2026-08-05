@@ -71,6 +71,7 @@
 use _repo.nu graph-root
 use _derive.nu [record-bytes]
 use _particle.nu [particle-store resolve-particle store-index]
+use _signer.nu [own-signer]
 use _validate.nu [RFC3339_RE]
 use link.nu
 
@@ -119,8 +120,13 @@ def edge [
     literal: bool # treat a content operand as literal even if it names a path
 ]: nothing -> record {
     let root = graph-root $repo
+    # Same order as `link add`, for the same reason: `address` publishes every
+    # record it mints, so a signer resolved after it would leave those files
+    # behind when the repo cannot name one. Resolved here and passed down, so
+    # `link add` takes it as given rather than asking a second time.
+    let signer_cid = if $signer != null { $signer } else { own-signer $root }
     let index = store-index $root
-    link add (address $root $index $src $allow_missing $literal) (address $root $index $tgt $allow_missing $literal) --signer $signer --repo $repo --allow-missing
+    link add (address $root $index $src $allow_missing $literal) (address $root $index $tgt $allow_missing $literal) --signer $signer_cid --repo $repo --allow-missing
 }
 
 # What `confirm` and `deny` speak about: the fields of the edge itself, plus

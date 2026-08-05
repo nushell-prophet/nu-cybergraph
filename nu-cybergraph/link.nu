@@ -30,11 +30,18 @@ export def add [
     --literal # treat a text endpoint as literal content even if it names a path
 ]: nothing -> record {
     let root = graph-root $repo
+    # Why the signer is resolved before the endpoints: `resolve-particle`
+    # PUBLISHES a content endpoint under particles/. Resolved inside the record
+    # below, `own-signer` ran last, so a repo with no single signer identity had
+    # already written files by the time it raised — side effects before the
+    # check that forbids them, and the operator was left with orphan particles
+    # for a link that was never written.
+    let signer_cid = if $signer != null { $signer } else { own-signer $root }
     let index = store-index $root
     let rec = {
         cid_from: (resolve-particle $root $index $cid_from --allow-missing=$allow_missing --literal=$literal)
         cid_to: (resolve-particle $root $index $cid_to --allow-missing=$allow_missing --literal=$literal)
-        signer: (if $signer != null { $signer } else { own-signer $root })
+        signer: $signer_cid
     }
     let cid = link-cid $rec
     mkdir (links-dir $root)

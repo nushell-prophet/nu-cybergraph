@@ -244,6 +244,17 @@ def "link add refuses a path-shaped endpoint that names nothing" [] {
     assert error {|| link add ($tmp | path join "missing.md") "bostrom" --repo $tmp --signer $N }
 }
 
+# Validation before side effects: resolving a content endpoint publishes it, so
+# a repo that cannot name a signer has to fail before the first file lands.
+# It used to publish both endpoints and only then raise from `own-signer`,
+# leaving orphan files for a link that was never written.
+@test
+def "link add publishes nothing when the repo has no signer identity" [] {
+    let tmp = $in.tmp
+    assert error {|| link add "cyber" "bostrom" --repo $tmp }
+    assert not ((particles-dir $in.root) | path exists)
+}
+
 @test
 def "link add passes CID endpoints through without publishing anything" [] {
     link add $A $B --repo $in.tmp --signer $N --allow-missing | ignore

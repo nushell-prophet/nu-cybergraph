@@ -26,6 +26,16 @@ const DISAGREE = "QmbQUXxqMrFA6zGYmgjvbFKyywS7Gcbb3afb3wqG6s7r6J" # {"op":"disag
 const EDGE_AB = "QmawrHuBDdcSRCPumzsKfsMi5FJne8xai9WNPAdr3NmLBV" # {"cid_from":A,"cid_to":B} — the edge address
 const CYBERLINK_ABS = "Qme4L2P7QwNoijw6HzYVrqrrtk99oj1XvJHvAb9yobHVLe" # {"cid_from":A,"cid_to":B,"signer":S}
 
+# The same order `link add` keeps, one level up: `address` publishes every
+# record it mints, so a convention run in a repo with no signer identity must
+# leave nothing behind.
+@test
+def "a convention publishes nothing when the repo has no signer identity" [] {
+    let tmp = $in.tmp
+    assert error {|| convention agree "bostrom" --repo $tmp }
+    assert not ((particles-dir ($tmp | path join cybergraph)) | path exists)
+}
+
 @test
 def "derive golden CIDs pin the record canon" [] {
     assert equal (derive {op: "confirm"}) $CONFIRM
