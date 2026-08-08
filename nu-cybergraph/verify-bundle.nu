@@ -12,10 +12,13 @@
 # So the claim had no command behind it. This file is that command, and nothing
 # more — a public name over the function that already does the work.
 #
-# Not a subcommand of `verify`: `export def bundle` inside `verify.nu` would
-# shadow its own `use bundle.nu` there, and `verify` calls `bundle` to
-# materialize an own link before checking it. Probed on 0.114.1 — the shadowing
-# is silent, and `verify <cid>` quietly ran the wrong command.
+# Not a subcommand of `verify`. The original reason was a shadowing hazard —
+# `export def bundle` inside `verify.nu` shadowed its own `use bundle.nu`, and
+# `verify` called `bundle` to materialize an own link before checking it.
+# Probed on 0.114.1: the shadowing was silent, and `verify <cid>` quietly ran
+# the wrong command. `verify` no longer imports `bundle.nu` at all, so that
+# particular trap is gone; the file stays for the reason above it — a received
+# bundle needs a public name, and this is it.
 
 use _verify-helpers.nu [verify-bundle]
 

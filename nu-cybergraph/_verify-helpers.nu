@@ -62,16 +62,31 @@ def canonical-pubkeys [dir: path]: nothing -> table {
     $pubs | insert fingerprint {|p| $p.bytes | decode utf-8 | pubkey fingerprint }
 }
 
-# One proof directory — a birth bundle or a custody layer, same layout: a
-# single *.cert.json at the root, the leaf file at its manifest path, the
-# seal snapshot + pubkeys under multiproofs/.
-def verify-proof-dir [dir: path]: nothing -> record {
-    let certs = list-files $dir --suffix ".cert.json"
-    if ($certs | length) != 1 {
-        error make {msg: $"expected exactly one *.cert.json at the root of ($dir), found ($certs | length)"}
+# One proof root. `dir` is where the leaf resolves and whose multiproofs/pubkeys
+# is the trust list; a bundle or a custody layer answers all three by itself.
+#
+# The two flags exist for the graph home, which answers only the first: its
+# certs/ holds hundreds of certificates rather than one, and its
+# multiproofs/tree-root.txt is the CURRENT root while a birth certificate always
+# belongs to an older seal. Named, those become `certs/<cid>.cert.json` plus
+# `seals/<root12>/` and the same checker runs over the repo in place.
+#
+# Not a second code path: without the flags this behaves exactly as before, and
+# `verify` used to buy the same thing by exporting a throwaway bundle per link —
+# 567 mktemp + copies over the acceptance graph, ~92ms each, to rearrange paths
+# `merkle verify` can now be told directly (nu-multiproof --multiproofs-dir).
+def verify-proof-dir [dir: path --cert: path --multiproofs-dir: path]: nothing -> record {
+    # Not `default`: it takes a value, so the glob would run even when the
+    # caller named the certificate — and over a graph home it finds none.
+    let proof = if $cert != null { $cert } else {
+        let certs = list-files $dir --suffix ".cert.json"
+        if ($certs | length) != 1 {
+            error make {msg: $"expected exactly one *.cert.json at the root of ($dir), found ($certs | length)"}
+        }
+        $certs | first
     }
     let pubs = canonical-pubkeys $dir
-    {v: (merkle verify ($certs | first) --repo $dir) pubs: $pubs}
+    {v: (merkle verify $proof --repo $dir --multiproofs-dir $multiproofs_dir) pubs: $pubs}
 }
 
 # The binding check: does CLAIMED (a signer CID) match a pubkey that validly
@@ -292,8 +307,15 @@ def verify-custody [bundle: path link_cid: string author: string root_handoff: a
 # Verify a portable bundle directory: the birth proof (multiproof result +
 # SIGNER BINDING — the record's `signer` must be the CID of a pubkey that
 # validly signed the root statement), then every custody layer on top.
-export def verify-bundle [bundle: path]: nothing -> record {
-    let birth = verify-proof-dir $bundle
+#
+# The flags pass straight to verify-proof-dir, so `verify` can point this at the
+# graph home instead of at an exported copy of it. Everything below is unchanged
+# by that: the leaf resolves under `bundle` either way (`links/<cid>.json` is the
+# same relative path in a bundle and in the graph home — that is why the export
+# reproduced it), and a graph home carries no handoff and no custody/, so those
+# two checks answer null and [] exactly as they do for a birth bundle.
+export def verify-bundle [bundle: path --cert: path --multiproofs-dir: path]: nothing -> record {
+    let birth = verify-proof-dir $bundle --cert $cert --multiproofs-dir $multiproofs_dir
     let v = $birth.v
 
     # When the leaf is not a readable regular file, `merkle verify` has already

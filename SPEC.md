@@ -318,7 +318,9 @@ Four things this format fixes on top of it: the content anchor is always off (5)
 
 ## 8. Verification
 
-`verify-bundle <dir>` is the whole check, and every other entry point reduces to it. Verifying an own link means materializing its bundle in a temporary directory and running exactly this, so "verifies here" always means "verifies anywhere".
+One checker, and every entry point reduces to it: a certificate, the content root its leaf resolves against, and the artifacts of the seal that certificate belongs to. A bundle answers all three by itself — one `*.cert.json` at its root, the leaf at its manifest path, the seal snapshot and pubkeys under `multiproofs/` — and `verify-bundle <dir>` is that case. Verifying an own link names the same three in the repo instead: `certs/<cid>.cert.json`, the graph home, and `seals/<root12>/`. Same checker, same verdict, so "verifies here" always means "verifies anywhere".
+
+An implementation MUST NOT fold a birth certificate against the repository's *current* root statement. The graph home's `multiproofs/tree-root.txt` moves with every seal; a certificate is frozen at birth, so the two agree only for links born in the newest seal. The seal's own snapshot under `seals/<root12>/` is the artifact to check against (3.3).
 
 Order matters — an implementation MUST NOT reach a later check with data an earlier one has not cleared.
 
