@@ -51,8 +51,8 @@
 # translation are this repo's extensions — claimed-at took over the claimed_at
 # field removed from the link record, so a time claim is an ordinary optional
 # edge instead of a fixture of every record; update-file is bj002's update act
-# stated about a file instead of an edge, which is what a version chain of files
-# needs; translation names the one relation a multilingual corpus lives on, and
+# stated about a particle instead of an edge, which is what a version chain of
+# particles needs; translation names the one relation a multilingual corpus lives on, and
 # neither `same` nor `quote` says it. bj002's set of conventions is open, which
 # is what permits all three.
 #
@@ -259,7 +259,7 @@ export def quote [
 # records which text came first, which a symmetric relation would lose.
 #
 # Not `same`: that says two names denote one entity, and two language versions
-# are two files, each with its own author and its own CID. Not `quote` either —
+# are two particles, each with its own author and its own CID. Not `quote` either —
 # a quote is checkable byte-for-byte, a translation is a judgement, and the
 # signature is what puts the signer behind it. An extension like `claimed-at`
 # and `update-file`, which bj002's open set of conventions permits.
@@ -276,11 +276,11 @@ export def translation [
 }
 
 # Agree: {op: agree} → B — "claim B is true". Gives an opinion about a
-# standalone file an edge of its own, so it aggregates like any other
+# standalone particle an edge of its own, so it aggregates like any other
 # (bj002 "Agreement and disagreement with content").
 @example "agree with claim B" { convention agree QmB… }
 export def agree [
-    cid: string # the file being agreed with
+    cid: string # the particle being agreed with
     --signer: string
     --repo: path
     --allow-missing # skip the local-file check on a CID operand (see resolve-particle)
@@ -290,11 +290,11 @@ export def agree [
 }
 
 # Disagree: {op: disagree} → B — "claim B is false". The other axis from
-# deny: this speaks about the file's content, deny about the statement or the record
+# deny: this speaks about the particle's content, deny about the statement or the record
 # (bj002 "Agreement and disagreement with content").
 @example "disagree with claim B" { convention disagree QmB… }
 export def disagree [
-    cid: string # the file being disagreed with
+    cid: string # the particle being disagreed with
     --signer: string
     --repo: path
     --allow-missing # skip the local-file check on a CID operand (see resolve-particle)
@@ -304,7 +304,7 @@ export def disagree [
 }
 
 # Argument for: {about: C, op: pro} → B — "B is an argument for C". C is any
-# CID: a file, an edge, or a cyberlink; the level of argumentation is the
+# CID: a particle, an edge, or a cyberlink; the level of argumentation is the
 # out-degree of the source (bj002 "Argument for and against").
 @example "B argues for C" { convention pro QmC… QmB… }
 export def pro [
@@ -365,13 +365,13 @@ export def answer [
     edge {cid_from: {about: $about, op: "question"}, cid_to: $question, op: "answer"} $answer $signer $repo $allow_missing $literal
 }
 
-# Authorship: {about: B, op: author} → P — "the author of file B is P". The
+# Authorship: {about: B, op: author} → P — "the author of particle B is P". The
 # signer of the edge is the one who ports it (the archivist), which need not be
 # the author P; the signature certifies the porting, not the authorship
 # (bj002 "Authorship: porting from other mediums").
 @example "the author of B is P" { convention author QmB… QmP… }
 export def author [
-    content: string # the ported file
+    content: string # the ported particle
     author_id: string # CID of the author's identifier
     --signer: string
     --repo: path

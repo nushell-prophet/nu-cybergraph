@@ -1,4 +1,4 @@
-# The file store primitive and the text-or-CID resolver shared by every write
+# The particle store primitive and the text-or-CID resolver shared by every write
 # command (`particle add`, `link add`, the convention verbs). Borrowed
 # discipline: cy's `pin-text` — the argument convention that made that CLI
 # comfortable: a CID passes through untouched, anything else becomes a file

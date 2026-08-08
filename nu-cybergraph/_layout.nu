@@ -20,7 +20,7 @@ export def links-dir [root: path]: nothing -> path {
     $root | path join $LINKS_DIR
 }
 
-# <root>/particles — the file store, every file self-addressed: instruction and
+# <root>/particles — the particle store, every file self-addressed: instruction and
 # address records (published so a reader can dereference an instruction edge,
 # bj002 "Reading instructions") and content published by `particle add` or by a
 # text argument to a write command. Not in the seal manifest: a stored file is

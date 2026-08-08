@@ -10,7 +10,7 @@ use _validate.nu [CID_V0_RE]
 use _fs.nu [list-dirs]
 
 # Write a new link record to links/<cid>.json, named by its own content address.
-# An endpoint is any content-addressed file; its CID is the CID v0 of its bytes.
+# An endpoint is any particle; its CID is the CID v0 of its bytes.
 # Both endpoints accept a CID or content: a non-CID argument is resolved to
 # bytes (a path is opened, anything else is literal — see resolve-arg-bytes)
 # and published as a file under particles/, its CID linked (see _particle.nu).
@@ -18,12 +18,12 @@ use _fs.nu [list-dirs]
 # not an error. A CID endpoint must resolve to a file this repo holds — see
 # resolve-particle for why, and --allow-missing for the escape hatch to name a
 # CID whose bytes this repo does not (yet) hold.
-@example "link two files by the CIDs of their bytes" { link add QmUQUHEmv651XCBhiWUQpx2zf4PDts1aXL324ZFyV4QZPF QmW9519sfmW2MvDb4TU4dKtiFAXm1UPDvE7JrMaBjprVHp --allow-missing }
-@example "publish two texts as files and link them" { link add "cyber" "bostrom" }
+@example "link two particles by the CIDs of their bytes" { link add QmUQUHEmv651XCBhiWUQpx2zf4PDts1aXL324ZFyV4QZPF QmW9519sfmW2MvDb4TU4dKtiFAXm1UPDvE7JrMaBjprVHp --allow-missing }
+@example "publish two texts as particles and link them" { link add "cyber" "bostrom" }
 @example "link a file to text, by its path" { link add path/to/doc.md "reviewed" }
 export def add [
-    cid_from: string # source vertex: a CID v0, a path to publish, or content to publish as a file
-    cid_to: string # target vertex: a CID v0, a path to publish, or content to publish as a file
+    cid_from: string # source vertex: a CID v0, a path to publish, or content to publish as a particle
+    cid_to: string # target vertex: a CID v0, a path to publish, or content to publish as a particle
     --signer: string # Signer CID (default: CID of the single registered pubkey)
     --repo: path # Target repo root (default: git root of current directory)
     --allow-missing # skip the local-file check on a CID endpoint (see resolve-particle)
@@ -140,8 +140,8 @@ export def imported [
 # `role` is where it sits: `cid_from`, `cid_to` or `signer` for the record's
 # own fields, `cid_from.about` for an operand inside an instruction's source
 # record, `cid_to.cid_from` for a field of the edge a `confirm` speaks about.
-# The distinction is the whole answer: as `cid_to` of an update the file is the
-# new version, as `cid_from.about` it is the replaced one. A link that names
+# The distinction is the whole answer: as `cid_to` of an update the particle is
+# the new version, as `cid_from.about` it is the replaced one. A link that names
 # the CID twice returns twice — one act stating the same address in two
 # positions is a fact about the act, not a duplicate to be swept up.
 #
@@ -149,9 +149,9 @@ export def imported [
 # costs the neighbourhood and not the graph. `--scan` reads every record
 # instead of asking `rg` to narrow the candidates first; same rows, and the
 # tests pin that equality.
-@example "everything said about a file" { link touching QmQXupHE6VPzpoBTivNXAAGwigJE68n4TeVUSxYnFL78GV }
+@example "everything said about a particle" { link touching QmQXupHE6VPzpoBTivNXAAGwigJE68n4TeVUSxYnFL78GV }
 export def touching [
-    cid: string # CID v0 of the file or record the statements are about
+    cid: string # CID v0 of the particle or record the statements are about
     --repo: path # Repo root (default: git root of current directory)
     --scan # read every record instead of narrowing with rg (same answer, slower)
 ]: nothing -> table {
@@ -181,9 +181,9 @@ export def touching [
 # it reads 1 until imported links are counted too. The column is here because
 # it is the number a weighing formula needs, and because a reader must see that
 # ten links from one signer are not ten voices.
-@example "how the graph speaks about a file" { link tally QmQXupHE6VPzpoBTivNXAAGwigJE68n4TeVUSxYnFL78GV }
+@example "how the graph speaks about a particle" { link tally QmQXupHE6VPzpoBTivNXAAGwigJE68n4TeVUSxYnFL78GV }
 export def tally [
-    cid: string # CID v0 of the file or record the statements are about
+    cid: string # CID v0 of the particle or record the statements are about
     --repo: path # Repo root (default: git root of current directory)
     --scan # read every record instead of narrowing with rg (same answer, slower)
 ]: nothing -> table {

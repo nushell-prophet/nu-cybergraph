@@ -1,4 +1,4 @@
-# Publish files: arbitrary bytes stored self-addressed under particles/. The
+# Publish particles: arbitrary bytes stored self-addressed under particles/. The
 # public face of the store primitive every write command resolves its text
 # arguments through.
 
@@ -20,7 +20,7 @@ use _validate.nu [CID_V0_RE]
 # string meant as content. Piping is unaffected either way: piped content is
 # always literal, even when it happens to be path-shaped — the pipe is
 # itself the deliberate-intent signal.
-@example "publish text as a file" { particle add "cyber" }
+@example "publish text as a particle" { particle add "cyber" }
 @example "publish a file's bytes" { particle add path/to/doc.md }
 @example "publish a path string itself, not the file it names" { particle add path/to/doc.md --literal }
 @example "publish markdown, keep the extension" { particle add path/to/doc.md --ext md }

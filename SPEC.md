@@ -12,9 +12,9 @@ MUST, MUST NOT, SHOULD and MAY are used as in RFC 2119.
 
 | term | meaning |
 |---|---|
-| file | any bytes, addressed by the CID v0 of those bytes |
-| vertex | a file whose CID stands in an edge |
-| link, cyberlink | a directed edge from one file to another, asserted by one signer |
+| particle | a carrier of meaning: its content is the bytes of a file, its name is the CID v0 of those bytes |
+| vertex | the role a particle takes when its CID stands in an edge, not a second thing |
+| link, cyberlink | a directed edge from one particle to another, asserted by one signer |
 | signer | an identity: the CID v0 of an SSH public key file in canonical form |
 | graph home | `<git-root>/cybergraph/` — one signer's whole graph |
 | seal | one signing moment: manifest → merkle root → SSH signature → OTS stamp |
@@ -133,12 +133,12 @@ A signature sits beside the file it signs, named `<file>.<fingerprint>.sig`. Ver
 
 ## 3. Repository layout
 
-The graph home is always `<git-root>/cybergraph/`. A file referenced by a link need not live there, or in the repo at all — links name CIDs, not paths.
+The graph home is always `<git-root>/cybergraph/`. A particle referenced by a link need not have its bytes there, or in the repo at all — links name CIDs, not paths.
 
 ```
 cybergraph/
   links/<link-cid>.json                  # link records, self-addressed          3.1
-  particles/<cid>[.ext]                  # the file store, self-addressed       3.2
+  particles/<cid>[.ext]                  # the particle store, self-addressed   3.2
   certs/<link-cid>.cert.json             # frozen birth certificates            3.3
   seals/<root-hex-12>/                   # per-seal root statement + signatures 3.4
   exports/<link-cid>/                    # bundles this repo built              6
@@ -175,7 +175,7 @@ Rule 2 is not redundant. Reordered keys, added whitespace, or a duplicate key ea
 
 **Triple guard.** A repeat of the same triple is byte-identical, so a writer MUST return the existing record rather than write a second file. One act, one file. The no-op still re-reads and re-checks the file on disk first, so a corrupted record fails loudly instead of reading as a successful repeat.
 
-### 3.2 File store — `particles/<cid>[.ext]`
+### 3.2 Particle store — `particles/<cid>[.ext]`
 
 Arbitrary content published as a self-addressed file, storing the exact bytes: no newline appended, no encoding transform.
 
