@@ -166,7 +166,7 @@ Three honest limits. The custody bounds are upper bounds: the chain proves each 
 
 ## Dependencies
 
-- [nu-multiproof](https://codeberg.org/nushell-prophet/nu-multiproof/) as a live sibling checkout at `../../ai-sandbox-dev-container/nu-multiproof` — resolved in exactly one place, the `nu-cybergraph/_deps/` shims; edit them if your checkout lives elsewhere. Not a submodule: the two repos are co-developed and a pin would lag.
+- [nu-multiproof](https://codeberg.org/nushell-prophet/nu-multiproof/) as a live sibling checkout at `../nu-multiproof` — resolved in exactly one place, the `nu-cybergraph/_deps/` shims; edit them if your checkout lives elsewhere. Not a submodule: the two repos are co-developed and a pin would lag.
 - `rg` ([ripgrep](https://github.com/BurntSushi/ripgrep)), optional and only for `link touching`/`link tally`: it narrows which files the reader opens. Absent, the same commands read every record and return the same rows — nothing depends on it for correctness, which is why it can be optional at all.
 - `git` and `ssh-keygen`, nothing else: per-file, per-directory and root CIDs are all computed in pure nushell, so no `ipfs` CLI is needed.
 

@@ -33,7 +33,7 @@ use /Users/user/git/cy-container/nu-cybergraph/nu-cybergraph
 use /Users/user/git/cy-container/nu-cybergraph/nu-cybergraph/_verify-helpers.nu [verify-bundle]
 use /Users/user/git/cy-container/nu-cybergraph/nu-cybergraph/_signer.nu [own-signer]
 
-const MP = "/Users/user/git/ai-sandbox-dev-container/nu-multiproof"
+const MP = "/Users/user/git/cy-container/nu-multiproof"
 const CG = "/Users/user/git/cy-container/nu-cybergraph"
 
 # ─────────────────────────────────────────────────────────────────────────────

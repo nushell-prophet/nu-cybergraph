@@ -24,7 +24,7 @@ A change lands when the acceptance test needs it, or when the exercise hits a de
 
 ## Dependencies are live sibling checkouts
 
-`_deps/` is the single resolution point for nu-multiproof (`../../ai-sandbox-dev-container/nu-multiproof`) — one shim file per dependency, so a `use` site parses only the subtree it needs (nushell re-parses a module at every use site; a single-file facade charged every importer for all six deps). toolkit.nu resolves nutest the same way. No pinning — the repos are co-developed. If an interface change in nu-multiproof breaks this repo, fix it here in the same session, or park a note in `todo/`.
+`_deps/` is the single resolution point for nu-multiproof (`../nu-multiproof`) — one shim file per dependency, so a `use` site parses only the subtree it needs (nushell re-parses a module at every use site; a single-file facade charged every importer for all six deps). toolkit.nu resolves nutest the same way. No pinning — the repos are co-developed. If an interface change in nu-multiproof breaks this repo, fix it here in the same session, or park a note in `todo/`.
 
 ## Key invariants
 
