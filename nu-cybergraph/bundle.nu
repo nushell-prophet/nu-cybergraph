@@ -16,21 +16,31 @@
 # same layout, over the receipt instead of the record, so the same
 # verification machinery covers both.
 
-use _deps/ssh-sign.nu [ssh-sign]
-use _deps/pubkey.nu [pubkey]
+use _deps/ssh-sign.nu [ ssh-sign ]
+use _deps/pubkey.nu [ pubkey ]
 use _repo.nu graph-root
-use _fs.nu [list-files list-dirs copy-file copy-tree]
+use _fs.nu [ list-files list-dirs copy-file copy-tree ]
 use _layout.nu [
-    links-dir particles-dir exports-dir cert-path cert-filename snapshot-dir imported-copies
-    receipt-relpath receipt-cert-path receipt-cert-filename custody-dir custody-layer-dirname
+    links-dir
+    particles-dir
+    exports-dir
+    cert-path
+    cert-filename
+    snapshot-dir
+    imported-copies
+    receipt-relpath
+    receipt-cert-path
+    receipt-cert-filename
+    custody-dir
+    custody-layer-dirname
     handoff-filename
 ]
-use _validate.nu [CID_V0_RE]
-use _record.nu [read-link]
-use _receipt.nu [read-receipt custody-layers]
-use _signer.nu [own-signer]
-use _particle.nu [particle-find]
-use _handoff.nu [handoff-bytes HANDOFF_SCHEMA]
+use _validate.nu [ CID_V0_RE ]
+use _record.nu [ read-link ]
+use _receipt.nu [ read-receipt custody-layers ]
+use _signer.nu [ own-signer ]
+use _particle.nu [ particle-find ]
+use _handoff.nu [ handoff-bytes HANDOFF_SCHEMA ]
 
 # Copy one seal's verification artifacts into a proof dir: the snapshot's
 # root statement + signatures, the signer pubkeys, and the OTS bundles
@@ -64,12 +74,12 @@ def assemble-seal-artifacts [root: path out: path root_hex: string]: nothing -> 
     let registered = list-files ($root | path join multiproofs pubkeys) --suffix ".pub"
         | each {|f| {path: $f fingerprint: (open --raw $f | pubkey fingerprint)} }
     let copied = $signers | each {|fp|
-        let hit = $registered | where fingerprint == $fp
-        if ($hit | is-empty) { null } else {
-            copy-file ($hit | first | get path) ($out | path join multiproofs pubkeys)
-            $fp
+            let hit = $registered | where fingerprint == $fp
+            if ($hit | is-empty) { null } else {
+                copy-file ($hit | first | get path) ($out | path join multiproofs pubkeys)
+                $fp
+            }
         }
-    }
     if ($copied | is-empty) {
         error make {msg: "no signer pubkey found for the snapshot's signatures — the bundle could never verify"}
     }

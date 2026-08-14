@@ -11,10 +11,10 @@
 #   proves order transitively while every receipt stays constant-size —
 #   re-listing all prior layers would grow the chain quadratically.
 
-use _fs.nu [list-files list-dirs]
-use _derive.nu [ordered-bytes]
-use _validate.nu [SHA256_RE assert-keys assert-cids assert-timestamp assert-hash-or-null]
-use _layout.nu [CUSTODY_DIR custody-dir]
+use _fs.nu [ list-files list-dirs ]
+use _derive.nu [ ordered-bytes ]
+use _validate.nu [ SHA256_RE assert-keys assert-cids assert-timestamp assert-hash-or-null ]
+use _layout.nu [ CUSTODY_DIR custody-dir ]
 
 export const RECEIPT_KEYS = [link signer custodian received_at files prev handoff]
 

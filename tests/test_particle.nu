@@ -4,9 +4,9 @@ use std/testing *
 use ../nu-cybergraph/particle.nu
 use ../nu-cybergraph/link.nu
 use ../nu-cybergraph/convention.nu
-use ../nu-cybergraph/_derive.nu [derive]
-use ../nu-cybergraph/_layout.nu [particles-dir particle-path]
-use ../nu-cybergraph/_deps/cid-v0.nu [cid-v0]
+use ../nu-cybergraph/_derive.nu [ derive ]
+use ../nu-cybergraph/_layout.nu [ particles-dir particle-path ]
+use ../nu-cybergraph/_deps/cid-v0.nu [ cid-v0 ]
 
 # Same fixture CIDs as test_convention.nu; plain --repo dir, fixed signer,
 # so everything runs offline with no git/ssh/init.
@@ -302,7 +302,7 @@ def "allow-missing reaches an operand nested inside the address expression" [] {
 @test
 def "convention verbs resolve text arguments before hashing" [] {
     let q = convention question $A "why?" --repo $in.tmp --signer $N --allow-missing | get record
-    assert equal $q.cid_from (derive {about: $A, op: "question"})
+    assert equal $q.cid_from (derive {about: $A op: "question"})
     assert equal $q.cid_to ("why?" | into binary | cid-v0)
     assert equal (open --raw (particle-path $in.root $q.cid_to)) "why?"
 }
@@ -311,6 +311,6 @@ def "convention verbs resolve text arguments before hashing" [] {
 def "convention verbs resolve args embedded in derived sources" [] {
     let q = convention quote "source text" "text" --repo $in.tmp --signer $N | get record
     let src_cid = "source text" | into binary | cid-v0
-    assert equal $q.cid_from (derive {about: $src_cid, op: "quote"})
+    assert equal $q.cid_from (derive {about: $src_cid op: "quote"})
     assert equal (open --raw (particle-path $in.root $src_cid)) "source text"
 }

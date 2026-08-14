@@ -7,10 +7,10 @@ use ../nu-cybergraph/init.nu
 use ../nu-cybergraph/seal.nu
 use ../nu-cybergraph/link.nu
 use ../nu-cybergraph/verify.nu
-use ../nu-cybergraph/_record.nu [link-bytes]
-use ../nu-cybergraph/_fs.nu [copy-file copy-tree list-files list-dirs move-file]
-use ../nu-cybergraph/_layout.nu [certs-dir]
-use ../nu-cybergraph/_deps/pubkey.nu [pubkey]
+use ../nu-cybergraph/_record.nu [ link-bytes ]
+use ../nu-cybergraph/_fs.nu [ copy-file copy-tree list-files list-dirs move-file ]
+use ../nu-cybergraph/_layout.nu [ certs-dir ]
+use ../nu-cybergraph/_deps/pubkey.nu [ pubkey ]
 
 const P1 = "QmUQUHEmv651XCBhiWUQpx2zf4PDts1aXL324ZFyV4QZPF"
 const P2 = "QmW9519sfmW2MvDb4TU4dKtiFAXm1UPDvE7JrMaBjprVHp"

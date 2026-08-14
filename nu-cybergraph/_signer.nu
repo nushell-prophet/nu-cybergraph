@@ -12,7 +12,7 @@
 # author under a key they did not name.
 
 use _fs.nu list-files
-use _deps/cid-v0.nu [cid-v0]
+use _deps/cid-v0.nu [ cid-v0 ]
 
 export def own-signer [root: path]: nothing -> string {
     let pubs = list-files ($root | path join multiproofs pubkeys) --suffix ".pub"

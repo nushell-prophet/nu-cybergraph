@@ -14,9 +14,9 @@
 # file, so anything published in that shape answers this test. A reader gets
 # "this parses as an instruction", never "this was meant as one".
 
-use _layout.nu [links-dir particles-dir]
-use _particle.nu [index-find particle-verify store-cid]
-use _record.nu [read-link]
+use _layout.nu [ links-dir particles-dir ]
+use _particle.nu [ index-find particle-verify store-cid ]
+use _record.nu [ read-link ]
 use _fs.nu list-files
 
 # Every link record in the graph home, each checked against its own address by
@@ -35,7 +35,7 @@ export def read-links [root: path]: nothing -> table {
 # timestamp file parses as a JSON scalar, and without the flatness rule a
 # nested JSON document would come back as a fake instruction with fake
 # operands.
-export def deref-file [file: path cid: string]: nothing -> any {
+def deref-file [file: path cid: string]: nothing -> any {
     # Verified outside the `try`: the catch is for "these bytes are not JSON",
     # and a tampered file must not reach a reader disguised as that.
     let bytes = particle-verify $file $cid
@@ -145,6 +145,6 @@ export def touches [root: path cid: string --scan]: nothing -> table {
 
 # Where a CID sits, as one dotted string: the endpoint's own key, then the
 # fields walked to reach it.
-export def role-path [prefix: string path: string]: nothing -> string {
+def role-path [prefix: string path: string]: nothing -> string {
     if $path == "" { $prefix } else { $"($prefix).($path)" }
 }

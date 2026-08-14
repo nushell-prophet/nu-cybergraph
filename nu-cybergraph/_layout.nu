@@ -50,7 +50,7 @@ export def certs-dir [root: path]: nothing -> path {
 }
 
 # <root>/seals
-export def seals-dir [root: path]: nothing -> path {
+def seals-dir [root: path]: nothing -> path {
     $root | path join $SEALS_DIR
 }
 
@@ -79,11 +79,35 @@ export def imported-copies [root: path link_cid: string]: nothing -> list<path> 
     | where ($it | path exists)
 }
 
+# What marks a file in receipts/ as a receipt rather than its frozen proof.
+# `<cid>.receipt.cert.json` deliberately does not end with it.
+export const RECEIPT_SUFFIX = ".receipt.json"
+
 # receipts/<cid>.receipt.json — the custody receipt's manifest path, relative
 # to the graph root. Relative because it doubles as the proof's leaf.filepath:
 # a custody layer places the receipt at this same path inside the layer dir.
 export def receipt-relpath [link_cid: string]: nothing -> string {
-    [$RECEIPTS_DIR $"($link_cid).receipt.json"] | path join
+    [$RECEIPTS_DIR $"($link_cid)($RECEIPT_SUFFIX)"] | path join
+}
+
+# The link CID a receipt file is named after — the inverse of receipt-relpath.
+# `seal` spelled it inline three times as `str replace ".receipt.json" ""`,
+# which is this module's rule read backwards in a file that does not own it.
+# Cut by length rather than replaced: the suffix comes off the END, where
+# `str replace` without --regex took the first match anywhere in the name.
+#
+# The refusal is what a length cut needs and a replace did not: handed a name
+# that is not a receipt, `str replace` gave the name back unchanged, while
+# cutting blind returns a truncation — `Qm123.receipt.cert.json` came back as
+# `Qm123.rece`, a plausible-looking string that is nobody's CID. Every caller
+# today filters by the same suffix first, so this never fires; it fires for the
+# caller who does not.
+export def receipt-cid [file: path]: nothing -> string {
+    let base = $file | path basename
+    if not ($base | str ends-with $RECEIPT_SUFFIX) {
+        error make {msg: $"not a receipt filename: ($base) — expected <cid>($RECEIPT_SUFFIX)"}
+    }
+    $base | str substring ..<(-1 * ($RECEIPT_SUFFIX | str length))
 }
 
 # <cid>.receipt.cert.json — the frozen receipt proof, also at a layer's root

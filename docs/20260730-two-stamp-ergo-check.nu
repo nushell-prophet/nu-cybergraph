@@ -29,12 +29,24 @@
 # permanent public write, so it must not sit in a path that re-runs on every
 # refresh.
 
-use /Users/user/git/cy-container/nu-cybergraph/nu-cybergraph
-use /Users/user/git/cy-container/nu-cybergraph/nu-cybergraph/_verify-helpers.nu [verify-bundle]
-use /Users/user/git/cy-container/nu-cybergraph/nu-cybergraph/_signer.nu [own-signer]
+# Relative to this file, never absolute. The absolute paths that stood here
+# named `/Users/user/git/cy-container/nu-cybergraph` — the RECIPIENT checkout,
+# not the monorepo this file now ships in. So a refresh run from here checked
+# the published copy of the code rather than the code beside it, which is the
+# one thing an embeds document exists to prevent.
+use ../nu-cybergraph
+use ../nu-cybergraph/_verify-helpers.nu [ verify-bundle ]
+use ../nu-cybergraph/_signer.nu [ own-signer ]
 
-const MP = "/Users/user/git/cy-container/nu-multiproof"
-const CG = "/Users/user/git/cy-container/nu-cybergraph"
+# Sections 2 and 3 need those two as ABSOLUTE paths at runtime: section 2 writes
+# a script into a temp dir, which has no relative path back here. Resolved from
+# the working directory rather than with `path self`, because `dotnu` evaluates
+# this file as a string — `path self` raises "Couldn't find current file" there,
+# and the refresh command in the header is the contract this has to satisfy.
+# dotnu cds into the script's own directory first, so `..` is this repo; running
+# the file by hand means `cd docs` first.
+let CG = ".." | path expand
+let MP = "../../nu-multiproof" | path expand
 
 # ─────────────────────────────────────────────────────────────────────────────
 # 1. What we are testing against
@@ -43,24 +55,35 @@ const CG = "/Users/user/git/cy-container/nu-cybergraph"
 # it touched five files under nu-multiproof/, none of them cid-v0, pubkey, init
 # or ssh-sign — so the four modules we import were byte-identical to main.
 #
-# The count below has since grown to ten, and those four are now in it. That is
+# The count had since grown to ten, and those four were then in it. That was
 # not the branch changing: `main` moved on under it, through a topiary pass and a
-# return-type sweep (nu-multiproof 95e69f9), so a three-dot diff now reports work
+# return-type sweep (nu-multiproof 95e69f9), so a three-dot diff reported work
 # that landed after this check rather than work this branch proposed. The point
 # the line was making is spent — it is kept because it dates the comparison.
-
-^git -C $MP diff --stat main...two-stamp-ergo -- nu-multiproof/ | print $in
-# =>  nu-multiproof/_fs.nu         |  12 ++-
-# =>  nu-multiproof/_stamps.nu     |  94 +++++++++++++++++++++
-# =>  nu-multiproof/cid-v0.nu      |   4 +-
-# =>  nu-multiproof/init.nu        |   2 +-
-# =>  nu-multiproof/merkle.nu      |  87 +++++++++++--------
-# =>  nu-multiproof/ots.nu         | 147 +++++++++++++++++++++++++++++---
-# =>  nu-multiproof/pubkey.nu      |   2 +-
-# =>  nu-multiproof/seal.nu        | 194 +++++++++++++++++++++++++++++++++++++++++--
-# =>  nu-multiproof/ssh-sign.nu    |   4 +-
-# =>  nu-multiproof/tree-hashes.nu |   4 +-
-# =>  10 files changed, 484 insertions(+), 66 deletions(-)
+#
+# STOPPED EXECUTING, and that is worth naming rather than quietly deleting.
+# The line was `git diff --stat main...two-stamp-ergo`, and `main` is what went:
+# the trunk of the checkout it ran against is `master`. The branch itself is
+# still there (`git -C nu-multiproof branch` lists both `two-stamp` and
+# `two-stamp-ergo`), and `master...two-stamp-ergo` runs today — it reports 23
+# files, which is the point the paragraph above already made about a three-dot
+# diff against a trunk that moved. An external command exiting non-zero raises,
+# and this one stood at the top of the file, so nothing below it ran either and
+# the header's claim to be refreshed rather than frozen was false for the whole
+# document. Frozen as the comment below: a spent comparison needs its date, not
+# a rerun against a trunk that is no longer the one it was measured from.
+#
+#   nu-multiproof/_fs.nu         |  12 ++-
+#   nu-multiproof/_stamps.nu     |  94 +++++++++++++++++++++
+#   nu-multiproof/cid-v0.nu      |   4 +-
+#   nu-multiproof/init.nu        |   2 +-
+#   nu-multiproof/merkle.nu      |  87 +++++++++++--------
+#   nu-multiproof/ots.nu         | 147 +++++++++++++++++++++++++++++---
+#   nu-multiproof/pubkey.nu      |   2 +-
+#   nu-multiproof/seal.nu        | 194 +++++++++++++++++++++++++++++++++++++++++--
+#   nu-multiproof/ssh-sign.nu    |   4 +-
+#   nu-multiproof/tree-hashes.nu |   4 +-
+#   10 files changed, 484 insertions(+), 66 deletions(-)
 
 # ─────────────────────────────────────────────────────────────────────────────
 # 2. The one real defect: a parse-time collision — REPORTED, AND FIXED UPSTREAM
@@ -102,7 +125,8 @@ do { ^nu ($tmp | path join ok.nu) } | complete | get stdout | str trim | print $
 
 # Verified once, by hand, not embedded because it needs a second checkout:
 #   git -C $MP archive main | tar -x -C /tmp/mpmain
-# and the same colliding import pair parses clean against main. So this is new
+# — `main` as it stood on 2026-07-30; that name is gone now, same as in section
+# 1, and the trunk to archive today is `master`. So this is new
 # on the branch, and it belongs upstream — the example should call `main status`
 # rather than name the module's own command.
 
@@ -265,7 +289,7 @@ $"newborn certificates: ($sealed.newborn), links on disk: (nu-cybergraph link li
 # Verify goes through the portable bundle a stranger would get, never through
 # this repo's current tree-root.txt.
 let v = nu-cybergraph verify $plain.cid --repo $a.repo | first
-{valid: $v.valid, signer_bound: $v.signer.bound, endorsed: $v.signer.endorsed.status, endorsements: ($v.endorsements | length)} | print $in
+{valid: $v.valid signer_bound: $v.signer.bound endorsed: $v.signer.endorsed.status endorsements: ($v.endorsements | length)} | print $in
 # => ╭──────────────┬────────╮
 # => │ valid        │ true   │
 # => │ signer_bound │ true   │
@@ -275,27 +299,30 @@ let v = nu-cybergraph verify $plain.cid --repo $a.repo | first
 
 # Unstamped, the row is still there: one endorsement per validly-signing key,
 # with an `absent` anchor. So the signature is always named; only its date is
-# missing without a stamp. `_verify-helpers.nu:244-249` then inserts five more
-# columns — `record`, `signer`, `handoff`, `custody`, `handed_to` — and an
-# `insert` throws on a name that already exists. `endorsements` clashes with
-# none of them, which is the whole reason this branch does not break verify.
+# missing without a stamp. `_verify-helpers.nu`'s `UNREAD_COLUMNS` then adds five
+# more — `record`, `signer`, `handoff`, `custody`, `handed_to` — by `insert`, which
+# throws on a name upstream already returned. `endorsements` collides with none of
+# them, which is the whole reason this branch does not break verify. (Named, not
+# cited by line: the line numbers this file used to give rot on the next edit, and
+# one just did.)
 $v | columns | print $in
-# => ╭────┬──────────────────╮
-# => │  0 │ valid            │
-# => │  1 │ structure_valid  │
-# => │  2 │ root             │
-# => │  3 │ manifest_root    │
-# => │  4 │ leaf             │
-# => │  5 │ content_verified │
-# => │  6 │ signatures       │
-# => │  7 │ endorsements     │
-# => │  8 │ error            │
-# => │  9 │ record           │
-# => │ 10 │ signer           │
-# => │ 11 │ handoff          │
-# => │ 12 │ custody          │
-# => │ 13 │ handed_to        │
-# => ╰────┴──────────────────╯
+# => ╭────┬─────────────────────╮
+# => │  0 │ valid               │
+# => │  1 │ structure_valid     │
+# => │  2 │ root                │
+# => │  3 │ manifest_root       │
+# => │  4 │ leaf                │
+# => │  5 │ content_verified    │
+# => │  6 │ content_enumeration │
+# => │  7 │ signatures          │
+# => │  8 │ endorsements        │
+# => │  9 │ error               │
+# => │ 10 │ record              │
+# => │ 11 │ signer              │
+# => │ 12 │ handoff             │
+# => │ 13 │ custody             │
+# => │ 14 │ handed_to           │
+# => ╰────┴─────────────────────╯
 
 # Handoff, import, custody: A hands the link to B, B imports it, seals to freeze
 # the custody receipt, and verifies it by CID alone. `custody_layers` is 0 at
@@ -306,7 +333,7 @@ let h1 = nu-cybergraph bundle $plain.cid --repo $a.repo --to $B_ID --key $a.key 
 nu-cybergraph import $h1 --repo $b.repo | ignore
 nu-cybergraph seal --repo $b.repo --no-stamp | ignore
 let vb = nu-cybergraph verify $plain.cid --repo $b.repo | first
-{valid: $vb.valid, custody_layers: ($vb.custody | length), custody_all_valid: ($vb.custody | all {|c| $c.valid }), handed_to_is_b: ($vb.handed_to == $B_ID)} | print $in
+{valid: $vb.valid custody_layers: ($vb.custody | length) custody_all_valid: ($vb.custody | all {|c| $c.valid }) handed_to_is_b: ($vb.handed_to == $B_ID)} | print $in
 # => ╭───────────────────┬──────╮
 # => │ valid             │ true │
 # => │ custody_layers    │ 0    │

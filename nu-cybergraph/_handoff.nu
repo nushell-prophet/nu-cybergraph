@@ -15,8 +15,8 @@
 # stripping a handoff breaks the next receipt, so it cannot be silently
 # removed once the recipient sealed.
 
-use _derive.nu [ordered-bytes]
-use _validate.nu [assert-keys assert-cids assert-timestamp assert-hash-or-null]
+use _derive.nu [ ordered-bytes ]
+use _validate.nu [ assert-keys assert-cids assert-timestamp assert-hash-or-null ]
 
 # Domain separation lives in the SIGNED BYTES, not in the signature namespace.
 # nu-multiproof used to take a `--namespace` on sign/verify; the value was

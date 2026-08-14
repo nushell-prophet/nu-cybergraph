@@ -4,10 +4,10 @@
 # comfortable: a CID passes through untouched, anything else becomes a file
 # first.
 
-use _layout.nu [particles-dir particle-path PARTICLE_EXT_RE]
-use _validate.nu [CID_V0_RE]
+use _layout.nu [ particles-dir particle-path PARTICLE_EXT_RE ]
+use _validate.nu [ CID_V0_RE ]
 use _fs.nu list-files
-use _deps/cid-v0.nu [cid-v0]
+use _deps/cid-v0.nu [ cid-v0 ]
 
 # The store grouped by address: {<cid>: [<path> …]} from one directory
 # listing. The one definition of the store's filename rule — `<cid>` bare or
@@ -43,7 +43,7 @@ export def store-cid [file: path]: nothing -> any {
 # All store files addressing a CID: `<cid>` bare or `<cid>.<ext>`. The store
 # invariant is at most one such file (`particle-store` keeps it); readers
 # fail fast on a violation instead of picking one copy silently.
-export def particle-files [root: path cid: string]: nothing -> list<string> {
+def particle-files [root: path cid: string]: nothing -> list<string> {
     store-index $root | get --optional $cid | default []
 }
 

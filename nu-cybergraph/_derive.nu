@@ -25,7 +25,7 @@
 # Alphabetical means byte order of the UTF-8 key bytes — locale-free and
 # case-sensitive; nushell's record `sort` matches it for these keys.
 
-use _deps/cid-v0.nu [cid-v0]
+use _deps/cid-v0.nu [ cid-v0 ]
 
 # Canonical bytes of a record: keys sorted alphabetically, compact JSON, one
 # trailing "\n". Values must be strings — flatness is the spec, not a

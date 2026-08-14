@@ -9,9 +9,9 @@
 # bytes against the filename, so a non-canonical file still fails loudly
 # instead of drifting.
 
-use _deps/cid-v0.nu [cid-v0]
-use _derive.nu [record-bytes derive]
-use _validate.nu [assert-keys assert-cids]
+use _deps/cid-v0.nu [ cid-v0 ]
+use _derive.nu [ record-bytes derive ]
+use _validate.nu [ assert-keys assert-cids ]
 
 # Why alphabetical (not the semantic triple-first order): one serialization
 # rule for every record in the format — link files and derived records alike —

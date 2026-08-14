@@ -10,11 +10,11 @@
 # appended.
 
 use _repo.nu graph-root
-use _layout.nu [imported-dir receipts-dir receipt-relpath handoff-filename]
-use _fs.nu [copy-tree]
-use _receipt.nu [receipt-bytes bundle-manifest custody-layers]
-use _signer.nu [own-signer]
-use _verify-helpers.nu [verify-bundle]
+use _layout.nu [ imported-dir receipts-dir receipt-relpath handoff-filename ]
+use _fs.nu [ copy-tree ]
+use _receipt.nu [ receipt-bytes bundle-manifest custody-layers ]
+use _signer.nu [ own-signer ]
+use _verify-helpers.nu [ verify-bundle ]
 
 # Verify a foreign bundle and land it read-only under imported/, writing this
 # repo's custody receipt for the next seal to freeze. Refuses on any

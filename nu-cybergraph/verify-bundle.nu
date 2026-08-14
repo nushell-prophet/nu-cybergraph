@@ -20,7 +20,7 @@
 # particular trap is gone; the file stays for the reason above it — a received
 # bundle needs a public name, and this is it.
 
-use _verify-helpers.nu [verify-bundle]
+use _verify-helpers.nu [ verify-bundle ]
 
 # Verify a received bundle against the seal it was born under. Needs no repo,
 # no key and no network: everything the check reads is inside the directory.
@@ -28,7 +28,7 @@ use _verify-helpers.nu [verify-bundle]
 export def main [
     bundle: path # Bundle directory: the birth proof as `bundle` exported it
 ]: nothing -> record {
-    # Checked here rather than left to the first `glob` inside: a mistyped path
+    # Checked here rather than left to the certificate lookup inside: a mistyped path
     # otherwise surfaces as "expected exactly one *.cert.json at the root of X,
     # found 0", which reads as a verdict about the bundle instead of about the
     # argument.

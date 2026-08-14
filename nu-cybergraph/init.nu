@@ -1,9 +1,9 @@
 # Bootstrap a signer's repo: multiproof machinery + the cybergraph directories.
 
-use _repo.nu [repo-root graph-root]
-use _layout.nu [links-dir certs-dir]
-use _fs.nu [list-files]
-use _deps/init.nu [init]
+use _repo.nu [ repo-root graph-root ]
+use _layout.nu [ links-dir certs-dir ]
+use _fs.nu [ list-files ]
+use _deps/init.nu [ init ]
 
 # `init` here is nu-multiproof's init (pubkey registration in
 # multiproofs/pubkeys/); this wrapper adds the cybergraph layout on top.
@@ -56,11 +56,13 @@ export def main [
             msg: (
                 [
                     $"multiple pubkeys registered in ($pubkeys_dir | path relative-to $root) \(($after | length)) — a graph home has exactly one signer identity"
-                    (if ($added | is-empty) {
-                        "none of them was registered by this run: remove all but one by hand"
-                    } else {
-                        $"the key this run registered was removed again: ($added | each { path basename } | str join ', ')"
-                    })
+                    (
+                        if ($added | is-empty) {
+                            "none of them was registered by this run: remove all but one by hand"
+                        } else {
+                            $"the key this run registered was removed again: ($added | each { path basename } | str join ', ')"
+                        }
+                    )
                     "a second signer needs its own graph home"
                 ] | str join "\n"
             )

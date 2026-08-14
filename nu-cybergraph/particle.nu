@@ -3,8 +3,8 @@
 # arguments through.
 
 use _repo.nu graph-root
-use _particle.nu [particle-store particle-read resolve-arg-bytes]
-use _validate.nu [CID_V0_RE]
+use _particle.nu [ particle-store particle-read resolve-arg-bytes ]
+use _validate.nu [ CID_V0_RE ]
 
 # Publish content as a self-addressed file under particles/ and return its
 # CID. Content comes as the argument or through the pipeline (string or raw
@@ -29,7 +29,7 @@ export def add [
     --repo: path # Target repo root (default: git root of current directory)
     --ext: string # filename extension for the store file (e.g. md); the address stays the bare CID
     --literal # treat the argument as literal content even if it names a path
-]: [nothing -> string, string -> string, binary -> string] {
+]: [nothing -> string string -> string binary -> string] {
     let piped = $in
     let root = graph-root $repo
     if $content != null and $piped != null {

@@ -1,7 +1,7 @@
 use std/assert
 use std/testing *
 
-use ../nu-cybergraph/_handoff.nu [handoff-bytes validate-handoff read-handoff HANDOFF_SCHEMA HANDOFF_KEYS]
+use ../nu-cybergraph/_handoff.nu [ handoff-bytes validate-handoff read-handoff HANDOFF_SCHEMA HANDOFF_KEYS ]
 
 # Fixed handoff for golden pinning: the golden link record of test_record.nu,
 # handed from the bj003 smoke experiment's file CIDs used as signer CIDs.

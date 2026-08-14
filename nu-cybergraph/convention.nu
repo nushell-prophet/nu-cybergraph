@@ -69,17 +69,17 @@
 # apart.
 
 use _repo.nu graph-root
-use _derive.nu [record-bytes]
-use _particle.nu [particle-store resolve-particle store-index]
-use _signer.nu [own-signer]
-use _validate.nu [RFC3339_RE]
+use _derive.nu [ record-bytes ]
+use _particle.nu [ particle-store resolve-particle store-index ]
+use _signer.nu [ own-signer ]
+use _validate.nu [ RFC3339_RE ]
 use link.nu
 
 # Re-exported so a reader can compute any address by hand: the edge address
 # `derive {cid_from: A, cid_to: B}`, the cyberlink's derived CID
 # `derive {cid_from: A, cid_to: B, signer: S}`, or a candidate instruction
 # source (bj002 appendix, "Reading instructions").
-export use _derive.nu [derive]
+export use _derive.nu [ derive ]
 
 # Resolve an address expression to a CID. A leaf string is an operand —
 # `resolve-particle` turns content into its CID and leaves a CID alone (or
@@ -96,8 +96,8 @@ export use _derive.nu [derive]
 def address [root: path index: record expr: any allow_missing: bool literal: bool]: nothing -> string {
     if ($expr | describe) == "string" { return (resolve-particle $root $index $expr --allow-missing=$allow_missing --literal=$literal) }
     let resolved = $expr | columns | reduce --fold {} {|key acc|
-        $acc | insert $key (if $key == "op" { $expr.op } else { address $root $index ($expr | get $key) $allow_missing $literal })
-    }
+            $acc | insert $key (if $key == "op" { $expr.op } else { address $root $index ($expr | get $key) $allow_missing $literal })
+        }
     record-bytes $resolved | particle-store $root
 }
 
@@ -134,7 +134,7 @@ def edge [
 # verbs take the same three arguments and differ only in the op word — one
 # shape, so it is built once.
 def subject [cid_from: string cid_to: string about_signer: any]: nothing -> record {
-    let pair = {cid_from: $cid_from, cid_to: $cid_to}
+    let pair = {cid_from: $cid_from cid_to: $cid_to}
     if $about_signer == null { $pair } else { $pair | insert signer $about_signer }
 }
 
@@ -208,7 +208,7 @@ export def update [
     --allow-missing # skip the local-file check on a CID operand (see resolve-particle)
     --literal # treat a content operand as literal even if it names a path (see resolve-arg-bytes)
 ]: nothing -> record {
-    edge {cid_from: $cid_from, cid_to: $cid_to, op: "update"} $cid_new $signer $repo $allow_missing $literal
+    edge {cid_from: $cid_from cid_to: $cid_to op: "update"} $cid_new $signer $repo $allow_missing $literal
 }
 
 # Update a file: {about: B, op: update} → C — "C is the version that replaces B".
@@ -235,7 +235,7 @@ export def "update-file" [
     --allow-missing # skip the local-file check on a CID operand (see resolve-particle)
     --literal # treat a content operand as literal even if it names a path (see resolve-arg-bytes)
 ]: nothing -> record {
-    edge {about: $superseded, op: "update"} $replacement $signer $repo $allow_missing $literal
+    edge {about: $superseded op: "update"} $replacement $signer $repo $allow_missing $literal
 }
 
 # Quote: {about: A, op: quote} → B states that B is a faithful excerpt of A
@@ -250,7 +250,7 @@ export def quote [
     --allow-missing # skip the local-file check on a CID operand (see resolve-particle)
     --literal # treat a content operand as literal even if it names a path (see resolve-arg-bytes)
 ]: nothing -> record {
-    edge {about: $about, op: "quote"} $excerpt $signer $repo $allow_missing $literal
+    edge {about: $about op: "quote"} $excerpt $signer $repo $allow_missing $literal
 }
 
 # Translation: {about: A, op: translation} → B states that B says in another
@@ -272,7 +272,7 @@ export def translation [
     --allow-missing # skip the local-file check on a CID operand (see resolve-particle)
     --literal # treat a content operand as literal even if it names a path (see resolve-arg-bytes)
 ]: nothing -> record {
-    edge {about: $original, op: "translation"} $translated $signer $repo $allow_missing $literal
+    edge {about: $original op: "translation"} $translated $signer $repo $allow_missing $literal
 }
 
 # Agree: {op: agree} → B — "claim B is true". Gives an opinion about a
@@ -315,7 +315,7 @@ export def pro [
     --allow-missing # skip the local-file check on a CID operand (see resolve-particle)
     --literal # treat a content operand as literal even if it names a path (see resolve-arg-bytes)
 ]: nothing -> record {
-    edge {about: $target, op: "pro"} $argument $signer $repo $allow_missing $literal
+    edge {about: $target op: "pro"} $argument $signer $repo $allow_missing $literal
 }
 
 # Argument against: {about: C, op: con} → B — "B is an argument against C".
@@ -329,7 +329,7 @@ export def con [
     --allow-missing # skip the local-file check on a CID operand (see resolve-particle)
     --literal # treat a content operand as literal even if it names a path (see resolve-arg-bytes)
 ]: nothing -> record {
-    edge {about: $target, op: "con"} $argument $signer $repo $allow_missing $literal
+    edge {about: $target op: "con"} $argument $signer $repo $allow_missing $literal
 }
 
 # Question: {about: B, op: question} → Q — "Q is a question about B". B is any
@@ -344,7 +344,7 @@ export def question [
     --allow-missing # skip the local-file check on a CID operand (see resolve-particle)
     --literal # treat a content operand as literal even if it names a path (see resolve-arg-bytes)
 ]: nothing -> record {
-    edge {about: $about, op: "question"} $question $signer $repo $allow_missing $literal
+    edge {about: $about op: "question"} $question $signer $repo $allow_missing $literal
 }
 
 # Answer: {cid_from: {about: B, op: question}, cid_to: Q, op: answer} → A —
@@ -362,7 +362,7 @@ export def answer [
     --allow-missing # skip the local-file check on a CID operand (see resolve-particle)
     --literal # treat a content operand as literal even if it names a path (see resolve-arg-bytes)
 ]: nothing -> record {
-    edge {cid_from: {about: $about, op: "question"}, cid_to: $question, op: "answer"} $answer $signer $repo $allow_missing $literal
+    edge {cid_from: {about: $about op: "question"} cid_to: $question op: "answer"} $answer $signer $repo $allow_missing $literal
 }
 
 # Authorship: {about: B, op: author} → P — "the author of particle B is P". The
@@ -378,7 +378,7 @@ export def author [
     --allow-missing # skip the local-file check on a CID operand (see resolve-particle)
     --literal # treat a content operand as literal even if it names a path (see resolve-arg-bytes)
 ]: nothing -> record {
-    edge {about: $content, op: "author"} $author_id $signer $repo $allow_missing $literal
+    edge {about: $content op: "author"} $author_id $signer $repo $allow_missing $literal
 }
 
 # Identity: {about: P1, op: same} → P2 — "P1 and P2 name one entity" (the
@@ -394,7 +394,7 @@ export def same [
     --allow-missing # skip the local-file check on a CID operand (see resolve-particle)
     --literal # treat a content operand as literal even if it names a path (see resolve-arg-bytes)
 ]: nothing -> record {
-    edge {about: $name_from, op: "same"} $name_to $signer $repo $allow_missing $literal
+    edge {about: $name_from op: "same"} $name_to $signer $repo $allow_missing $literal
 }
 
 # Claimed time: {about: X, op: claimed_at} → T — "I claim X's time is T". X is
@@ -426,5 +426,5 @@ export def claimed-at [
     try { $t | into datetime | ignore } catch {
         error make {msg: $"claimed time is not a real calendar date: ($t | to json)"}
     }
-    edge {about: $about, op: "claimed_at"} $t $signer $repo $allow_missing $literal
+    edge {about: $about op: "claimed_at"} $t $signer $repo $allow_missing $literal
 }

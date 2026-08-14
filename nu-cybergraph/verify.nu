@@ -6,8 +6,8 @@
 # for both cases, so callers never branch on where the link came from.
 
 use _repo.nu graph-root
-use _layout.nu [cert-path imported-copies snapshot-dir]
-use _verify-helpers.nu [verify-bundle]
+use _layout.nu [ cert-path imported-copies snapshot-dir ]
+use _verify-helpers.nu [ verify-bundle ]
 
 # Verify a link — own or imported — against its birth seal, never the current
 # root. One row per verified copy: own links have one, imports one per signer.

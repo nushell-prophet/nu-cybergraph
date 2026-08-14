@@ -1,13 +1,13 @@
 # Create link records in a signer's repo, and read the graph they make.
 
 use _repo.nu graph-root
-use _record.nu [link-bytes link-cid edge-cid read-link]
-use _layout.nu [links-dir link-path imported-dir]
-use _particle.nu [resolve-particle store-index]
-use _signer.nu [own-signer]
-use _read.nu [read-links deref touches]
-use _validate.nu [CID_V0_RE]
-use _fs.nu [list-dirs]
+use _record.nu [ link-bytes link-cid edge-cid read-link ]
+use _layout.nu [ links-dir link-path imported-dir ]
+use _particle.nu [ resolve-particle store-index ]
+use _signer.nu [ own-signer ]
+use _read.nu [ read-links deref touches ]
+use _validate.nu [ CID_V0_RE ]
+use _fs.nu [ list-dirs ]
 
 # Write a new link record to links/<cid>.json, named by its own content address.
 # An endpoint is any particle; its CID is the CID v0 of its bytes.
@@ -67,9 +67,9 @@ export def add [
     # than be reported as a successful repeat.
     if ($out | path exists) {
         read-link $out | ignore
-        return {cid: $cid edge: $edge path: $out record: $rec}
+    } else {
+        link-bytes $rec | save --raw $out
     }
-    link-bytes $rec | save --raw $out
     {cid: $cid edge: $edge path: $out record: $rec}
 }
 
@@ -193,11 +193,13 @@ export def tally [
 ]: nothing -> table {
     touching $cid --repo $repo --scan=$scan
     | group-by {|r| [($r.op | default "—") $r.role] | to json --raw }
-    | items {|_ rows| {
-        op: ($rows | first | get op)
-        role: ($rows | first | get role)
-        links: ($rows | get cid | uniq | length)
-        signers: ($rows | get signer | uniq | length)
-    } }
+    | items {|_ rows|
+        {
+            op: ($rows | first | get op)
+            role: ($rows | first | get role)
+            links: ($rows | get cid | uniq | length)
+            signers: ($rows | get signer | uniq | length)
+        }
+    }
     | sort-by op role
 }

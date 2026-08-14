@@ -1,9 +1,9 @@
 use std/assert
 use std/testing *
 
-use ../nu-cybergraph/_record.nu [link-bytes link-cid edge-cid validate-link read-link LINK_KEYS]
-use ../nu-cybergraph/_derive.nu [derive]
-use ../nu-cybergraph/_deps/cid-v0.nu [cid-v0]
+use ../nu-cybergraph/_record.nu [ link-bytes link-cid edge-cid validate-link read-link LINK_KEYS ]
+use ../nu-cybergraph/_derive.nu [ derive ]
+use ../nu-cybergraph/_deps/cid-v0.nu [ cid-v0 ]
 
 # Fixed record for golden pinning — same file/signer CIDs as the
 # bostrom-journal bj003 smoke experiment.

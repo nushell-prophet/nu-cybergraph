@@ -76,8 +76,8 @@ def canonical-pubkeys [dir: path]: nothing -> table {
 # 567 mktemp + copies over the acceptance graph, ~92ms each, to rearrange paths
 # `merkle verify` can now be told directly (nu-multiproof --multiproofs-dir).
 def verify-proof-dir [dir: path --cert: path --multiproofs-dir: path]: nothing -> record {
-    # Not `default`: it takes a value, so the glob would run even when the
-    # caller named the certificate — and over a graph home it finds none.
+    # Not `default`: it takes a value, so the listing below would run even when
+    # the caller named the certificate — and over a graph home it finds none.
     let proof = if $cert != null { $cert } else {
         let certs = list-files $dir --suffix ".cert.json"
         if ($certs | length) != 1 {
@@ -304,6 +304,39 @@ def verify-custody [bundle: path link_cid: string author: string root_handoff: a
     $out
 }
 
+# The columns this repo adds on top of `merkle verify`'s verdict, in the state
+# they take when nothing could be read. Written once because `verify-bundle` has
+# two exits sixty lines apart, and both used to spell the whole set out. 170a0e7
+# is where that started: the tail had grown these five over several commits, and
+# the new early exit copied all five at once rather than sharing them — the
+# defect 022585d named in `link add`, and from then on every column would cost
+# two edits.
+# The tail merges its real values over these, so a column added here appears at
+# the unreadable exit without an edit.
+const UNREAD_COLUMNS = {
+    record: null
+    signer: {cid: null bound: false endorsed: null}
+    handoff: null
+    custody: []
+    handed_to: null
+}
+
+# Add those columns to an upstream verdict, raising if upstream already has one
+# of the names.
+#
+# `insert` in a fold and not `merge`, which was the first shape of this: `merge`
+# overwrites in silence, and these five names are added to a record this repo
+# does not own. Upstream grows columns — `content_enumeration` arrived from
+# nu-multiproof between two refreshes of docs/20260730-two-stamp-ergo-check.nu —
+# so an upstream `record` or `signer` some day is a real event, not a
+# hypothetical. `insert` stops the run and names the column; `merge` would hide
+# upstream's answer under this repo's default, and `custody: []` reads as "no
+# custody layers" rather than as "something went wrong".
+def add-columns [v: record cols: record]: nothing -> record {
+    $cols | items {|name value| {name: $name value: $value} }
+    | reduce --fold $v {|c acc| $acc | insert $c.name $c.value }
+}
+
 # Verify a portable bundle directory: the birth proof (multiproof result +
 # SIGNER BINDING — the record's `signer` must be the CID of a pubkey that
 # validly signed the root statement), then every custody layer on top.
@@ -336,13 +369,7 @@ export def verify-bundle [bundle: path --cert: path --multiproofs-dir: path]: no
     # throwing its own message, so this must never become a `try` around the
     # read.
     if ($v.content_verified | describe) != "bool" {
-        return ($v
-            | reject ots
-            | insert record null
-            | insert signer {cid: null bound: false endorsed: null}
-            | insert handoff null
-            | insert custody []
-            | insert handed_to null)
+        return (add-columns ($v | reject ots) $UNREAD_COLUMNS)
     }
 
     # read-link throws on a record that fails self-addressing — tampered bytes
@@ -393,13 +420,16 @@ export def verify-bundle [bundle: path --cert: path --multiproofs-dir: path]: no
     #
     # Upstream still PRINTS `ots: absent` from `merkle verify`. Silencing that
     # needs a change there, not a filter here.
-    $v
-    | reject ots
-    | insert record $rec
-    | insert signer {cid: $rec.signer bound: $signer_bound endorsed: $signer_endorsed}
-    | insert handoff $root_handoff
-    | insert custody $custody
-    | insert handed_to $handed_to
+    # The real values merge over UNREAD_COLUMNS, not over the verdict: that
+    # overwrite is this repo's own defaults giving way to this repo's own
+    # answers, which is nothing like overwriting a column upstream returned.
+    add-columns ($v | reject ots) ($UNREAD_COLUMNS | merge {
+        record: $rec
+        signer: {cid: $rec.signer bound: $signer_bound endorsed: $signer_endorsed}
+        handoff: $root_handoff
+        custody: $custody
+        handed_to: $handed_to
+    })
     | update valid ($v.valid and $signer_bound and $root_handoff_ok and $custody_ok)
     | update error (if $v.error != null { $v.error } else if not $signer_bound {
         "record's signer CID matches no validly-signing pubkey in the bundle"

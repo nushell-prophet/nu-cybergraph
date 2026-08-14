@@ -4,8 +4,8 @@ use std/testing *
 use ../nu-cybergraph/particle.nu
 use ../nu-cybergraph/link.nu
 use ../nu-cybergraph/convention.nu
-use ../nu-cybergraph/_derive.nu [derive]
-use ../nu-cybergraph/_layout.nu [particle-path]
+use ../nu-cybergraph/_derive.nu [ derive ]
+use ../nu-cybergraph/_layout.nu [ particle-path ]
 
 # Same fixture CIDs as test_convention.nu, plus a second signer: aggregation is
 # about telling voices apart, so a one-signer fixture could not fail.
@@ -37,10 +37,10 @@ def "a plain edge reads as a plain edge, an instruction reads as its verb" [] {
     assert equal $plain.src null
 
     let instr = link list --repo $tmp | where op == "update" | first
-    assert equal $instr.src {about: $B, op: "update"}
+    assert equal $instr.src {about: $B op: "update"}
     assert equal $instr.cid_to $C
     # The verb is readable without knowing the store: the source dereferences.
-    assert equal $instr.cid_from (derive {about: $B, op: "update"})
+    assert equal $instr.cid_from (derive {about: $B op: "update"})
 }
 
 @test
@@ -105,7 +105,10 @@ def "the rg-narrowed reading and the full scan return the same rows" [] {
     # Asserted outright as well: with no rg on PATH both sides run the same
     # branch, and an equality test alone would then pin nothing.
     assert equal (link touching $B --repo $tmp --scan | get role | sort) [
-        "cid_from.about" "cid_from.cid_from.about" "cid_to" "cid_to.cid_to"
+        "cid_from.about"
+        "cid_from.cid_from.about"
+        "cid_to"
+        "cid_to.cid_to"
     ]
 }
 
@@ -167,7 +170,7 @@ def "a published file that is not a canonical record is not an instruction" [] {
 def "the reader refuses a store file that does not hash to its name" [] {
     let ctx = $in
     convention update-file $B $C --signer $S --repo $ctx.tmp --allow-missing
-    let src = derive {about: $B, op: "update"}
+    let src = derive {about: $B op: "update"}
     "tampered" | save --force --raw (particle-path $ctx.root $src)
     assert error {|| link list --repo $ctx.tmp }
 }

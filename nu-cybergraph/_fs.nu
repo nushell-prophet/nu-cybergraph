@@ -87,6 +87,22 @@ export def list-dirs [dir: path]: nothing -> list<path> {
 # source reaching this function is a file this repo wrote. A FOREIGN tree is
 # copy-tree's job, and that is where following a link would read bytes the
 # bundle does not contain — refused there by name.
+# `path exists` in front of `path type`, and it is not the dead half it looks
+# like. ba0571e removed it on the grounds that `path type` compared in place
+# answers null for an absent path rather than raising — true, and beside the
+# point. `path type` raises on paths `path exists` merely answers false for, and
+# `and` short-circuits, so the first half is what keeps those out of the second:
+#
+#   parent directory unreadable -> `path type` raises a bare "I/O error" naming
+#     no path at all, where falling through to `save --raw` raises naming the
+#     destination — the very reason this function is written with open/save
+#     instead of `cp` plus a check.
+#   the empty string -> `path type` answers "dir" (measured), so the file would
+#     land in the current directory under its own basename instead of failing.
+#
+# Both are unreachable from the call sites here, which all build $dst from a
+# layout path. The guard stays anyway: it costs one syscall, and it is the half
+# that decides what kind of error the operator reads.
 export def copy-file [src: path dst: path]: nothing -> nothing {
     let landed = if ($dst | path exists) and ($dst | path type) == "dir" {
         $dst | path join ($src | path basename)
