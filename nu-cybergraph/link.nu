@@ -1,7 +1,7 @@
 # Create link records in a signer's repo, and read the graph they make.
 
 use _repo.nu graph-root
-use _record.nu [link-bytes link-cid read-link]
+use _record.nu [link-bytes link-cid edge-cid read-link]
 use _layout.nu [links-dir link-path imported-dir]
 use _particle.nu [resolve-particle store-index]
 use _signer.nu [own-signer]
@@ -44,6 +44,10 @@ export def add [
         signer: $signer_cid
     }
     let cid = link-cid $rec
+    # Beside `cid`, never inside `record`: `record` is the bytes on disk, and
+    # validate-link refuses a fourth key. The edge address is derived, so it is
+    # reported, not stored.
+    let edge = edge-cid $rec
     mkdir (links-dir $root)
     let out = link-path $root $cid
     # The record IS the triple, so file existence IS the triple guard: one act,
@@ -63,10 +67,10 @@ export def add [
     # than be reported as a successful repeat.
     if ($out | path exists) {
         read-link $out | ignore
-        return {cid: $cid path: $out record: $rec}
+        return {cid: $cid edge: $edge path: $out record: $rec}
     }
     link-bytes $rec | save --raw $out
-    {cid: $cid path: $out record: $rec}
+    {cid: $cid edge: $edge path: $out record: $rec}
 }
 
 # One link, read: the triple as stored, then what its endpoints say. The one
