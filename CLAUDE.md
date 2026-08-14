@@ -6,16 +6,6 @@ All the changes where relevant should be propagated to nu-multiproof.
 
 Pre-1.0: no backwards compatibility to keep. A format change is allowed — it only means every CID is recomputed, and the regeneration script below exists so that costs one run.
 
-## Goal / Done
-
-This repo has one job: make the journal's own cybergraph runnable. **The acceptance test is `bostrom-journal`, branch `nu-cybergraph-regen`** — `nu regenerate-cybergraph.nu` builds the whole graph from `particles/` from nothing, and `dotnu embeds-update cybergraph-from-particles.nu` leaves an empty `git diff`. When both run clean, this repo is done for now. Rehearsal green 2026-07-27 under a throwaway key: 567 links, 567 certificates, all `valid: true`; the editor's own signed run is still pending.
-
-In scope: bj002's encoding half — link record, particle store, convention verbs, `seal`, `verify` — plus the reading commands bj003's first half needs (given a CID, which edges touch it; aggregate over them). Those landed on 2026-07-28 as `link list` / `link touching` / `link tally`; that was the last planned feature.
-
-Parked, not built: `bundle`, `import`, custody receipts, `handoff`. They work and they stay, but they answer no question the acceptance test asks. `handoff` is queued for removal (`todo/20260727-180010-remove-handoff.md`).
-
-A change lands when the acceptance test needs it, or when the exercise hits a defect. "An audit found something better" is not a reason — audit → note → fix → new surface → audit is a loop with no exit, and it is what filled this repo's `todo/`. Parked notes are a record, not a work queue.
-
 ## Conventions (shared with nu-multiproof)
 
 - `nu-cybergraph/mod.nu` re-exports the non-`_` submodules wholesale; `_*.nu` files are internal, imported by explicit named lists (`use _record.nu [link-bytes link-cid]`). Never `use foo *`.
