@@ -229,3 +229,31 @@ def assert-same-tree [source: path target: path]: nothing -> nothing {
         }
     }
 }
+
+# A path as the caller would type it from where they stand: relative to the
+# current directory when it sits under it, absolute when it does not.
+#
+# For a path this toolchain constructs and hands back for a person to read.
+# A caller who needs a handle rather than a label takes `| path expand` — the
+# exact inverse, since the value is relative to the cwd it was made in.
+#
+# Why the cwd and not the graph root: the absolute form spent most of the row
+# on a prefix the reader is already standing in, and relative to the cwd the
+# value still pastes straight into `open`.
+#
+# Why a prefix test and not `try { path relative-to } catch { }`: "not under
+# here" is an ordinary answer, not a failure, and burying it in a catch hides
+# that. Not an anchored regex either — the cwd is data, so a directory named
+# `test (2)` would be read as pattern syntax. The trailing separator is part
+# of the prefix: without it `/a/bc` counts as under `/a/b`.
+#
+# Same helper, same reasoning, as nu-multiproof's `_fs.nu` — duplicated (not
+# imported) for the reason given at the top of this file.
+export def cwd-relative []: path -> path {
+    let p = $in
+    if ($p | str starts-with ($env.PWD | path join "")) {
+        $p | path relative-to $env.PWD
+    } else {
+        $p
+    }
+}

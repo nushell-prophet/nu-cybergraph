@@ -11,7 +11,7 @@
 
 use _repo.nu graph-root
 use _layout.nu [ imported-dir receipts-dir receipt-relpath handoff-filename ]
-use _fs.nu [ copy-tree ]
+use _fs.nu [ copy-tree cwd-relative ]
 use _receipt.nu [ receipt-bytes bundle-manifest custody-layers ]
 use _signer.nu [ own-signer ]
 use _verify-helpers.nu [ verify-bundle ]
@@ -75,8 +75,8 @@ export def main [
     {
         link: $link_cid
         signer: $v.signer.cid
-        path: $dest
-        receipt: $receipt_path
+        path: ($dest | cwd-relative)
+        receipt: ($receipt_path | cwd-relative)
         custody: ($v.custody | length)
         # The link's date, and the only one: the anchor over the signature that
         # endorsed it. Reached without a `?` because the refusal above already

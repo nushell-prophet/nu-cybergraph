@@ -6,7 +6,7 @@
 # newer roots and must not touch existing certificates.
 
 use _repo.nu graph-root
-use _fs.nu [ list-files copy-file move-file ]
+use _fs.nu [ list-files copy-file move-file cwd-relative ]
 use _layout.nu [ links-dir certs-dir cert-path snapshot-dir receipts-dir receipt-cert-path receipt-relpath receipt-cid RECEIPT_SUFFIX LINKS_DIR CERTS_DIR SEALS_DIR IMPORTED_DIR RECEIPTS_DIR ]
 use _record.nu [ read-link ]
 use _deps/seal.nu [ seal ]
@@ -270,8 +270,12 @@ export def main [
     mkdir (certs-dir $root)
     let newborn = list-files (links-dir $root) --suffix ".json"
         | where (not ((cert-path $root (($it | path parse).stem)) | path exists))
+    # `path expand` because this is a handle, not a label: `merkle prove` returns
+    # its path relative to the cwd, and `move-file` must not depend on where the
+    # operator happened to stand. The expand is the exact inverse — it resolves
+    # against that same cwd — so it is a no-op on the absolute form.
     for f in $newborn {
-        let proof = merkle prove ($f | path relative-to $root) --repo $root
+        let proof = merkle prove ($f | path relative-to $root) --repo $root | path expand
         move-file $proof (cert-path $root (($f | path parse).stem))
     }
 
@@ -283,9 +287,9 @@ export def main [
     let new_receipts = list-files (receipts-dir $root) --suffix $RECEIPT_SUFFIX
         | where (not ((receipt-cert-path $root (receipt-cid $it)) | path exists))
     for f in $new_receipts {
-        let proof = merkle prove ($f | path relative-to $root) --repo $root
+        let proof = merkle prove ($f | path relative-to $root) --repo $root | path expand
         move-file $proof (receipt-cert-path $root (receipt-cid $f))
     }
 
-    {sealed: $sealed newborn: ($newborn | length) receipts: ($new_receipts | length) snapshot: $snap}
+    {sealed: $sealed newborn: ($newborn | length) receipts: ($new_receipts | length) snapshot: ($snap | cwd-relative)}
 }

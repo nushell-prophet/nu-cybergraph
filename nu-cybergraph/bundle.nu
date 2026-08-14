@@ -19,7 +19,7 @@
 use _deps/ssh-sign.nu [ ssh-sign ]
 use _deps/pubkey.nu [ pubkey ]
 use _repo.nu graph-root
-use _fs.nu [ list-files list-dirs copy-file copy-tree ]
+use _fs.nu [ list-files list-dirs copy-file copy-tree cwd-relative ]
 use _layout.nu [
     links-dir
     particles-dir
@@ -273,5 +273,5 @@ export def main [
         rm --recursive --force $out
         error make $e.raw
     }
-    $out
+    $out | cwd-relative
 }

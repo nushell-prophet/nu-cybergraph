@@ -7,7 +7,7 @@ use _particle.nu [ resolve-particle store-index particle-store ]
 use _signer.nu [ resolve-signer ]
 use _read.nu [ read-links deref touches ]
 use _validate.nu [ CID_V0_RE ]
-use _fs.nu [ list-dirs ]
+use _fs.nu [ list-dirs cwd-relative ]
 
 # Write a new link record to links/<cid>.json, named by its own content address.
 # An endpoint is any particle; its CID is the CID v0 of its bytes.
@@ -82,7 +82,7 @@ export def add [
     } else {
         link-bytes $rec | save --raw $out
     }
-    {cid: $cid edge: $edge path: $out record: $rec}
+    {cid: $cid edge: $edge path: ($out | cwd-relative) record: $rec}
 }
 
 # One link, read: the triple as stored, then what its endpoints say. The one
