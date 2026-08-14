@@ -1,10 +1,12 @@
 # Entry point stub — the tasks are the `main <task>` subcommands below.
 export def main [] { }
 
-# Requires a nutest checkout at ../../ai-sandbox-dev-container/nutest — the
-# same live-sibling convention as the nu-multiproof dependency (_deps/).
+# Requires nutest as a sibling at ../nutest — the same live-sibling convention
+# as the nu-multiproof dependency (_deps/). In the monorepo that sibling is a
+# symlink to the one checkout outside it, which other modules also use: the
+# path is uniform here, and nothing had to move.
 export def 'main test' [--fail] {
-    use ../../ai-sandbox-dev-container/nutest/nutest
+    use ../nutest/nutest
 
     nutest run-tests --path tests/ --fail=$fail
 }
