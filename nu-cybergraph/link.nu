@@ -4,7 +4,7 @@ use _repo.nu graph-root
 use _record.nu [ link-bytes link-cid edge-bytes read-link ]
 use _layout.nu [ links-dir link-path imported-dir ]
 use _particle.nu [ resolve-particle store-index particle-store ]
-use _signer.nu [ own-signer ]
+use _signer.nu [ resolve-signer ]
 use _read.nu [ read-links deref touches ]
 use _validate.nu [ CID_V0_RE ]
 use _fs.nu [ list-dirs ]
@@ -14,6 +14,8 @@ use _fs.nu [ list-dirs ]
 # Both endpoints accept a CID or content: a non-CID argument is resolved to
 # bytes (a path is opened, anything else is literal — see resolve-arg-bytes)
 # and published as a file under particles/, its CID linked (see _particle.nu).
+# `--signer` publishes content too, but by a narrower rule (see resolve-signer):
+# it never opens a path, and a CID there is never checked against particles/.
 # Idempotent: asserting the same triple again returns the existing record,
 # not an error. A CID endpoint must resolve to a file this repo holds — see
 # resolve-particle for why, and --allow-missing for the escape hatch to name a
@@ -21,10 +23,11 @@ use _fs.nu [ list-dirs ]
 @example "link two particles by the CIDs of their bytes" { link add QmUQUHEmv651XCBhiWUQpx2zf4PDts1aXL324ZFyV4QZPF QmW9519sfmW2MvDb4TU4dKtiFAXm1UPDvE7JrMaBjprVHp --allow-missing }
 @example "publish two texts as particles and link them" { link add "cyber" "bostrom" }
 @example "link a file to text, by its path" { link add path/to/doc.md "reviewed" }
+@example "sign under an ad-hoc identity, published as a particle" { link add "cyber" "bostrom" --signer alice }
 export def add [
     cid_from: string # source vertex: a CID v0, a path to publish, or content to publish as a particle
     cid_to: string # target vertex: a CID v0, a path to publish, or content to publish as a particle
-    --signer: string # Signer CID (default: CID of the single registered pubkey)
+    --signer: string # signer: a CID v0, or content published as a particle — never a path (default: CID of the single registered pubkey)
     --repo: path # Target repo root (default: git root of current directory)
     --allow-missing # skip the local-file check on a CID endpoint (see resolve-particle)
     --literal # treat a text endpoint as literal content even if it names a path
@@ -36,7 +39,7 @@ export def add [
     # already written files by the time it raised — side effects before the
     # check that forbids them, and the operator was left with orphan particles
     # for a link that was never written.
-    let signer_cid = if $signer != null { $signer } else { own-signer $root }
+    let signer_cid = resolve-signer $root $signer
     let index = store-index $root
     let rec = {
         cid_from: (resolve-particle $root $index $cid_from --allow-missing=$allow_missing --literal=$literal)

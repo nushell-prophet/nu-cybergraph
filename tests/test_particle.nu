@@ -255,6 +255,51 @@ def "link add publishes nothing when the repo has no signer identity" [] {
     assert not ((particles-dir $in.root) | path exists)
 }
 
+# --signer publishes content, so an identity can be named by its bytes and not
+# only by an address the operator computed elsewhere. What it is for: several
+# signers in one repo, which `init` cannot give — it registers exactly one key.
+@test
+def "link add publishes a bare-string signer as a particle" [] {
+    let tmp = $in.tmp
+    let r = link add "cyber" "bostrom" --repo $tmp --signer "alice" | get record
+    assert equal $r.signer ("alice" | into binary | cid-v0)
+    assert equal (open --raw (particle-path $in.root $r.signer)) "alice"
+}
+
+# The convention path resolves the signer itself, before `address` publishes
+# the operand records, so a bare-string signer means the same thing there.
+@test
+def "convention verbs publish a bare-string signer as a particle" [] {
+    let tmp = $in.tmp
+    let r = convention agree "cyber" --repo $tmp --signer "alice" | get record
+    assert equal $r.signer ("alice" | into binary | cid-v0)
+}
+
+# A signer names an identity, never a file: a name is published as its own
+# bytes whatever shape it has, so an ad-hoc one carrying a dot or a slash needs
+# no flag and cannot be mistaken for a mistyped path.
+@test
+def "link add publishes a path-shaped signer as its own bytes" [] {
+    let tmp = $in.tmp
+    let key = $tmp | path join "other.pub"
+    "ssh-ed25519 AAAA\n" | save --raw $key
+    let r = link add "cyber" "bostrom" --repo $tmp --signer $key | get record
+    assert equal $r.signer ($key | into binary | cid-v0)
+    let named = link add "cyber" "prophet" --repo $tmp --signer "agent-1.v2" | get record
+    assert equal $named.signer ("agent-1.v2" | into binary | cid-v0)
+}
+
+# A signer CID skips the local-file check an endpoint CID gets, and needs no
+# --allow-missing: a signer addresses a pubkey file, which lives in
+# multiproofs/pubkeys/ and never in the particle store — this repo's own
+# identity would fail that check.
+@test
+def "link add takes a signer CID this repo holds no file for" [] {
+    let r = link add "cyber" "bostrom" --repo $in.tmp --signer $N | get record
+    assert equal $r.signer $N
+    assert equal ((particle-path $in.root $N) | path exists) false
+}
+
 @test
 def "link add passes CID endpoints through and publishes only the edge pair" [] {
     let r = link add $A $B --repo $in.tmp --signer $N --allow-missing

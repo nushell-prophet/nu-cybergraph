@@ -71,7 +71,7 @@
 use _repo.nu graph-root
 use _derive.nu [ record-bytes ]
 use _particle.nu [ particle-store resolve-particle store-index ]
-use _signer.nu [ own-signer ]
+use _signer.nu [ resolve-signer ]
 use _validate.nu [ RFC3339_RE ]
 use link.nu
 
@@ -122,9 +122,11 @@ def edge [
     let root = graph-root $repo
     # Same order as `link add`, for the same reason: `address` publishes every
     # record it mints, so a signer resolved after it would leave those files
-    # behind when the repo cannot name one. Resolved here and passed down, so
-    # `link add` takes it as given rather than asking a second time.
-    let signer_cid = if $signer != null { $signer } else { own-signer $root }
+    # behind when the repo cannot name one. Through `resolve-signer` and not an
+    # inline own-signer call, so a bare-string signer means the same thing on
+    # both write paths. Resolved here and passed down as a CID, so `link add`
+    # takes it as given rather than asking a second time.
+    let signer_cid = resolve-signer $root $signer
     let index = store-index $root
     link add (address $root $index $src $allow_missing $literal) (address $root $index $tgt $allow_missing $literal) --signer $signer_cid --repo $repo --allow-missing
 }
