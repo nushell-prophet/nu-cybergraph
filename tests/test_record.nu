@@ -1,7 +1,7 @@
 use std/assert
 use std/testing *
 
-use ../nu-cybergraph/_record.nu [ link-bytes link-cid edge-cid validate-link read-link LINK_KEYS ]
+use ../nu-cybergraph/_record.nu [ link-bytes link-cid edge-bytes validate-link read-link LINK_KEYS ]
 use ../nu-cybergraph/_derive.nu [ derive ]
 use ../nu-cybergraph/_deps/cid-v0.nu [ cid-v0 ]
 
@@ -38,16 +38,16 @@ def "link file CID equals the derived cyberlink CID" [] {
 # edge address, and against the link CID, so the two can never be confused.
 @test
 def "the edge CID is the derived address of the pair without the signer" [] {
-    assert equal (edge-cid (golden-record)) (derive ((golden-record) | reject signer))
-    assert equal (edge-cid (golden-record)) $GOLDEN_EDGE_CID
-    assert ((edge-cid (golden-record)) != $GOLDEN_CID)
+    assert equal (edge-bytes (golden-record) | cid-v0) (derive ((golden-record) | reject signer))
+    assert equal (edge-bytes (golden-record) | cid-v0) $GOLDEN_EDGE_CID
+    assert ((edge-bytes (golden-record) | cid-v0) != $GOLDEN_CID)
 }
 
 # Two signers, one edge — the whole reason the edge has its own address.
 @test
 def "the edge CID is the same for every signer of that edge" [] {
     let other = (golden-record) | update signer $GOLDEN_CID
-    assert equal (edge-cid $other) (edge-cid (golden-record))
+    assert equal (edge-bytes $other) (edge-bytes (golden-record))
     assert ((link-cid $other) != (link-cid (golden-record)))
 }
 

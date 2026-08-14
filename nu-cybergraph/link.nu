@@ -1,9 +1,9 @@
 # Create link records in a signer's repo, and read the graph they make.
 
 use _repo.nu graph-root
-use _record.nu [ link-bytes link-cid edge-cid read-link ]
+use _record.nu [ link-bytes link-cid edge-bytes read-link ]
 use _layout.nu [ links-dir link-path imported-dir ]
-use _particle.nu [ resolve-particle store-index ]
+use _particle.nu [ resolve-particle store-index particle-store ]
 use _signer.nu [ own-signer ]
 use _read.nu [ read-links deref touches ]
 use _validate.nu [ CID_V0_RE ]
@@ -45,9 +45,18 @@ export def add [
     }
     let cid = link-cid $rec
     # Beside `cid`, never inside `record`: `record` is the bytes on disk, and
-    # validate-link refuses a fourth key. The edge address is derived, so it is
-    # reported, not stored.
-    let edge = edge-cid $rec
+    # validate-link refuses a fourth key.
+    #
+    # The pair is published as a particle, and the address comes back from the
+    # store, so what is reported is the address of bytes that exist. Without it
+    # the edge address was derived and nothing held its preimage: `link add A
+    # <edge>` — a statement about the edge just made — was refused as a CID this
+    # repo holds no file for, which is exactly the reference the command had
+    # just handed out. It is also what conventions already do (convention.nu
+    # `address` publishes every record it mints), so `confirm A B` published the
+    # pair while `link add A B`, computing the same record, published nothing.
+    # Idempotent, so a repeat and a second signer of the same edge cost nothing.
+    let edge = edge-bytes $rec | particle-store $root
     mkdir (links-dir $root)
     let out = link-path $root $cid
     # The record IS the triple, so file existence IS the triple guard: one act,

@@ -256,10 +256,42 @@ def "link add publishes nothing when the repo has no signer identity" [] {
 }
 
 @test
-def "link add passes CID endpoints through without publishing anything" [] {
-    link add $A $B --repo $in.tmp --signer $N --allow-missing | ignore
-    # only links/ was written: no particles dir means no file was minted
-    assert not ((particles-dir $in.root) | path exists)
+def "link add passes CID endpoints through and publishes only the edge pair" [] {
+    let r = link add $A $B --repo $in.tmp --signer $N --allow-missing
+    # The endpoints were addresses already, so nothing was minted for them; the
+    # one file written is the pair the reported edge address names.
+    let stored = ls (particles-dir $in.root) | get name | each { path basename }
+    assert equal $stored [$r.edge]
+    assert equal (open --raw (particle-path $in.root $r.edge)) $"{\"cid_from\":\"($A)\",\"cid_to\":\"($B)\"}\n"
+}
+
+# The reference `link add` hands out has to be one `link add` accepts back. It
+# reported the edge address while nothing held its preimage, so stating anything
+# about the edge just made — the plainest next act there is — was refused as a
+# CID this repo holds no file for.
+@test
+def "the edge address link add reports can be linked to without a flag" [] {
+    let tmp = $in.tmp
+    let born = link add "cyber" "prophet" --repo $tmp --signer $N
+    let about = link add "cyber" $born.edge --repo $tmp --signer $N
+    assert equal $about.record.cid_to $born.edge
+    # ...and it reads back as the edge itself, not as an opaque address.
+    let row = link list --repo $tmp | where cid == $about.cid | first
+    assert equal $row.tgt {cid_from: $born.record.cid_from cid_to: $born.record.cid_to}
+}
+
+# The publish sits before the triple guard's no-op, so re-adding a link written
+# before this rule existed heals the store. Pinned because moving the publish
+# into the guard's `else` branch is the obvious tidy, and it would take the heal
+# with it without failing anything else.
+@test
+def "re-adding an existing link restores a missing edge particle" [] {
+    let tmp = $in.tmp
+    let born = link add "cyber" "prophet" --repo $tmp --signer $N
+    rm (particle-path $in.root $born.edge)
+    let again = link add "cyber" "prophet" --repo $tmp --signer $N
+    assert equal $again.cid $born.cid # the record itself was the no-op it always was
+    assert ((particle-path $in.root $born.edge) | path exists) "the missing edge particle was not restored"
 }
 
 # The default this repo's own resolve-particle enforces: a CID it holds no

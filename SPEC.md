@@ -166,6 +166,8 @@ The atomic edge. Exactly three keys, all CIDs, nothing else:
 
 Because the record is exactly the triple, its self-address **equals the cyberlink's derived CID** under 2.2. The same act asserted by the same signer is one CID for everyone, whenever recorded, and the file in `links/` is the published preimage of that address.
 
+**Edge address.** The edge alone — the same act with the signer dropped — has its own address, `derive {cid_from, cid_to}` under 2.2, so two signers stating one edge share one address. A writer MUST publish that record as a store file (3.2) when it writes the link — the same rule section 4 puts on every record a convention mints, and this is the same record `confirm A B` and `deny A B` mint as their target. Without the preimage the address is one no later act can reference: a statement *about* the edge would name a CID the graph holds no bytes for, unless a `confirm` or `deny` about that same edge happened to publish it first. Publishing is idempotent, so a repeat, a second signer of the same edge, and a convention minting the same pair all write nothing new.
+
 A reader MUST enforce both addressing rules, from a **single** read of the bytes:
 
 1. CID v0 of the raw bytes equals the filename stem.
@@ -184,7 +186,7 @@ Arbitrary content published as a self-addressed file, storing the exact bytes: n
 - A reader MUST hash the bytes back to the CID before serving them.
 - Absence is ordinary for a reader: a link names CIDs and the bytes need not be local. Absence and tampering MUST stay distinguishable — an optional read returns nothing for a CID the store does not hold, and still raises for a file that fails its hash.
 
-The store holds two kinds of thing: content published by a user, and the instruction and address records minted by conventions (section 4). Publishing the latter is what makes a derived CID readable — the record is its own preimage.
+The store holds content published by a user, the instruction and address records minted by conventions (section 4), and the edge-address record of every link (3.1). Publishing the latter two is what makes a derived CID readable — the record is its own preimage.
 
 Store files are not sealed directly. A file is time-anchored the moment a sealed link names its CID, because showing bytes that hash to an anchored CID extends the anchor to those bytes.
 
@@ -257,7 +259,7 @@ Sixteen verbs. Twelve are bj002 conventions; `repeat` is edge repetition (bj002 
 
 A record shown in source or target position means the CID of its canonical bytes. `answer`'s source nests: the inner question record resolves to its own CID first, then the outer record is serialized.
 
-The edge address is `derive {cid_from: A, cid_to: B}` and the cyberlink's derived CID is `derive {cid_from: A, cid_to: B, signer: S}` — bj002's two special cases, which are just records here. The second is byte-identical to the link file itself (3.1), so `confirm A B S` targets a CID whose preimage is already published in `links/`.
+The edge address is `derive {cid_from: A, cid_to: B}` and the cyberlink's derived CID is `derive {cid_from: A, cid_to: B, signer: S}` — bj002's two special cases, which are just records here. The second is byte-identical to the link file itself (3.1), so `confirm A B S` targets a CID whose preimage is already published in `links/`; the first is published under `particles/` by every writer that mints it — the link writer (3.1), and `confirm A B` / `deny A B`, whose target IS that record — so it too is always a published preimage.
 
 Reading these edges back means dereferencing the source CID in `particles/`. An operand's CID appears as a literal string in every record that names it, so a text search narrows candidate files — but a search MUST only narrow: every surviving file is read, hashed back to its name, and parsed exactly as it would have been. A file that merely quotes a CID in prose is found by the search and dropped by the reading.
 

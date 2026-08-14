@@ -10,7 +10,7 @@
 # instead of drifting.
 
 use _deps/cid-v0.nu [ cid-v0 ]
-use _derive.nu [ record-bytes derive ]
+use _derive.nu [ record-bytes ]
 use _validate.nu [ assert-keys assert-cids ]
 
 # Why alphabetical (not the semantic triple-first order): one serialization
@@ -44,18 +44,23 @@ export def link-cid [rec: record]: nothing -> string {
     link-bytes $rec | cid-v0
 }
 
-# The edge alone: the pair, with the signer dropped. Why a second address at
-# all — the link CID covers the signer, so it answers "which signer asserted
-# this edge", and two signers stating the same edge get two CIDs. Reading
-# across signers needs the address the signer does not enter.
+# The edge alone, as canonical bytes: the pair, with the signer dropped. Why a
+# second address at all — the link CID covers the signer, so it answers "which
+# signer asserted this edge", and two signers stating the same edge get two
+# CIDs. Reading across signers needs the address the signer does not enter.
 #
 # This mints no new byte format: bj002's appendix already names it, and README
 # "Link record format" pins it — the edge address IS `derive {cid_from, cid_to}`
 # under the same canon, the address `convention confirm A B` has been computing
 # all along. Not validated here: every caller passes a record that link-cid or
 # read-link already checked, and one invariant belongs in one place.
-export def edge-cid [rec: record]: nothing -> string {
-    derive ($rec | select cid_from cid_to)
+#
+# Bytes and not the CID, because `link add` publishes these bytes as a particle
+# and takes the address back from the store — so the address it reports and the
+# preimage it stores cannot drift apart. Callers wanting only the address hash
+# these: `edge-bytes $rec | cid-v0`.
+export def edge-bytes [rec: record]: nothing -> binary {
+    record-bytes ($rec | select cid_from cid_to)
 }
 
 # Read + validate a record file, enforcing BOTH addressing rules: the CID of
