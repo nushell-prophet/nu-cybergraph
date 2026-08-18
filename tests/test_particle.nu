@@ -306,8 +306,8 @@ def "link add passes CID endpoints through and publishes only the edge pair" [] 
     # The endpoints were addresses already, so nothing was minted for them; the
     # one file written is the pair the reported edge address names.
     let stored = ls (particles-dir $in.root) | get name | each { path basename }
-    assert equal $stored [$r.edge]
-    assert equal (open --raw (particle-path $in.root $r.edge)) $"{\"cid_from\":\"($A)\",\"cid_to\":\"($B)\"}\n"
+    assert equal $stored [$r.edge_cid]
+    assert equal (open --raw (particle-path $in.root $r.edge_cid)) $"{\"cid_from\":\"($A)\",\"cid_to\":\"($B)\"}\n"
 }
 
 # The reference `link add` hands out has to be one `link add` accepts back. It
@@ -318,10 +318,10 @@ def "link add passes CID endpoints through and publishes only the edge pair" [] 
 def "the edge address link add reports can be linked to without a flag" [] {
     let tmp = $in.tmp
     let born = link add "cyber" "prophet" --repo $tmp --signer $N
-    let about = link add "cyber" $born.edge --repo $tmp --signer $N
-    assert equal $about.record.cid_to $born.edge
+    let about = link add "cyber" $born.edge_cid --repo $tmp --signer $N
+    assert equal $about.record.cid_to $born.edge_cid
     # ...and it reads back as the edge itself, not as an opaque address.
-    let row = link list --repo $tmp | where cid == $about.cid | first
+    let row = link list --repo $tmp | where link_cid == $about.link_cid | first
     assert equal $row.tgt {cid_from: $born.record.cid_from cid_to: $born.record.cid_to}
 }
 
@@ -333,10 +333,10 @@ def "the edge address link add reports can be linked to without a flag" [] {
 def "re-adding an existing link restores a missing edge particle" [] {
     let tmp = $in.tmp
     let born = link add "cyber" "prophet" --repo $tmp --signer $N
-    rm (particle-path $in.root $born.edge)
+    rm (particle-path $in.root $born.edge_cid)
     let again = link add "cyber" "prophet" --repo $tmp --signer $N
-    assert equal $again.cid $born.cid # the record itself was the no-op it always was
-    assert ((particle-path $in.root $born.edge) | path exists) "the missing edge particle was not restored"
+    assert equal $again.link_cid $born.link_cid # the record itself was the no-op it always was
+    assert ((particle-path $in.root $born.edge_cid) | path exists) "the missing edge particle was not restored"
 }
 
 # The default this repo's own resolve-particle enforces: a CID it holds no

@@ -47,8 +47,8 @@ export def add [
         signer: $signer_cid
     }
     let cid = link-cid $rec
-    # Beside `cid`, never inside `record`: `record` is the bytes on disk, and
-    # validate-link refuses a fourth key.
+    # Beside `link_cid`, never inside `record`: `record` is the bytes on disk,
+    # and validate-link refuses a fourth key.
     #
     # The pair is published as a particle, and the address comes back from the
     # store, so what is reported is the address of bytes that exist. Without it
@@ -82,7 +82,7 @@ export def add [
     } else {
         link-bytes $rec | save --raw $out
     }
-    {cid: $cid edge: $edge path: ($out | cwd-relative) record: $rec}
+    {link_cid: $cid edge_cid: $edge path: ($out | cwd-relative) record: $rec}
 }
 
 # One link, read: the triple as stored, then what its endpoints say. The one
@@ -90,7 +90,7 @@ export def add [
 def statement [index: record l: record]: nothing -> record {
     let src = deref $index $l.cid_from
     {
-        cid: $l.cid
+        link_cid: $l.link_cid
         cid_from: $l.cid_from
         cid_to: $l.cid_to
         signer: $l.signer
@@ -111,7 +111,7 @@ def statement [index: record l: record]: nothing -> record {
 # by `verify` against its birth seal, and mixing it in here would silently turn
 # a reading of what THIS signer said into a reading of everyone — the exact
 # distinction aggregation rests on.
-@example "every update edge with the record that states it" { link list | where op == "update" | select cid src cid_to }
+@example "every update edge with the record that states it" { link list | where op == "update" | select link_cid src cid_to }
 export def list [
     --repo: path # Repo root (default: git root of current directory)
 ]: nothing -> table {
@@ -147,7 +147,7 @@ export def imported [
         read-links $bundle | each {|l| statement $index $l }
     }
     | flatten
-    | sort-by cid
+    | sort-by link_cid
 }
 
 # Every link that names this CID, one row per place it is named — bj003's
@@ -180,7 +180,7 @@ export def touching [
     let index = store-index $root
     $hits
     | sort-by link role
-    | each {|h| statement $index ({cid: $h.link} | merge (read-link (link-path $root $h.link))) | insert role $h.role | move role --after cid }
+    | each {|h| statement $index ({link_cid: $h.link} | merge (read-link (link-path $root $h.link))) | insert role $h.role | move role --after link_cid }
 }
 
 # Count what the graph says about a CID: one row per (verb, position), with the
@@ -209,7 +209,7 @@ export def tally [
         {
             op: ($rows | first | get op)
             role: ($rows | first | get role)
-            links: ($rows | get cid | uniq | length)
+            links: ($rows | get link_cid | uniq | length)
             signers: ($rows | get signer | uniq | length)
         }
     }

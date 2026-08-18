@@ -24,7 +24,7 @@ use _fs.nu list-files
 export def read-links [root: path]: nothing -> table {
     list-files (links-dir $root) --suffix ".json"
     | sort
-    | each {|f| {cid: ($f | path parse | get stem)} | merge (read-link $f) }
+    | each {|f| {link_cid: ($f | path parse | get stem)} | merge (read-link $f) }
 }
 
 # The record a store file publishes, or null when it is not an instruction

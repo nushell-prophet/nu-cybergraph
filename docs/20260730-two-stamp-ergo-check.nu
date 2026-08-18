@@ -288,7 +288,7 @@ $"newborn certificates: ($sealed.newborn), links on disk: (nu-cybergraph link li
 
 # Verify goes through the portable bundle a stranger would get, never through
 # this repo's current tree-root.txt.
-let v = nu-cybergraph verify $plain.cid --repo $a.repo | first
+let v = nu-cybergraph verify $plain.link_cid --repo $a.repo | first
 {valid: $v.valid signer_bound: $v.signer.bound endorsed: $v.signer.endorsed.status endorsements: ($v.endorsements | length)} | print $in
 # => ╭──────────────┬────────╮
 # => │ valid        │ true   │
@@ -329,10 +329,10 @@ $v | columns | print $in
 # the first hop — a layer records a PREVIOUS custodian, and B received this
 # straight from its author. B re-exporting to C is what makes the first layer.
 let B_ID = own-signer $b.home
-let h1 = nu-cybergraph bundle $plain.cid --repo $a.repo --to $B_ID --key $a.key --out ($tmp | path join h1)
+let h1 = nu-cybergraph bundle $plain.link_cid --repo $a.repo --to $B_ID --key $a.key --out ($tmp | path join h1)
 nu-cybergraph import $h1 --repo $b.repo | ignore
 nu-cybergraph seal --repo $b.repo --no-stamp | ignore
-let vb = nu-cybergraph verify $plain.cid --repo $b.repo | first
+let vb = nu-cybergraph verify $plain.link_cid --repo $b.repo | first
 {valid: $vb.valid custody_layers: ($vb.custody | length) custody_all_valid: ($vb.custody | all {|c| $c.valid }) handed_to_is_b: ($vb.handed_to == $B_ID)} | print $in
 # => ╭───────────────────┬──────╮
 # => │ valid             │ true │
