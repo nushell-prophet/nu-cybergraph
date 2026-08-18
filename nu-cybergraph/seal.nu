@@ -9,6 +9,8 @@ use _repo.nu graph-root
 use _fs.nu [ list-files copy-file move-file cwd-relative ]
 use _layout.nu [ links-dir certs-dir cert-path snapshot-dir receipts-dir receipt-cert-path receipt-relpath receipt-cid RECEIPT_SUFFIX LINKS_DIR CERTS_DIR SEALS_DIR IMPORTED_DIR RECEIPTS_DIR ]
 use _record.nu [ read-link ]
+use _signer.nu [ own-signer ]
+use _commit-proposal.nu [ seal-commit-line ]
 use _deps/seal.nu [ seal ]
 use _deps/merkle.nu [ merkle ]
 
@@ -51,10 +53,17 @@ def assert-frozen-proof [proof: path leaf: string]: nothing -> nothing {
 #
 # No --key: the signing identity is the repo's, read from its git config, which
 # is where multiproof's seal reads it too.
+#
+# Committing is deliberately outside this pipeline, as it is upstream: it is the
+# operator's decision, with context the seal does not have. `--propose-commit`
+# does not weaken that — it writes the command into the prompt to be read, edited
+# and run — it only fixes the wording, so a seal does not land under "wip" or
+# split over three commits.
 export def main [
     --repo: path # Target git repo root (default: git root of current directory)
     --no-stamp # Skip OTS timestamping (stamping is the point — tests only)
     --response-file: path # TESTS ONLY: take the calendar's answer from this file instead of posting the digest
+    --propose-commit # Leave a `git commit` for this seal in the prompt, unrun
 ]: nothing -> record {
     let root = graph-root $repo
 
@@ -291,5 +300,25 @@ export def main [
         move-file $proof (receipt-cert-path $root (receipt-cid $f))
     }
 
-    {sealed: $sealed newborn: ($newborn | length) receipts: ($new_receipts | length) snapshot: ($snap | cwd-relative)}
+    let out = {sealed: $sealed newborn: ($newborn | length) receipts: ($new_receipts | length) snapshot: ($snap | cwd-relative)}
+
+    # Last, so the buffer holds a proposal for a seal that finished — and so the
+    # counts it states are the ones the freeze loops actually reached. Outside a
+    # REPL this is harmless rather than a no-op: `commandline edit` writes the
+    # engine's repl buffer unconditionally and only the REPL reads it back, so
+    # the flag is inert in a script without being an error there.
+    #
+    # `own-signer` is called only here. `seal` has already refused an empty trust
+    # list above, and upstream refuses an unregistered signing key before it
+    # rewrites anything, so this resolves an identity both checks have passed —
+    # it is the proposal's own need, not a third gate.
+    if $propose_commit {
+        # No --replace: it is `commandline edit`'s documented default, so naming
+        # it would imply a choice among its four modes. The one that must never
+        # appear here is --accept, which runs the buffer immediately — the
+        # opposite of the guarantee this flag exists for.
+        commandline edit (seal-commit-line $out $root (own-signer $root))
+    }
+
+    $out
 }
