@@ -11,6 +11,7 @@ use ../nu-cybergraph/_record.nu [ link-bytes ]
 use ../nu-cybergraph/_fs.nu [ copy-file copy-tree list-files list-dirs move-file ]
 use ../nu-cybergraph/_layout.nu [ certs-dir ]
 use ../nu-cybergraph/_deps/pubkey.nu [ pubkey ]
+use ../nu-cybergraph/_deps/cid-v0.nu [ cid-v0 ]
 
 const P1 = "QmUQUHEmv651XCBhiWUQpx2zf4PDts1aXL324ZFyV4QZPF"
 const P2 = "QmW9519sfmW2MvDb4TU4dKtiFAXm1UPDvE7JrMaBjprVHp"
@@ -59,6 +60,67 @@ def "init refuses to register a second key and undoes what it added" [] {
     ^git -C $r.repo config user.signingKey $key2
     assert error {|| init --repo $r.repo }
     assert equal (glob ($r.repo | path join cybergraph multiproofs pubkeys *.pub) | length) 1
+}
+
+# A co-signer is a second key in the trust list, not a second identity: it adds
+# its signature to a frozen seal snapshot so that forging one statement costs
+# every device, which is the whole point of holding keys apart. The graph's own
+# identity is this checkout's `user.signingKey` — the key `seal` signs the root
+# with — so the key a record is authored under is the key that catalogues it.
+# Deriving it by counting registered pubkeys instead made the co-signer's
+# presence stop every write in the repo.
+@test
+def "a co-signer in the trust list does not become the identity of the graph" [] {
+    let r = make-bare-repo $in.tmp_dir
+    init --repo $r.repo
+    let home = $r.repo | path join cybergraph
+    let mine = ls ($home | path join multiproofs pubkeys) | get name | first
+
+    let co = $in.tmp_dir | path join co-signer
+    ^ssh-keygen -t ed25519 -f $co -N "" -q
+    open --raw $"($co).pub" | pubkey canonical | save --raw ($home | path join multiproofs pubkeys co-signer.pub)
+
+    let rec = link add "cyber" "prophet" --repo $r.repo | get record
+    assert equal $rec.signer (open --raw $mine | into binary | cid-v0)
+}
+
+# The other side of that rule, and it holds at every size of the trust list —
+# ONE registered key is not an answer either. The list is where a foreign key
+# belongs (upstream invites `alice.pub` into it to check her bundles), so a
+# repo holding exactly one key someone else owns would otherwise author under
+# her name with no error, and find out at `verify` that nothing binds.
+@test
+def "no configured signing key means no identity, whatever the trust list holds" [] {
+    let r = make-bare-repo $in.tmp_dir
+    init --repo $r.repo
+    let home = $r.repo | path join cybergraph
+    ^git -C $r.repo config --unset user.signingKey
+
+    let one = try { link add "cyber" "prophet" --repo $r.repo; null } catch {|e| $e.msg }
+    assert ($one != null) "the single registered key answered for a checkout that names no signer"
+    assert ($one | str contains "user.signingKey")
+
+    let co = $in.tmp_dir | path join co-signer
+    ^ssh-keygen -t ed25519 -f $co -N "" -q
+    open --raw $"($co).pub" | pubkey canonical | save --raw ($home | path join multiproofs pubkeys co-signer.pub)
+    let two = try { link add "cyber" "prophet" --repo $r.repo; null } catch {|e| $e.msg }
+    assert ($two != null) "a repo with two keys and no configured signer wrote a link anyway"
+}
+
+# Registration is what makes a signature readable: a record naming a signer the
+# trust list holds no key for fails the binding at verify, bundle and import.
+# Refused at the write, not three commands later.
+@test
+def "a signing key that is not registered cannot author" [] {
+    let r = make-bare-repo $in.tmp_dir
+    init --repo $r.repo
+    let other = $in.tmp_dir | path join other
+    ^ssh-keygen -t ed25519 -f $other -N "" -q
+    ^git -C $r.repo config user.signingKey $other
+
+    let err = try { link add "cyber" "prophet" --repo $r.repo; null } catch {|e| $e.msg }
+    assert ($err != null) "a link was authored under a key the trust list does not hold"
+    assert ($err | str contains "not registered")
 }
 
 @test

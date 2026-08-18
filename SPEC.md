@@ -121,7 +121,7 @@ Two derived names, not to be confused:
 
 A pubkey file's **name is decoration**. Identity comes from the bytes inside it. A verifier MUST NOT match a signer CID by filename — hash the file contents and compare.
 
-One graph home has exactly one registered key: zero and more than one are both errors, never a choice. The reference implementation enforces this at registration — `init` refuses a run that would establish a second key, and removes the key that run registered — and again wherever a command must derive the repo's own identity: writing a link with no explicit signer, or naming a recipient on export. `seal` refuses only the zero case, so a key placed in `pubkeys/` by hand still surfaces at write time rather than at seal time.
+A graph home has exactly one **authoring** identity, while `multiproofs/pubkeys/` MAY hold several keys — the two are different questions. The directory is nu-multiproof's trust list — the keys whose signatures this format accepts — and verification reads every valid signature over a root (8), so a key registered beside the authoring one can add a signature but never take authorship. The authoring identity is the key the checkout itself signs with — `user.signingKey` in its git config, the same key `seal` signs the root with — because a record's signer MUST be a key that validly signed the root cataloguing it (8) or the binding fails. An implementation MUST resolve it by key material: the canonical form of the configured key equals a registered file's bytes, never a filename match. The reference implementation refuses to write when no key is configured at all, when the configured key is not registered, and when nothing is registered — a single registered key is not an answer either, since the trust list is exactly where a key belonging to someone else is meant to sit. A command with an operator-facing `--key` (export) resolves that key instead of the config. Registration is still one at a time: `init` establishes one identity and removes a key that would establish a second, so a co-signer is placed in `pubkeys/` deliberately rather than by re-running `init`. `seal` refuses only the zero case.
 
 ### 2.5 SSH signatures
 
@@ -337,7 +337,7 @@ The verdict is a record, not a boolean. `valid` is the conjunction of the merkle
 
 ## 9. Conformance vectors
 
-Verified against the reference implementation on 2026-08-04 (`nu toolkit.nu test` — 123 passed).
+Verified against the reference implementation on 2026-08-18 (`nu toolkit.nu test` — 137 passed).
 
 **Link record and derived CIDs** (`tests/test_record.nu`, `tests/test_convention.nu`):
 

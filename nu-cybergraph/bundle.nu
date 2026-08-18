@@ -163,7 +163,7 @@ def write-handoff [root: path dir: path link_cid: string to: string receipt_hash
     let handoff = {
         schema: $HANDOFF_SCHEMA
         link: $link_cid
-        from: (own-signer $root)
+        from: (own-signer $root --key $key)
         to: $to
         receipt: $receipt_hash
         handed_at: (date now | format date "%+")
