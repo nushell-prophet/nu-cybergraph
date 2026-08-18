@@ -58,8 +58,63 @@ def "init refuses to register a second key and undoes what it added" [] {
     let key2 = $in.tmp_dir | path join key2
     ^ssh-keygen -t ed25519 -f $key2 -N "" -q
     ^git -C $r.repo config user.signingKey $key2
-    assert error {|| init --repo $r.repo }
+    let err = try { init --repo $r.repo; null } catch {|e| $e.msg }
+    assert ($err != null) "a re-run under another signing key grew the trust list silently"
     assert equal (glob ($r.repo | path join cybergraph multiproofs pubkeys *.pub) | length) 1
+    # The route out is named, because a second key IS legal — just never by
+    # accident, which is the whole difference this refusal now draws.
+    assert ($err | str contains "--co-signer")
+}
+
+# What `--co-signer` is for: a key that signs the same seal root as the identity
+# does, so one statement carries more than one signature. It never becomes the
+# identity — that is read from the key this checkout signs with — so a plain
+# re-run over such a home must pass straight through rather than read two keys
+# as the accident above.
+@test
+def "a co-signer joins the trust list and a later init leaves it alone" [] {
+    let r = make-bare-repo $in.tmp_dir
+    init --repo $r.repo
+    let co = $in.tmp_dir | path join extra
+    ^ssh-keygen -t ed25519 -f $co -N "" -q
+    init --repo $r.repo --co-signer $"($co).pub"
+    let pubs = $r.repo | path join cybergraph multiproofs pubkeys
+    assert equal (glob ($pubs | path join *.pub) | length) 2
+
+    init --repo $r.repo
+    assert equal (glob ($pubs | path join *.pub) | length) 2
+    # And it is idempotent for the same reason `init` is: registration compares
+    # key material, so the same co-signer twice is one file.
+    init --repo $r.repo --co-signer $"($co).pub"
+    assert equal (glob ($pubs | path join *.pub) | length) 2
+}
+
+# A co-signer stands BESIDE an identity, so it cannot be the first key: that
+# would leave a trust list nothing established, which is what --pubkey says
+# deliberately.
+@test
+def "co-signer refuses when nothing is registered yet" [] {
+    let tmp_dir = $in.tmp_dir
+    let repo = $tmp_dir | path join fresh
+    mkdir $repo
+    ^git init --object-format=sha256 -q $repo
+    let co = $tmp_dir | path join lonely
+    ^ssh-keygen -t ed25519 -f $co -N "" -q
+
+    let err = try { init --repo $repo --co-signer $"($co).pub"; null } catch {|e| $e.msg }
+    assert ($err != null) "a co-signer landed in a graph home with no identity"
+    assert ($err | str contains "--pubkey")
+    assert equal (glob ($repo | path join cybergraph multiproofs pubkeys *.pub) | length) 0
+}
+
+# The two flags answer different questions, so naming both names neither.
+@test
+def "pubkey and co-signer are alternatives" [] {
+    let r = make-bare-repo $in.tmp_dir
+    init --repo $r.repo
+    let co = $in.tmp_dir | path join both
+    ^ssh-keygen -t ed25519 -f $co -N "" -q
+    assert error {|| init --repo $r.repo --pubkey $"($co).pub" --co-signer $"($co).pub" }
 }
 
 # A co-signer is a second key in the trust list, not a second identity: it adds
@@ -78,7 +133,8 @@ def "a co-signer in the trust list does not become the identity of the graph" []
 
     let co = $in.tmp_dir | path join co-signer
     ^ssh-keygen -t ed25519 -f $co -N "" -q
-    open --raw $"($co).pub" | pubkey canonical | save --raw ($home | path join multiproofs pubkeys co-signer.pub)
+    init --repo $r.repo --co-signer $"($co).pub"
+    assert equal (glob ($home | path join multiproofs pubkeys *.pub) | length) 2
 
     let rec = link add "cyber" "prophet" --repo $r.repo | get record
     assert equal $rec.signer (open --raw $mine | into binary | cid-v0)
@@ -102,7 +158,7 @@ def "no configured signing key means no identity, whatever the trust list holds"
 
     let co = $in.tmp_dir | path join co-signer
     ^ssh-keygen -t ed25519 -f $co -N "" -q
-    open --raw $"($co).pub" | pubkey canonical | save --raw ($home | path join multiproofs pubkeys co-signer.pub)
+    init --repo $r.repo --co-signer $"($co).pub"
     let two = try { link add "cyber" "prophet" --repo $r.repo; null } catch {|e| $e.msg }
     assert ($two != null) "a repo with two keys and no configured signer wrote a link anyway"
 }
