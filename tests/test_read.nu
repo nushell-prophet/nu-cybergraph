@@ -112,11 +112,11 @@ def "the rg-narrowed reading and the full scan return the same rows" [] {
     ]
 }
 
-# The graph's files are `links/<cid>.json` and store names that parse as an
-# address. Anything else in those directories belongs to nobody: rg sees a
-# dotfile and recurses into subdirectories, a listing does neither, and before
-# both sides were filtered by the same rule the two disagreed — one returned a
-# row the other did not, or raised where the other did not.
+# The graph's files are the ones link-files walks and store names that parse
+# as an address. Anything else in those directories belongs to nobody: rg
+# sees a dotfile and recurses into subdirectories, a listing does neither,
+# and before both sides were filtered by the same rule the two disagreed —
+# one returned a row the other did not, or raised where the other did not.
 @test
 def "a file that is not a graph file is ignored by both readings" [] {
     let ctx = $in
@@ -126,7 +126,7 @@ def "a file that is not a graph file is ignored by both readings" [] {
     $"mentions ($B)" | save --raw ($ctx.root | path join particles .note)
     mkdir ($ctx.root | path join particles sub)
     $"mentions ($B)" | save --raw ($ctx.root | path join particles sub buried)
-    "not a record" | save --raw ($ctx.root | path join links notes.txt)
+    "not a record" | save --raw ($ctx.root | path join $S notes.txt)
 
     assert equal (link touching $B --repo $ctx.tmp) $expected
     assert equal (link touching $B --repo $ctx.tmp --scan) $expected

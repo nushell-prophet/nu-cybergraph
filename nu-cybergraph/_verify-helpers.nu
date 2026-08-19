@@ -6,7 +6,7 @@ use _deps/cid-v0.nu [cid-v0]
 use _deps/pubkey.nu [pubkey]
 use _deps/ssh-sign.nu [ssh-sign]
 use _fs.nu list-files
-use _record.nu [read-link]
+use _record.nu [read-link link-cid]
 use _receipt.nu [read-receipt bundle-manifest custody-layers]
 use _handoff.nu [read-handoff]
 use _layout.nu [receipt-relpath custody-layer-dirname handoff-filename]
@@ -189,8 +189,8 @@ export def stamp-cell [stamp: record]: nothing -> string {
 # read-handoff requires the schema token byte-exact, so what keeps this
 # signature from being replayed as some other artifact is the signed bytes
 # themselves — no signature namespace is involved (see _handoff.nu).
-def check-handoff [dir: path link_cid: string holder: string expected_receipt: any pubs: table]: nothing -> any {
-    let file = $dir | path join (handoff-filename $link_cid)
+def check-handoff [dir: path edge_cid: string link_cid: string holder: string expected_receipt: any pubs: table]: nothing -> any {
+    let file = $dir | path join (handoff-filename $edge_cid)
     if not ($file | path exists) {
         return null
     }
@@ -237,7 +237,7 @@ def check-handoff [dir: path link_cid: string holder: string expected_receipt: a
 # crypto/content/chain mismatches return valid: false rows.
 # root_handoff: the author's outgoing handoff (check-handoff on the bundle
 # root, null if absent) — the seam checks treat the birth bundle as layer 0.
-def verify-custody [bundle: path link_cid: string author: string root_handoff: any]: nothing -> table {
+def verify-custody [bundle: path edge_cid: string link_cid: string author: string root_handoff: any]: nothing -> table {
     let layers = custody-layers $bundle
     if ($layers | is-empty) {
         return []
@@ -253,7 +253,7 @@ def verify-custody [bundle: path link_cid: string author: string root_handoff: a
     for layer in $layers {
         let checked = verify-proof-dir $layer.dir
         let v = $checked.v
-        if $v.leaf.filepath != (receipt-relpath $link_cid) {
+        if $v.leaf.filepath != (receipt-relpath $author $edge_cid) {
             error make {msg: $"custody layer ($layer.dir) proves ($v.leaf.filepath), not this link's receipt"}
         }
         let receipt = read-receipt ($layer.dir | path join $v.leaf.filepath)
@@ -271,7 +271,7 @@ def verify-custody [bundle: path link_cid: string author: string root_handoff: a
         let handoff_hash_ok = $receipt.handoff == (if $prev_handoff == null { null } else { $prev_handoff.hash })
         let addressed_ok = $prev_handoff == null or $prev_handoff.to == $receipt.custodian
         let receipt_hash = open --raw ($layer.dir | path join $v.leaf.filepath) | hash sha256
-        let own_handoff = check-handoff $layer.dir $link_cid $receipt.custodian $receipt_hash $checked.pubs
+        let own_handoff = check-handoff $layer.dir $edge_cid $link_cid $receipt.custodian $receipt_hash $checked.pubs
         let handoff_ok = $handoff_hash_ok and $addressed_ok and ($own_handoff == null or $own_handoff.valid)
         let valid = $v.valid and $custodian_bound and $files_ok and $prev_ok and $handoff_ok
         let error = if $v.error != null { $v.error } else if not $custodian_bound {
@@ -343,10 +343,10 @@ def add-columns [v: record cols: record]: nothing -> record {
 #
 # The flags pass straight to verify-proof-dir, so `verify` can point this at the
 # graph home instead of at an exported copy of it. Everything below is unchanged
-# by that: the leaf resolves under `bundle` either way (`links/<cid>.json` is the
-# same relative path in a bundle and in the graph home — that is why the export
-# reproduced it), and a graph home carries no handoff and no custody/, so those
-# two checks answer null and [] exactly as they do for a birth bundle.
+# by that: the leaf resolves under `bundle` either way (`<signer>/<edge>.json` is
+# the same relative path in a bundle and in the graph home — that is why the
+# export reproduces it), and a graph home carries no handoff and no custody/, so
+# those two checks answer null and [] exactly as they do for a birth bundle.
 export def verify-bundle [bundle: path --cert: path --multiproofs-dir: path]: nothing -> record {
     let birth = verify-proof-dir $bundle --cert $cert --multiproofs-dir $multiproofs_dir
     let v = $birth.v
@@ -387,9 +387,15 @@ export def verify-bundle [bundle: path --cert: path --multiproofs-dir: path]: no
     }
     print $"signer:    ($signer_line)"
 
-    let link_cid = $v.leaf.filepath | path parse | get stem
-    let root_handoff = check-handoff $bundle $link_cid $rec.signer null $birth.pubs
-    let custody = verify-custody $bundle $link_cid $rec.signer $root_handoff
+    # Two halves of the act's identity, used side by side below: paths and
+    # filenames go by (author, edge) — the mirrored layout — while the `link`
+    # field inside receipts and handoffs stays the cyberlink's derived CID,
+    # recomputed the way every reader gets it: pair from the file, signer from
+    # the path, never from a filename.
+    let edge_cid = $v.leaf.filepath | path parse | get stem
+    let link_cid = link-cid $rec
+    let root_handoff = check-handoff $bundle $edge_cid $link_cid $rec.signer null $birth.pubs
+    let custody = verify-custody $bundle $edge_cid $link_cid $rec.signer $root_handoff
     let custody_ok = $custody | all { $in.valid }
     let root_handoff_ok = $root_handoff == null or $root_handoff.valid
     if ($custody | is-not-empty) {

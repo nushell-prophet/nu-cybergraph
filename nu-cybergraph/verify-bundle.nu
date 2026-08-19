@@ -2,8 +2,8 @@
 #
 # README "Portability" claims anyone can check a received bundle offline with
 # no access to the origin repo. Everything needed was already here, but the
-# only entry points were `verify` (which takes a link CID and looks in this
-# repo's certs/ or imported/) and `import` (which needs an initialized repo
+# only entry points were `verify` (which takes an edge CID and looks in this
+# repo's signer directories, certs/ and imported/) and `import` (which needs an initialized repo
 # with a registered pubkey, and writes a custody receipt — not a check but a
 # commitment). The checking function itself sat in `_verify-helpers.nu`, and a
 # leading `_` means internal to this module: the tests reached it by importing

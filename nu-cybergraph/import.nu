@@ -1,5 +1,5 @@
 # Import a foreign link's bundle into this repo, verifying before anything
-# lands. The bundle stays intact under imported/<signer-cid>/<link-cid>/ — it
+# lands. The bundle stays intact under imported/<signer-cid>/<edge-cid>/ — it
 # remains the link's authority for authorship and birth time through any
 # number of re-exports.
 #
@@ -10,9 +10,11 @@
 # appended.
 
 use _repo.nu graph-root
-use _layout.nu [ imported-dir receipts-dir receipt-relpath handoff-filename ]
+use _layout.nu [ imported-dir receipt-relpath handoff-filename ]
 use _fs.nu [ copy-tree cwd-relative ]
 use _receipt.nu [ receipt-bytes bundle-manifest custody-layers ]
+use _record.nu [ link-bytes ]
+use _particle.nu [ particle-store ]
 use _signer.nu [ own-signer ]
 use _verify-helpers.nu [ verify-bundle ]
 
@@ -35,8 +37,20 @@ export def main [
     if $v.handed_to != null and $v.handed_to != $me {
         error make {msg: $"refusing to import: bundle was handed to ($v.handed_to), not to this repo's signer ($me)"}
     }
-    let link_cid = $v.leaf.filepath | path parse | get stem
-    let dest = imported-dir $root | path join $v.signer.cid $link_cid
+    # Two halves of the act's identity: paths mirror the graph layout — the
+    # author's CID above, the edge below — while the receipt's `link` field
+    # keeps the cyberlink's derived CID, recomputed from the verified record
+    # (never from a filename).
+    #
+    # Recomputed THROUGH the store, so the CID this repo's sealed receipt
+    # asserts has a published preimage here, not only in the author's repo:
+    # the bundle carries only the endpoints' particles, and a holder of a
+    # link CID dereferences particles/<link-cid> first (SPEC 8 — `verify`
+    # does not take it). The address comes back from the store, link.nu's
+    # own discipline, so it and the stored bytes cannot drift apart.
+    let edge_cid = $v.leaf.filepath | path parse | get stem
+    let link_cid = link-bytes $v.record | particle-store $root
+    let dest = imported-dir $root | path join $v.signer.cid $edge_cid
     if ($dest | path exists) {
         error make {msg: $"already imported: ($dest)"}
     }
@@ -51,13 +65,13 @@ export def main [
     # from dest, not the source) and chains to the last custody layer present.
     let layers = custody-layers $dest
     let prev = if ($layers | is-empty) { null } else {
-        open --raw ($layers | last | get dir | path join (receipt-relpath $link_cid)) | hash sha256
+        open --raw ($layers | last | get dir | path join (receipt-relpath $v.signer.cid $edge_cid)) | hash sha256
     }
     # Hash of the handoff we arrived by, pulled into the sealed chain — after
     # this repo seals, the sender's claim can no longer be stripped.
     let handoff = if $v.handed_to == null { null } else {
         let tail_dir = if ($layers | is-empty) { $dest } else { $layers | last | get dir }
-        open --raw ($tail_dir | path join (handoff-filename $link_cid)) | hash sha256
+        open --raw ($tail_dir | path join (handoff-filename $edge_cid)) | hash sha256
     }
     let receipt = {
         link: $link_cid
@@ -68,11 +82,12 @@ export def main [
         prev: $prev
         handoff: $handoff
     }
-    mkdir (receipts-dir $root)
-    let receipt_path = $root | path join (receipt-relpath $link_cid)
+    let receipt_path = $root | path join (receipt-relpath $v.signer.cid $edge_cid)
+    mkdir ($receipt_path | path dirname)
     receipt-bytes $receipt | save --raw $receipt_path
 
     {
+        edge: $edge_cid
         link: $link_cid
         signer: $v.signer.cid
         path: ($dest | cwd-relative)

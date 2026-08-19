@@ -15,7 +15,7 @@
 # would also take a compatibility promise nobody made, the same line `_signer.nu`
 # drew for `resolve-key`.
 
-use _layout.nu [ snapshot-dir LINKS_DIR CERTS_DIR SEALS_DIR IMPORTED_DIR RECEIPTS_DIR ]
+use _layout.nu [ snapshot-dir signer-dirs CERTS_DIR SEALS_DIR IMPORTED_DIR RECEIPTS_DIR ]
 
 # Quote a value for the Nushell block the caller is handed.
 #
@@ -132,7 +132,9 @@ export def seal-commit-line [
     # `particles/` is absent because seal does not stage it either: a sealed link
     # anchors particle bytes through their CID, so committing them is the
     # operator's own act, not part of the seal.
-    let staged = [$LINKS_DIR $CERTS_DIR $SEALS_DIR $IMPORTED_DIR $RECEIPTS_DIR "multiproofs"]
+    let staged = (
+        (signer-dirs $root | each { path basename }) ++ [$CERTS_DIR $SEALS_DIR $IMPORTED_DIR $RECEIPTS_DIR "multiproofs"]
+    )
         | where {|d|
             let dir = $root | path join $d
             ($dir | path exists) and (ls $dir | is-not-empty)

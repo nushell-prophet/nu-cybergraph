@@ -268,7 +268,7 @@ def "the proposed block runs and commits exactly what the seal wrote" [] {
     # The seal's own artifacts landed, and nothing outside the graph home.
     let committed = ^git -C $g.repo show --name-only --format= HEAD | lines | where $it != ""
     assert ($committed | all {|f| $f | str starts-with "cybergraph/" })
-    assert ($committed | any {|f| $f | str starts-with "cybergraph/links/" })
+    assert ($committed | any {|f| $f | str starts-with $"cybergraph/($signer)/" })
     assert ($committed | any {|f| $f | str starts-with "cybergraph/certs/" })
     assert ($committed | any {|f| $f | str starts-with "cybergraph/seals/" })
     assert ($committed | any {|f| $f == "cybergraph/multiproofs/tree-root.txt" })

@@ -301,13 +301,16 @@ def "link add takes a signer CID this repo holds no file for" [] {
 }
 
 @test
-def "link add passes CID endpoints through and publishes only the edge pair" [] {
+def "link add passes CID endpoints through and publishes the pair and the triple" [] {
     let r = link add $A $B --repo $in.tmp --signer $N --allow-missing
     # The endpoints were addresses already, so nothing was minted for them; the
-    # one file written is the pair the reported edge address names.
-    let stored = ls (particles-dir $in.root) | get name | each { path basename }
-    assert equal $stored [$r.edge_cid]
+    # two files written are the derived records both reported addresses name —
+    # the pair (the edge address) and the triple (the cyberlink's preimage,
+    # published because the link file stopped being it).
+    let stored = ls (particles-dir $in.root) | get name | each { path basename } | sort
+    assert equal $stored ([$r.edge_cid $r.link_cid] | sort)
     assert equal (open --raw (particle-path $in.root $r.edge_cid)) $"{\"cid_from\":\"($A)\",\"cid_to\":\"($B)\"}\n"
+    assert equal (open --raw (particle-path $in.root $r.link_cid)) $"{\"cid_from\":\"($A)\",\"cid_to\":\"($B)\",\"signer\":\"($N)\"}\n"
 }
 
 # The reference `link add` hands out has to be one `link add` accepts back. It

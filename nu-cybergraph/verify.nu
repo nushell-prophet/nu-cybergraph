@@ -1,50 +1,74 @@
-# Verify a link by CID — own or imported — always through its birth
-# certificate and the seal it was born under, never the repo's current root.
+# Verify an edge — who asserted it, and which of those acts is proven —
+# always through each copy's birth certificate and the seal it was born
+# under, never the repo's current root.
 #
-# Returns a table, one row per verified copy: an own link has exactly one;
-# the same CID imported from several signers yields one row each. One shape
-# for both cases, so callers never branch on where the link came from.
+# Returns a table, one row per verified copy: one per own signer directory
+# holding the edge, one per imported bundle carrying it. One shape for both
+# cases, so callers never branch on where a copy came from.
+#
+# The argument is the EDGE address, not the cyberlink's derived CID: the two
+# can only be told apart by trying, and a guessed argument fails silently.
+# A caller holding a link CID dereferences it first — `particles/<link-cid>`
+# is the published triple, which names the signer and the pair.
 
 use _repo.nu graph-root
-use _layout.nu [ cert-path imported-copies snapshot-dir ]
+use _layout.nu [ signer-dirs link-path cert-path snapshot-dir imported-edge-copies ]
 use _verify-helpers.nu [ verify-bundle ]
 
-# Verify a link — own or imported — against its birth seal, never the current
-# root. One row per verified copy: own links have one, imports one per signer.
+# Verify every copy of an edge against its birth seal, never the current
+# root. `--signer` narrows to a single act.
 export def main [
-    link_cid: string # Link CID: authored here (certs/) or imported (imported/*/)
+    edge_cid: string # Edge CID — the address of the pair, the filename of every copy
+    --signer: string # Only this signer's act (default: every copy held)
     --repo: path # Repo root (default: git root of current directory)
 ]: nothing -> table {
     let root = graph-root $repo
-    let cert = cert-path $root $link_cid
-    if ($cert | path exists) {
-        # Own link: still one verification path for everything — the same
-        # checker, told where this link's proof and its seal's artifacts are,
-        # so "verifies here" still means "verifies anywhere".
-        #
-        # It used to be told by construction instead: export a portable bundle
-        # into a temp dir and check that, because `merkle verify` derived the
-        # root statement from the same --repo as the content, and the graph
-        # home's multiproofs/tree-root.txt is the CURRENT root — a certificate
-        # from any earlier seal died on "proof is for a different seal". That
-        # cost a mktemp and a full copy per link (~92ms each, 567 links on the
-        # acceptance graph) to rearrange paths, never to check anything.
-        # nu-multiproof 16e3e74's --multiproofs-dir names the older seal
-        # directly; seals/<root12>/ is already that directory, snapshotted at
-        # birth by `seal`.
-        let born = open --raw $cert | from json | get root
-        let snapshot = snapshot-dir $root $born
-        if not ($snapshot | path exists) {
-            error make {msg: $"seal snapshot missing for root ($born | str substring 0..11) — the certificate predates the seals/ convention?"}
+    let held = signer-dirs $root
+        | each { path basename }
+        | where {|s| $signer == null or $s == $signer }
+        | where ((link-path $root $it $edge_cid) | path exists)
+    # An own copy with no certificate yet is pending its seal, not broken —
+    # `link add` of an edge this repo also holds as an import is a supported
+    # state between add and seal. Raising on it here aborted the WHOLE query
+    # from inside the `each` (surfacing as "Eval block failed with pipeline
+    # input", the trap seal.nu documents), hiding imported copies that still
+    # verify. So a pending copy is set aside; it becomes the error only when
+    # nothing verifiable is left — the is-empty branch below.
+    let pending = $held | where {|s| not ((cert-path $root $s $edge_cid) | path exists) }
+    let own = $held
+        | where ((cert-path $root $it $edge_cid) | path exists)
+        | each {|s|
+            let cert = cert-path $root $s $edge_cid
+            # Own copy: still one verification path for everything — the same
+            # checker, told where this act's proof and its seal's artifacts
+            # are, so "verifies here" still means "verifies anywhere".
+            #
+            # It used to be told by construction instead: export a portable
+            # bundle into a temp dir and check that, because `merkle verify`
+            # derived the root statement from the same --repo as the content,
+            # and the graph home's multiproofs/tree-root.txt is the CURRENT
+            # root — a certificate from any earlier seal died on "proof is for
+            # a different seal". That cost a mktemp and a full copy per link
+            # (~92ms each, 567 links on the acceptance graph) to rearrange
+            # paths, never to check anything. nu-multiproof 16e3e74's
+            # --multiproofs-dir names the older seal directly; seals/<root12>/
+            # is already that directory, snapshotted at birth by `seal`.
+            let born = open --raw $cert | from json | get root
+            let snapshot = snapshot-dir $root $born
+            if not ($snapshot | path exists) {
+                error make {msg: $"seal snapshot missing for root ($born | str substring 0..11) — the certificate predates the seals/ convention?"}
+            }
+            verify-bundle $root --cert $cert --multiproofs-dir $snapshot
         }
-        [(verify-bundle $root --cert $cert --multiproofs-dir $snapshot)]
-    } else {
-        # The same link CID can arrive from several signers (identical record,
-        # identical CID) — verify every copy we hold.
-        let hits = imported-copies $root $link_cid
-        if ($hits | is-empty) {
-            error make {msg: $"unknown link: ($link_cid) — not in certs/ or imported/"}
+    let imported = imported-edge-copies $root $edge_cid
+        | where {|h| $signer == null or $h.signer == $signer }
+        | each {|h| verify-bundle $h.dir }
+    let rows = $own ++ $imported
+    if ($rows | is-empty) {
+        if ($pending | is-not-empty) {
+            error make {msg: $"($pending | first)/($edge_cid).json has no birth certificate yet — run `nu-cybergraph seal` first"}
         }
-        $hits | each {|bundle_dir| verify-bundle $bundle_dir }
+        error make {msg: $"unknown edge: ($edge_cid) — no signer directory holds it and nothing in imported/"}
     }
+    $rows
 }

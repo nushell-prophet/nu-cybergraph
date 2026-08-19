@@ -7,7 +7,7 @@ use ../nu-cybergraph/init.nu
 use ../nu-cybergraph/seal.nu
 use ../nu-cybergraph/link.nu
 use ../nu-cybergraph/verify.nu
-use ../nu-cybergraph/_record.nu [ link-bytes ]
+use ../nu-cybergraph/_record.nu [ edge-bytes ]
 use ../nu-cybergraph/_fs.nu [ copy-file copy-tree list-files list-dirs move-file ]
 use ../nu-cybergraph/_layout.nu [ certs-dir ]
 use ../nu-cybergraph/_deps/pubkey.nu [ pubkey ]
@@ -21,7 +21,7 @@ const P3 = "QmQXupHE6VPzpoBTivNXAAGwigJE68n4TeVUSxYnFL78GV"
 # the tamper that self-addressing exists to catch: canonical, parseable, and
 # lying about which act it is.
 def swap-record [file: path rec: record] {
-    link-bytes $rec | save --force --raw $file
+    edge-bytes $rec | save --force --raw $file
 }
 
 @before-each
@@ -185,7 +185,6 @@ def "init is idempotent: re-run reports, never duplicates" [] {
     init --repo $r.repo
     init --repo $r.repo
     assert equal (glob ($r.repo | path join cybergraph multiproofs pubkeys *.pub) | length) 1
-    assert (($r.repo | path join cybergraph links) | path exists)
     assert (($r.repo | path join cybergraph certs) | path exists)
 }
 
@@ -207,8 +206,8 @@ def "init refuses when it registered no signer" [] {
     # Both routes out are named, because the operator has heard of neither.
     assert ($err | str contains "user.signingKey")
     assert ($err | str contains "--pubkey")
-    # And it refuses before claiming a layout: no links/ to suggest otherwise.
-    assert not (($repo | path join cybergraph links) | path exists)
+    # And it refuses before claiming a layout: no certs/ to suggest otherwise.
+    assert not (($repo | path join cybergraph certs) | path exists)
 }
 
 # The other half of the same rule: a key passed explicitly is a registration,
@@ -225,7 +224,7 @@ def "init with an explicit pubkey needs no git signing key" [] {
     ^ssh-keygen -t ed25519 -f $key -N "" -q
 
     init --repo $repo --pubkey $"($key).pub"
-    assert (($repo | path join cybergraph links) | path exists)
+    assert (($repo | path join cybergraph certs) | path exists)
     let registered = ls ($repo | path join cybergraph multiproofs pubkeys) | get name
     assert equal ($registered | length) 1
     # The key that landed is the key named, not merely some key: counting one
@@ -255,7 +254,7 @@ def "nested graph home: init puts everything under cybergraph/ by default" [] {
     let r = make-bare-repo $in.tmp_dir
     init --repo $r.repo
     assert (($r.repo | path join cybergraph multiproofs pubkeys) | path exists)
-    assert (($r.repo | path join cybergraph links) | path exists)
+    assert (($r.repo | path join cybergraph certs) | path exists)
 
     # An arbitrary user file at the repo root: tracked by git, untouched by
     # the graph — the seal manifest covers only the cybergraph/ subtree
@@ -263,17 +262,17 @@ def "nested graph home: init puts everything under cybergraph/ by default" [] {
     ^git -C $r.repo add -A
 
     let born = link add $P1 $P2 --repo $r.repo --allow-missing
-    assert ($born.path | str contains $"cybergraph(char path_sep)links")
+    assert ($born.path | str contains $"cybergraph(char path_sep)($born.record.signer)")
     let sealed = seal --repo $r.repo --no-stamp
     assert equal $sealed.newborn 1
-    assert (($r.repo | path join cybergraph certs $"($born.link_cid).cert.json") | path exists)
+    assert (($r.repo | path join cybergraph certs $born.record.signer $"($born.edge_cid).cert.json") | path exists)
     let manifest = open --raw ($r.repo | path join cybergraph multiproofs tree-hashes.csv)
         | from csv --no-infer
     assert ($manifest | where filepath == "notes.md" | is-empty)
-    assert ($manifest | where filepath == $"links/($born.link_cid).json" | is-not-empty)
+    assert ($manifest | where filepath == $"($born.record.signer)/($born.edge_cid).json" | is-not-empty)
 
     # Discovery is implicit from here on: verify finds the nested home itself
-    assert (verify $born.link_cid --repo $r.repo | first | get valid)
+    assert (verify $born.edge_cid --repo $r.repo | first | get valid)
 }
 
 @test
@@ -286,7 +285,7 @@ def "link add is idempotent on a repeat of the triple — one act, one file" [] 
     # returns the same CID, not a second file or an error.
     let again = link add $P1 $P2 --repo $r.repo --allow-missing
     assert equal $again $born
-    assert equal (glob ($r.repo | path join cybergraph links *.json) | length) 1
+    assert equal (glob ($r.repo | path join cybergraph $born.record.signer *.json) | length) 1
 }
 
 @test
@@ -312,10 +311,10 @@ def "seal refuses a link file that does not match its content address" [] {
 
     let err = try { seal --repo $r.repo --no-stamp; null } catch {|e| $e.msg }
     assert ($err != null) "seal signed a record that is not its own address"
-    assert ($err | str contains $born.link_cid) $"error should name the offending file: ($err)"
+    assert ($err | str contains $born.edge_cid) $"error should name the offending file: ($err)"
     # Aborted before multiproof wrote anything — no manifest, no certificate
     assert not (($r.repo | path join cybergraph multiproofs tree-hashes.csv) | path exists)
-    assert not (($r.repo | path join cybergraph certs $"($born.link_cid).cert.json") | path exists)
+    assert not (($r.repo | path join cybergraph certs $born.record.signer $"($born.edge_cid).cert.json") | path exists)
 }
 
 @test
@@ -330,7 +329,7 @@ def "a record tampered after its birth seal aborts the next seal too" [] {
     swap-record $born.path (open --raw $born.path | from json | update cid_to $P3)
     let err = try { seal --repo $r.repo --no-stamp; null } catch {|e| $e.msg }
     assert ($err != null) "a tampered record was re-attested by a later seal"
-    assert ($err | str contains $born.link_cid)
+    assert ($err | str contains $born.edge_cid)
 }
 
 # The signing identity is the repo's git config, so both key failures below are
@@ -422,15 +421,15 @@ def "a node that is not this links frozen proof is refused before anything is st
     let r = make-bare-repo $in.tmp_dir
     init --repo $r.repo
     let born = link add $P1 $P2 --repo $r.repo --allow-missing
-    let cert = $r.repo | path join cybergraph certs $"($born.link_cid).cert.json"
-    mkdir (certs-dir $r.repo)
+    let cert = $r.repo | path join cybergraph certs $born.record.signer $"($born.edge_cid).cert.json"
+    mkdir ($cert | path dirname)
 
     # 1. a directory
     mkdir $cert
     "junk\n" | save --raw ($cert | path join filler.txt)
     let e1 = try { seal --repo $r.repo --no-stamp; null } catch {|e| $e.msg }
     assert ($e1 != null) "seal reported success while the link went uncertified"
-    assert ($e1 | str contains $born.link_cid) $"the refusal should name the path in the way: ($e1)"
+    assert ($e1 | str contains $born.edge_cid) $"the refusal should name the path in the way: ($e1)"
     # Refused BEFORE staging, so the recovery is just removing the node. When
     # the check ran later, certs/ was already in git's index and the operator
     # who deleted the directory hit `tracked paths do not resolve to regular
@@ -443,26 +442,26 @@ def "a node that is not this links frozen proof is refused before anything is st
     "" | save --raw $cert
     let e2 = try { seal --repo $r.repo --no-stamp; null } catch {|e| $e.msg }
     assert ($e2 != null) "an empty file passed as a frozen certificate"
-    assert ($e2 | str contains $born.link_cid)
+    assert ($e2 | str contains $born.edge_cid)
     rm $cert
 
     # 3. a real proof, but for a different link
     let other = link add $P1 $P3 --repo $r.repo --allow-missing
     seal --repo $r.repo --no-stamp | ignore
-    let other_cert = $r.repo | path join cybergraph certs $"($other.link_cid).cert.json"
+    let other_cert = $r.repo | path join cybergraph certs $other.record.signer $"($other.edge_cid).cert.json"
     assert ($other_cert | path exists) "the fixture needs a genuine proof to misfile"
     rm $cert
     cp $other_cert $cert
     let e3 = try { seal --repo $r.repo --no-stamp; null } catch {|e| $e.msg }
     assert ($e3 != null) "a proof for another link passed as this links certificate"
-    assert ($e3 | str contains $other.link_cid) $"the refusal should name the record actually certified: ($e3)"
+    assert ($e3 | str contains $other.edge_cid) $"the refusal should name the record actually certified: ($e3)"
 
     # And the repo still seals once the misfiled proof is gone: every refusal
     # above has to be recoverable by removing what was named, nothing more.
     rm $cert
     let ok = seal --repo $r.repo --no-stamp
     assert equal $ok.newborn 1
-    assert equal (open $cert | get leaf.filepath) $"links/($born.link_cid).json"
+    assert equal (open $cert | get leaf.filepath) $"($born.record.signer)/($born.edge_cid).json"
 }
 
 # The one thing that distinguishes the two orderings of `seal`'s writes. On the
@@ -483,8 +482,8 @@ def "a freeze loop that fails still leaves the snapshot its certificates name" [
     # The loop takes links in listing order, so hiding the LAST one guarantees
     # the first is certified before the throw. Sorting here is what makes that
     # deterministic rather than a property of how `ls` happened to answer.
-    let victim = [$a.link_cid $b.link_cid] | sort | last
-    $"cybergraph/links/($victim).json\n" | save --raw ($r.repo | path join .gitignore)
+    let victim = [$a.edge_cid $b.edge_cid] | sort | last
+    $"cybergraph/($a.record.signer)/($victim).json\n" | save --raw ($r.repo | path join .gitignore)
 
     let err = try { seal --repo $r.repo --no-stamp; null } catch {|e| $e.msg }
     assert ($err != null) "merkle prove found a link that git does not track"
@@ -495,7 +494,7 @@ def "a freeze loop that fails still leaves the snapshot its certificates name" [
     # certificate names its root, and that root must still be on disk — otherwise
     # `bundle` and `verify` for this link are dead and no re-seal can revive them,
     # because the retry mints a different root.
-    let frozen = list-files ($r.repo | path join cybergraph certs) --suffix ".cert.json"
+    let frozen = list-files ($r.repo | path join cybergraph certs) --recursive --suffix ".cert.json"
     assert ($frozen | is-not-empty) "the loop threw before freezing anything — the lever missed"
     for c in $frozen {
         let named = open $c | get root
@@ -635,4 +634,76 @@ def "copy-tree refuses a tree holding something that is not a regular file" [] {
     assert ($err != null) "copy-tree followed a symlink out of the tree"
     assert ($err | str contains "dangling") $"the refusal does not name the link: ($err)"
     assert ($err | str contains "not a regular file") $"the refusal does not say what is wrong: ($err)"
+}
+
+# The pre-seal sweep walks receipts/ by `receipt-files`' rule — CID-named
+# author directories only — while staging git-adds receipts/ wholesale. So a
+# stray at the top of receipts/ (a flat file at the pre-refactoring location,
+# a hand-named directory) used to be signed into every manifest unvalidated
+# and never frozen: seal reported success while the custody-freeze discipline
+# silently did not apply. Same recovery contract as the certs sweep: refused
+# before staging, removing the node is the whole fix.
+@test
+def "a stray under receipts is refused before anything is staged" [] {
+    let r = make-bare-repo $in.tmp_dir
+    init --repo $r.repo
+    link add $P1 $P2 --repo $r.repo --allow-missing | ignore
+    let receipts = $r.repo | path join cybergraph receipts
+
+    # 1. a receipt at the old flat location — valid-looking bytes, wrong level
+    mkdir $receipts
+    '{"link":"x"}' | save --raw ($receipts | path join $"($P1).receipt.json")
+    let e1 = try { seal --repo $r.repo --no-stamp; null } catch {|e| $e.msg }
+    assert ($e1 != null) "seal signed a receipt the sweep never validated"
+    assert ($e1 | str contains $"($P1).receipt.json") $"the refusal should name the stray: ($e1)"
+    assert ((^git -C $r.repo diff --cached --name-only | str trim) | is-empty) "the failed seal left receipts/ staged"
+    rm ($receipts | path join $"($P1).receipt.json")
+
+    # 2. a hand-named author directory — everything under it is invisible to
+    #    the sweep, whatever it holds
+    mkdir ($receipts | path join alice)
+    '{"link":"x"}' | save --raw ($receipts | path join alice $"($P1).receipt.json")
+    let e2 = try { seal --repo $r.repo --no-stamp; null } catch {|e| $e.msg }
+    assert ($e2 != null) "a non-CID author directory was signed unchecked"
+    assert ($e2 | str contains "alice") $"the refusal should name the stray directory: ($e2)"
+
+    # And the repo still seals once the strays are gone.
+    rm --recursive ($receipts | path join alice)
+    let ok = seal --repo $r.repo --no-stamp
+    assert equal $ok.newborn 1
+}
+
+# The tamper class the edge-first layout created: the signer left the file's
+# bytes for its path, so a sealed <signerA>/<edge>.json moved into another
+# valid-CID directory keeps canonical bytes AND a matching filename — under
+# the old self-addressed-triple format that was impossible. The binding of
+# pair to signer is the seal's (the path enters the signed root), so a
+# relocated file must earn no credit anywhere: not from its old certificate,
+# not at its new path, and not from the next seal.
+@test
+def "a sealed edge file moved to another signer directory earns no credit" [] {
+    let r = make-bare-repo $in.tmp_dir
+    init --repo $r.repo
+    let own = link add $P1 $P2 --repo $r.repo --allow-missing
+    let adhoc = link add $P1 $P2 --repo $r.repo --allow-missing --signer alice
+    seal --repo $r.repo --no-stamp | ignore
+    assert equal (verify $own.edge_cid --repo $r.repo | length) 2
+
+    # Relocate the ad-hoc copy into a fresh directory named by a valid CID.
+    let home = $r.repo | path join cybergraph
+    mkdir ($home | path join $P3)
+    mv ($home | path join $adhoc.record.signer $"($adhoc.edge_cid).json") ($home | path join $P3 $"($adhoc.edge_cid).json")
+
+    # The old certificate points at an absent file, the new path has none:
+    # the moved copy drops out of the full query instead of riding either.
+    let rows = verify $own.edge_cid --repo $r.repo
+    assert equal ($rows | get record.signer) [$own.record.signer]
+    let err = try { verify $own.edge_cid --repo $r.repo --signer $P3; null } catch {|e| $e.msg }
+    assert ($err | str contains "no birth certificate yet") $"the relocated copy must read as never sealed, got: ($err)"
+
+    # And the next seal refuses outright — the manifest still tracks the
+    # vacated path — rather than certifying the relocation as a new birth.
+    let sealed = try { seal --repo $r.repo --no-stamp; null } catch {|e| $e.msg }
+    assert ($sealed != null) "seal certified a relocated link file"
+    assert ($sealed | str contains $"($adhoc.record.signer)/($adhoc.edge_cid).json") $"the refusal should name the vacated path: ($sealed)"
 }

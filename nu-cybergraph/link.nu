@@ -2,14 +2,15 @@
 
 use _repo.nu graph-root
 use _record.nu [ link-bytes link-cid edge-bytes read-link ]
-use _layout.nu [ links-dir link-path imported-dir ]
+use _layout.nu [ signer-dir link-path imported-dir ]
 use _particle.nu [ resolve-particle store-index particle-store ]
 use _signer.nu [ resolve-signer ]
 use _read.nu [ read-links deref touches ]
 use _validate.nu [ CID_V0_RE ]
 use _fs.nu [ list-dirs cwd-relative ]
 
-# Write a new link record to links/<cid>.json, named by its own content address.
+# Write a new link: the pair {cid_from, cid_to} to <signer>/<edge-cid>.json,
+# the file named by its own content address, the signer by its directory.
 # An endpoint is any particle; its CID is the CID v0 of its bytes.
 # Both endpoints accept a CID or content: a non-CID argument is resolved to
 # bytes (a path is opened, anything else is literal — see resolve-arg-bytes)
@@ -41,32 +42,40 @@ export def add [
     # for a link that was never written.
     let signer_cid = resolve-signer $root $signer
     let index = store-index $root
-    let rec = {
+    let pair = {
         cid_from: (resolve-particle $root $index $cid_from --allow-missing=$allow_missing --literal=$literal)
         cid_to: (resolve-particle $root $index $cid_to --allow-missing=$allow_missing --literal=$literal)
-        signer: $signer_cid
     }
-    let cid = link-cid $rec
-    # Beside `link_cid`, never inside `record`: `record` is the bytes on disk,
-    # and validate-link refuses a fourth key.
+    let rec = $pair | insert signer $signer_cid
+    # Both derived records are published as particles, and each address comes
+    # back from the store, so what is reported is the address of bytes that
+    # exist.
     #
-    # The pair is published as a particle, and the address comes back from the
-    # store, so what is reported is the address of bytes that exist. Without it
-    # the edge address was derived and nothing held its preimage: `link add A
-    # <edge>` — a statement about the edge just made — was refused as a CID this
-    # repo holds no file for, which is exactly the reference the command had
-    # just handed out. It is also what conventions already do (convention.nu
-    # `address` publishes every record it mints), so `confirm A B` published the
-    # pair while `link add A B`, computing the same record, published nothing.
-    # Idempotent, so a repeat and a second signer of the same edge cost nothing.
-    let edge = edge-bytes $rec | particle-store $root
-    mkdir (links-dir $root)
-    let out = link-path $root $cid
-    # The record IS the triple, so file existence IS the triple guard: one act,
-    # one CID, one file — mirroring bostrom's consensus, which rejected a repeat
-    # cyberlink. Why no --reassert: a repeat is byte-identical, so there is
-    # nothing new to store; re-assertion over time is a statement ABOUT the act
-    # (e.g. `convention claimed-at`), not a second copy of it.
+    # The pair, even though the link file holds the same bytes: the store index
+    # (resolve-particle, deref) walks particles/ only, so without this copy
+    # `link add A <edge>` — a statement about the edge just made — was refused
+    # as a CID this repo holds no file for, which is exactly the reference the
+    # command had just handed out. Not solved by indexing signer directories
+    # instead: conventions publish the pair record they mint (`confirm A B`),
+    # so the index would then see two files for one CID and refuse the store as
+    # ambiguous. It is also what keeps `confirm A B` and `link add A B` — two
+    # writers of the same record — interchangeable preimage publishers.
+    #
+    # The triple, because the file stopped being its preimage: the cyberlink's
+    # derived CID — the address `confirm A B S` targets — must stay
+    # dereferenceable, so the rule SPEC 3.1 put on the edge record moves to
+    # the triple. Idempotent, so a repeat and a second signer of the same edge
+    # cost nothing.
+    let edge = edge-bytes $pair | particle-store $root
+    let cid = link-bytes $rec | particle-store $root
+    mkdir (signer-dir $root $signer_cid)
+    let out = link-path $root $signer_cid $edge
+    # The path IS the triple — signer in the directory, edge in the filename —
+    # so file existence IS the triple guard: one act, one address, one file —
+    # mirroring bostrom's consensus, which rejected a repeat cyberlink. Why no
+    # --reassert: a repeat is byte-identical, so there is nothing new to store;
+    # re-assertion over time is a statement ABOUT the act (e.g. `convention
+    # claimed-at`), not a second copy of it.
     #
     # Why a no-op and not an error: a repeat is the same act by the same
     # triple-guard argument above, and an agent replaying a run interrupted
@@ -80,16 +89,18 @@ export def add [
     if ($out | path exists) {
         read-link $out | ignore
     } else {
-        link-bytes $rec | save --raw $out
+        edge-bytes $pair | save --raw $out
     }
     {link_cid: $cid edge_cid: $edge path: ($out | cwd-relative) record: $rec}
 }
 
-# One link, read: the triple as stored, then what its endpoints say. The one
-# place the decoding rule lives, so `list` and `touching` cannot drift.
+# One link, read: both addresses, the triple, then what its endpoints say.
+# The one place the decoding rule lives, so `list` and `touching` cannot
+# drift.
 def statement [index: record l: record]: nothing -> record {
     let src = deref $index $l.cid_from
     {
+        edge_cid: $l.edge_cid
         link_cid: $l.link_cid
         cid_from: $l.cid_from
         cid_to: $l.cid_to
@@ -107,7 +118,8 @@ def statement [index: record l: record]: nothing -> record {
 # holds them, so the operands a convention hid behind a derived CID are back in
 # the open.
 #
-# Own links only (links/). An imported bundle is another signer's copy, checked
+# Own links only (the signer directories at the graph root). An imported
+# bundle is another signer's copy, checked
 # by `verify` against its birth seal, and mixing it in here would silently turn
 # a reading of what THIS signer said into a reading of everyone — the exact
 # distinction aggregation rests on.
@@ -179,8 +191,13 @@ export def touching [
     if ($hits | is-empty) { return [] }
     let index = store-index $root
     $hits
-    | sort-by link role
-    | each {|h| statement $index ({link_cid: $h.link} | merge (read-link (link-path $root $h.link))) | insert role $h.role | move role --after link_cid }
+    | sort-by file role
+    | each {|h|
+        let rec = read-link $h.file
+        statement $index ({edge_cid: ($h.file | path parse | get stem) link_cid: (link-cid $rec)} | merge $rec)
+        | insert role $h.role
+        | move role --after link_cid
+    }
 }
 
 # Count what the graph says about a CID: one row per (verb, position), with the

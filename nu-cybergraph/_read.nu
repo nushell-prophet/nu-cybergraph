@@ -14,17 +14,23 @@
 # file, so anything published in that shape answers this test. A reader gets
 # "this parses as an instruction", never "this was meant as one".
 
-use _layout.nu [ links-dir particles-dir ]
+use _layout.nu [ signer-dirs link-files particles-dir ]
 use _particle.nu [ index-find particle-verify store-cid ]
-use _record.nu [ read-link ]
+use _record.nu [ read-link link-cid EDGE_KEYS ]
 use _fs.nu list-files
 
-# Every link record in the graph home, each checked against its own address by
-# read-link. Sorted by CID so a reading is reproducible across filesystems.
+# Every link in the graph home, walked over the signer directories, each
+# checked against its own address by read-link. A row carries both addresses:
+# the edge (the filename) and the cyberlink's derived CID, recomputed the way
+# every reader now gets it — pair from the file, signer from the path. Sorted
+# by path (signer, then edge) so a reading is reproducible across filesystems.
 export def read-links [root: path]: nothing -> table {
-    list-files (links-dir $root) --suffix ".json"
-    | sort
-    | each {|f| {link_cid: ($f | path parse | get stem)} | merge (read-link $f) }
+    link-files $root
+    | sort-by file
+    | each {|l|
+        let rec = read-link $l.file
+        {edge_cid: $l.edge link_cid: (link-cid $rec)} | merge $rec
+    }
 }
 
 # The record a store file publishes, or null when it is not an instruction
@@ -58,8 +64,8 @@ export def deref [index: record cid: string]: nothing -> any {
     deref-file $file $cid
 }
 
-# Files that could name this CID: everything under links/ and particles/,
-# narrowed by a text search when `rg` is on PATH. bj002 names the search
+# Files that could name this CID: everything under the signer directories and
+# particles/, narrowed by a text search when `rg` is on PATH. bj002 names the search
 # itself — an operand's CID is a literal string in every record that mentions
 # it, so `rg` finds the whole neighbourhood of a vertex without reading the
 # graph. It is only a narrowing: a file that does not contain the string cannot
@@ -76,7 +82,7 @@ export def deref [index: record cid: string]: nothing -> any {
 # without --all hides a dotfile): both sides are filtered by the graph's own
 # filename rules in `touches`, which is where the two are made to agree.
 export def candidates [root: path cid: string --scan]: nothing -> list<path> {
-    let dirs = [(links-dir $root) (particles-dir $root)] | where ($it | path exists)
+    let dirs = (signer-dirs $root) ++ ([(particles-dir $root)] | where ($it | path exists))
     if ($dirs | is-empty) { return [] }
     if $scan or (which rg | is-empty) {
         return ($dirs | each {|d| list-files $d } | flatten)
@@ -93,32 +99,45 @@ export def candidates [root: path cid: string --scan]: nothing -> list<path> {
 # downward from every link, so the work is proportional to the neighbourhood
 # and not to the graph.
 #
-# Two ways a link can name it. Directly: the CID stands in the record, as
-# `cid_from`, `cid_to` or `signer` — a signer is named by every link it signed,
-# which is what makes a signer's own work countable. Indirectly: an instruction
-# preimage names it as an operand, and the link names that record; then the
-# role is the endpoint's key, a dot, and the field inside — `cid_from.about`.
-# The record may itself be an operand of a bigger record (`answer` is that
-# shape), so the step repeats, and the role grows one field per level.
+# Three ways a link can name it. By path: the signer lives in the directory
+# name, not in the bytes — so no text search can narrow that case, and every
+# link in the signer's own directory names them; this is what keeps a
+# signer's own work countable. Directly: the CID stands in the pair, as
+# `cid_from` or `cid_to`. Indirectly: an instruction preimage names it as an
+# operand, and the link names that record; then the role is the endpoint's
+# key, a dot, and the field inside — `cid_from.about`. The record may itself
+# be an operand of a bigger record (`answer` is that shape), so the step
+# repeats, and the role grows one field per level.
 #
 # A candidate is kept only if it is a file of the graph by the graph's own
-# rules: `links/<cid>.json` (seal's rule, so a reading and a seal catalogue the
-# same set) or a store name that parses as an address. That filter is what
-# makes the search and the scan agree — rg recurses into subdirectories and
-# sees dotfiles, a listing does neither, and neither of those is a graph file.
-# The `op` key needs no exclusion here: its value is a verb the format defines,
-# and `touching` accepts nothing but a CID v0.
+# rules: a file link-files walks (seal's rule, so a reading and a seal
+# catalogue the same set) or a store name that parses as an address. That
+# filter is what makes the search and the scan agree — rg recurses into
+# subdirectories and sees dotfiles, a listing does neither, and neither of
+# those is a graph file. The `op` key needs no exclusion here: its value is a
+# verb the format defines, and `touching` accepts nothing but a CID v0.
+#
+# The rows return the FILE, not a bare stem: the stem alone is the edge, and
+# reconstructing the act needs the signer half of the path too.
 export def touches [root: path cid: string --scan]: nothing -> table {
-    let seeds = candidates $root $cid --scan=$scan
+    let links = link-files $root
+    let signed = $links | where signer == $cid | each {|l| {file: $l.file role: "signer"} }
 
+    let seeds = candidates $root $cid --scan=$scan
+    let link_paths = $links | get file
+
+    # EDGE_KEYS and not the read-back record's columns: read-link returns the
+    # triple (signer inserted from the path), and matching that field here
+    # would double the by-path rows above — but only under --scan, since rg
+    # never surfaces a file whose bytes hold nothing. The scan and the search
+    # must agree, so the field set is pinned to what the bytes hold.
     let direct = $seeds
-        | where (($it | path dirname) == (links-dir $root) and ($it | path basename | str ends-with ".json"))
+        | where ($it in $link_paths)
         | each {|f|
             let rec = read-link $f
-            $rec
-            | columns
+            $EDGE_KEYS
             | where (($rec | get $it) == $cid)
-            | each {|key| {link: ($f | path parse | get stem) role: $key} }
+            | each {|key| {file: $f role: $key} }
         }
         | flatten
 
@@ -133,14 +152,14 @@ export def touches [root: path cid: string --scan]: nothing -> table {
                 | where (($rec | get $it) == $cid)
                 | each {|key|
                     touches $root $record_cid --scan=$scan
-                    | each {|row| {link: $row.link role: (role-path $row.role $key)} }
+                    | each {|row| {file: $row.file role: (role-path $row.role $key)} }
                 }
                 | flatten
             }
         }
         | flatten
 
-    $direct ++ $indirect
+    $signed ++ $direct ++ $indirect
 }
 
 # Where a CID sits, as one dotted string: the endpoint's own key, then the

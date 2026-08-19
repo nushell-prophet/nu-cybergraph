@@ -14,7 +14,8 @@ MUST, MUST NOT, SHOULD and MAY are used as in RFC 2119.
 |---|---|
 | particle | a carrier of meaning: its content is the bytes of a file, its name is the CID v0 of those bytes |
 | vertex | the role a particle takes when its CID stands in an edge, not a second thing |
-| link, cyberlink | a directed edge from one particle to another, asserted by one signer |
+| edge | the pair `{cid_from, cid_to}` — the unit of the operational layer; one address shared by every signer asserting it |
+| link, cyberlink | an edge asserted by one signer — the triple; its file holds the pair, the signer lives in the path |
 | signer | an identity: the CID v0 of an SSH public key file in canonical form |
 | graph home | `<git-root>/cybergraph/` — one signer's whole graph |
 | seal | one signing moment: manifest → merkle root → SSH signature → OTS stamp |
@@ -116,7 +117,7 @@ Two derived names, not to be confused:
 
 | name | value | used for |
 |---|---|---|
-| signer CID | CID v0 of the canonical file bytes | the `signer` field of a link record; the signer binding at verification |
+| signer CID | CID v0 of the canonical file bytes | the signer directory a link file lives in; the `signer` field of the triple particle; the signer binding at verification |
 | fingerprint | sha256 of the base64-decoded key blob, lowercase hex | the pubkey filename, the middle segment of a `.sig` filename, nu-multiproof's principal |
 
 A pubkey file's **name is decoration**. Identity comes from the bytes inside it. A verifier MUST NOT match a signer CID by filename — hash the file contents and compare.
@@ -137,45 +138,46 @@ The graph home is always `<git-root>/cybergraph/`. A particle referenced by a li
 
 ```
 cybergraph/
-  links/<link-cid>.json                  # link records, self-addressed          3.1
-  particles/<cid>[.ext]                  # the particle store, self-addressed   3.2
-  certs/<link-cid>.cert.json             # frozen birth certificates            3.3
-  seals/<root-hex-12>/                   # per-seal root statement + signatures 3.4
-  exports/<link-cid>/                    # bundles this repo built              6
-  multiproofs/pubkeys/<fingerprint>.pub  # the registered key, canonical bytes  2.4
-  multiproofs/                           # the rest of the proof layer          7
+  <signer-cid>/<edge-cid>.json              # link records: pair in the file, signer in the path  3.1
+  particles/<cid>[.ext]                     # the particle store, self-addressed                  3.2
+  certs/<signer-cid>/<edge-cid>.cert.json   # frozen birth certificates, mirroring the layout     3.3
+  seals/<root-hex-12>/                      # per-seal root statement + signatures                3.4
+  exports/<signer-cid>/<edge-cid>/          # bundles this repo built                             6
+  multiproofs/pubkeys/<fingerprint>.pub     # the registered key, canonical bytes                 2.4
+  multiproofs/                              # the rest of the proof layer                         7
 ```
 
-The pubkey filename is the reference implementation's choice and carries no authority — see 2.4.
+Signer directories sit at the graph root and are told from the reserved directories by form alone: a directory named by a CID v0 is a signer's, and the reserved names never match that pattern. The pubkey filename is the reference implementation's choice and carries no authority — see 2.4.
 
-`links/`, `certs/` and `seals/` are what a seal stages into git; `particles/` and `exports/` are not staged by the seal (see 5).
+The signer directories, `certs/` and `seals/` are what a seal stages into git; `particles/` and `exports/` are not staged by the seal (see 5).
 
 A sha256 git backend (`git init --object-format=sha256`) is recommended. The format works on sha1 repos too.
 
-### 3.1 Link record — `links/<link-cid>.json`
+### 3.1 Link record — `<signer-cid>/<edge-cid>.json`
 
-The atomic edge. Exactly three keys, all CIDs, nothing else:
+The atomic edge, in its signer's directory. The file holds exactly the pair, two keys, both CIDs, nothing else:
 
 ```json
-{"cid_from":"Qm…","cid_to":"Qm…","signer":"Qm…"}
+{"cid_from":"Qm…","cid_to":"Qm…"}
 ```
 
-- Serialized by the canonical rule (2.2), so key order is alphabetical — `cid_from`, `cid_to`, `signer` — compact, one trailing `\n`.
-- The filename stem MUST be the CID v0 of the file's exact bytes.
+- Serialized by the canonical rule (2.2), so key order is alphabetical — `cid_from`, `cid_to` — compact, one trailing `\n`.
+- The filename stem MUST be the CID v0 of the file's exact bytes — the **edge address**, `derive {cid_from, cid_to}` under 2.2. Two signers stating one edge share one filename, each in their own directory.
+- The signer is **not in the bytes**: it is the directory name, which MUST be a CID v0. What binds the pair to the signer is the seal — the path enters the signed root (5) — so a file moved into another signer's directory breaks its own proof. A reader checks the directory's *form* only; the binding is checked at verification (8).
 - There is **no timestamp**. A time inside the record would fork one act into a different CID per recording moment. Provable time comes from the seal (5); a claimed time is an ordinary edge (`claimed-at`, section 4).
 
-Because the record is exactly the triple, its self-address **equals the cyberlink's derived CID** under 2.2. The same act asserted by the same signer is one CID for everyone, whenever recorded, and the file in `links/` is the published preimage of that address.
+The cyberlink — the triple `derive {cid_from, cid_to, signer}` — is still defined and still computed: pair from the file, signer from the path. It stopped being the file's name.
 
-**Edge address.** The edge alone — the same act with the signer dropped — has its own address, `derive {cid_from, cid_to}` under 2.2, so two signers stating one edge share one address. A writer MUST publish that record as a store file (3.2) when it writes the link — the same rule section 4 puts on every record a convention mints, and this is the same record `confirm A B` and `deny A B` mint as their target. Without the preimage the address is one no later act can reference: a statement *about* the edge would name a CID the graph holds no bytes for, unless a `confirm` or `deny` about that same edge happened to publish it first. Publishing is idempotent, so a repeat, a second signer of the same edge, and a convention minting the same pair all write nothing new.
+**Publishing the triple.** A writer MUST publish the triple record as a store file (3.2) when it writes the link — the same rule section 4 puts on every record a convention mints, and this is the same record `confirm A B S` mints as its target. Without the preimage the cyberlink's derived CID is one no later act can dereference. A writer MUST also still publish the pair record as a store file, even though the link file holds the same bytes: the store (3.2) is the one place derived CIDs are dereferenced, and `confirm A B` / `deny A B` mint the same pair record as their target. Publishing is idempotent, so a repeat, a second signer of the same edge, and a convention minting the same pair all write nothing new.
 
 A reader MUST enforce both addressing rules, from a **single** read of the bytes:
 
 1. CID v0 of the raw bytes equals the filename stem.
 2. Those raw bytes equal the canonical serialization of the parsed record.
 
-Rule 2 is not redundant. Reordered keys, added whitespace, or a duplicate key each hash to some other CID and would pass rule 1 under that name — giving one act two addresses. Decode as UTF-8 explicitly; guessing the encoding lets a UTF-16 file parse to the same triple under a different CID.
+Rule 2 is not redundant. Reordered keys, added whitespace, or a duplicate key each hash to some other CID and would pass rule 1 under that name — giving one act two addresses. Decode as UTF-8 explicitly; guessing the encoding lets a UTF-16 file parse to the same pair under a different CID.
 
-**Triple guard.** A repeat of the same triple is byte-identical, so a writer MUST return the existing record rather than write a second file. One act, one file. The no-op still re-reads and re-checks the file on disk first, so a corrupted record fails loudly instead of reading as a successful repeat.
+**Triple guard.** The path IS the triple — signer in the directory, edge in the filename — so a repeat of the same act lands on the same path, and a writer MUST return the existing record rather than write a second file. One act, one file. The no-op still re-reads and re-checks the file on disk first, so a corrupted record fails loudly instead of reading as a successful repeat.
 
 ### 3.2 Particle store — `particles/<cid>[.ext]`
 
@@ -186,19 +188,19 @@ Arbitrary content published as a self-addressed file, storing the exact bytes: n
 - A reader MUST hash the bytes back to the CID before serving them.
 - Absence is ordinary for a reader: a link names CIDs and the bytes need not be local. Absence and tampering MUST stay distinguishable — an optional read returns nothing for a CID the store does not hold, and still raises for a file that fails its hash.
 
-The store holds content published by a user, the instruction and address records minted by conventions (section 4), and the edge-address record of every link (3.1). Publishing the latter two is what makes a derived CID readable — the record is its own preimage.
+The store holds content published by a user, the instruction and address records minted by conventions (section 4), and the pair and triple records of every link (3.1). Publishing the derived records is what makes a derived CID readable — the record is its own preimage.
 
 Store files are not sealed directly. A file is time-anchored the moment a sealed link names its CID, because showing bytes that hash to an anchored CID extends the anchor to those bytes.
 
-### 3.3 Birth certificate — `certs/<link-cid>.cert.json`
+### 3.3 Birth certificate — `certs/<signer-cid>/<edge-cid>.cert.json`
 
-The inclusion proof extracted from the **first** seal that catalogued the link, frozen forever. JSON, 2-space indent (the bytes are not addressed, so formatting is free):
+The inclusion proof extracted from the **first** seal that catalogued the link, frozen forever, filed mirroring the link layout — the signer's directory, the edge's name. JSON, 2-space indent (the bytes are not addressed, so formatting is free):
 
 ```json
 {
   "schema": "multiproof-merkle-v1",
   "leaf": {
-    "filepath": "links/<link-cid>.json",
+    "filepath": "<signer-cid>/<edge-cid>.json",
     "content_sha256": "<64 hex>",
     "content_git": "<40 or 64 hex>",
     "content_cid": "<Qm…>"
@@ -259,7 +261,7 @@ Sixteen verbs. Twelve are bj002 conventions; `repeat` is edge repetition (bj002 
 
 A record shown in source or target position means the CID of its canonical bytes. `answer`'s source nests: the inner question record resolves to its own CID first, then the outer record is serialized.
 
-The edge address is `derive {cid_from: A, cid_to: B}` and the cyberlink's derived CID is `derive {cid_from: A, cid_to: B, signer: S}` — bj002's two special cases, which are just records here. The second is byte-identical to the link file itself (3.1), so `confirm A B S` targets a CID whose preimage is already published in `links/`; the first is published under `particles/` by every writer that mints it — the link writer (3.1), and `confirm A B` / `deny A B`, whose target IS that record — so it too is always a published preimage.
+The edge address is `derive {cid_from: A, cid_to: B}` and the cyberlink's derived CID is `derive {cid_from: A, cid_to: B, signer: S}` — bj002's two special cases, which are just records here. The first is byte-identical to the link file itself (3.1); both are published under `particles/` by every writer that mints them — the link writer publishes the pair and the triple (3.1), and `confirm A B` / `deny A B` mint the pair as their target — so the CID a `confirm` or `deny` targets, in either arity, is always a published preimage.
 
 Reading these edges back means dereferencing the source CID in `particles/`. An operand's CID appears as a literal string in every record that names it, so a text search narrows candidate files — but a search MUST only narrow: every surviving file is read, hashed back to its name, and parsed exactly as it would have been. A file that merely quotes a CID in prose is found by the search and dropped by the reading.
 
@@ -267,16 +269,16 @@ Repeats, confirms and denies are separate signals and MUST NOT be summed by a fo
 
 ## 5. Seal procedure
 
-A seal is one signing moment over the whole graph home. The proof layer is rooted **at the graph home**, not at the git root: every manifest `filepath`, and therefore every leaf hash and every root, is relative to `cybergraph/` — which is why a certificate's `leaf.filepath` reads `links/<link-cid>.json` with no `cybergraph/` prefix. Normative order:
+A seal is one signing moment over the whole graph home. The proof layer is rooted **at the graph home**, not at the git root: every manifest `filepath`, and therefore every leaf hash and every root, is relative to `cybergraph/` — which is why a certificate's `leaf.filepath` reads `<signer-cid>/<edge-cid>.json` with no `cybergraph/` prefix. That the path enters the signed root is also what binds each pair to its signer (3.1). Normative order:
 
 1. Refuse if no pubkey is registered.
-2. Read and validate **every** link record (3.1) and check that whatever stands at each certificate path is the frozen proof for that exact leaf. Refuse before anything is staged or mutated: a seal is where a file crosses from junk on disk to a statement signed by this signer.
-3. `git add` the non-empty ones of `links/ certs/ seals/`. This list only ever *adds*; it does not bound the manifest.
+2. Read and validate **every** link record (3.1) — walking the signer directories, CID-v0-named directories at the root — and check that whatever stands at each certificate path is the frozen proof for that exact leaf. Refuse before anything is staged or mutated: a seal is where a file crosses from junk on disk to a statement signed by this signer.
+3. `git add` the non-empty ones of the signer directories, `certs/` and `seals/`. This list only ever *adds*; it does not bound the manifest.
 4. Run the proof layer's seal (section 7) with the content anchor **off** — signatures only.
 5. Write the snapshot `seals/<root12>/` (3.4) if it does not exist yet. This MUST happen **before** step 6: freezing runs per link and can fail part-way, and a certificate naming a root whose snapshot was never written can never be verified or exported again — a re-seal does not repair it, because the retry mints a different root.
-6. For every link with no certificate, extract its inclusion proof and freeze it at `certs/<link-cid>.cert.json`.
+6. For every link with no certificate, extract its inclusion proof and freeze it at `certs/<signer-cid>/<edge-cid>.cert.json`.
 
-**A repeated seal is not a no-op.** `seals/` is staged, so each seal catalogues the snapshots of every seal before it — the manifest differs, so the root differs, so another snapshot directory appears. Measured over five consecutive seals with nothing added: five distinct roots, manifest rows 3, 9, 12, 15, 18. This is accepted with its cost, not designed; a fixpoint would need a directory named after a root computed from a tree that already contains it.
+**A repeated seal is not a no-op.** `seals/` is staged, so each seal catalogues the snapshots of every seal before it — the manifest differs, so the root differs, so another snapshot directory appears. Measured over five consecutive seals with nothing added: five distinct roots, manifest rows 3, 10, 13, 16, 19. This is accepted with its cost, not designed; a fixpoint would need a directory named after a root computed from a tree that already contains it.
 
 What the manifest actually covers: every git-tracked file under the graph home except `multiproofs/`, which the proof layer excludes as derived output. Consequences worth stating: a file this staging list never mentions is still sealed once the operator commits it, and the registered pubkey is **not** under the seal — it lives in `multiproofs/pubkeys/`, and its authority comes from the signature it validates, not from inclusion.
 
@@ -290,8 +292,8 @@ Birth bundle for an authored link:
 
 ```
 <bundle>/
-  links/<link-cid>.json                      # the record, at the leaf's filepath
-  <link-cid>.cert.json                       # exactly one *.cert.json at the root
+  <signer-cid>/<edge-cid>.json               # the record, at the leaf's filepath
+  <edge-cid>.cert.json                       # exactly one *.cert.json at the root
   particles/<cid>[.ext]                      # the record's two ends, where held (default)
   multiproofs/tree-root.txt                  # + tree-root.txt.<fingerprint>.sig
   multiproofs/pubkeys/*.pub                  # named <fingerprint>.pub by the reference; the name carries no authority (2.4)
@@ -316,11 +318,11 @@ The merkle and timestamp layer is [nu-multiproof](https://codeberg.org/nushell-p
 - **"Dating the endorsement"** — `absent`/`pending`/`anchored`, the Bitcoin height, the rule that the **earliest** anchor of the same bytes is the reported one, and that a stamp is matched to its signer by hashing the signature file rather than by its name.
 - **the `seal` pipeline** (Quick start, "Sealing under an explicit key") — the order manifest → root statement → signature → stamp, the `<file>.<fingerprint>.sig` naming rule, and that the key must be registered before it can sign.
 
-Four things this format fixes on top of it: the content anchor is always off (5), the per-seal snapshot directory `seals/<root12>/` (3.4), the freeze rule for birth certificates (3.3), and the single inclusion proof moved to the bundle root as `<link-cid>.cert.json` (6).
+Four things this format fixes on top of it: the content anchor is always off (5), the per-seal snapshot directory `seals/<root12>/` (3.4), the freeze rule for birth certificates (3.3), and the single inclusion proof moved to the bundle root as `<edge-cid>.cert.json` (6).
 
 ## 8. Verification
 
-One checker, and every entry point reduces to it: a certificate, the content root its leaf resolves against, and the artifacts of the seal that certificate belongs to. A bundle answers all three by itself — one `*.cert.json` at its root, the leaf at its manifest path, the seal snapshot and pubkeys under `multiproofs/` — and `verify-bundle <dir>` is that case. Verifying an own link names the same three in the repo instead: `certs/<cid>.cert.json`, the graph home, and `seals/<root12>/`. Same checker, same verdict, so "verifies here" always means "verifies anywhere".
+One checker, and every entry point reduces to it: a certificate, the content root its leaf resolves against, and the artifacts of the seal that certificate belongs to. A bundle answers all three by itself — one `*.cert.json` at its root, the leaf at its manifest path, the seal snapshot and pubkeys under `multiproofs/` — and `verify-bundle <dir>` is that case. Verifying in the repo names the same three instead: `certs/<signer>/<edge>.cert.json`, the graph home, and `seals/<root12>/`. The repo entry point takes the EDGE address — `verify <edge-cid> [--signer]` — and runs this checker once per copy held: each signer directory holding the edge against that signer's own certificate, plus each imported bundle carrying it; one row per copy. It deliberately does not take the cyberlink CID: the two kinds of CID can only be told apart by trying, and a guessed argument fails silently — a caller holding a link CID dereferences `particles/<link-cid>` first (3.1). Same checker, same verdict, so "verifies here" always means "verifies anywhere".
 
 An implementation MUST NOT fold a birth certificate against the repository's *current* root statement. The graph home's `multiproofs/tree-root.txt` moves with every seal; a certificate is frozen at birth, so the two agree only for links born in the newest seal. The seal's own snapshot under `seals/<root12>/` is the artifact to check against (3.3).
 
@@ -329,15 +331,15 @@ Order matters — an implementation MUST NOT reach a later check with data an ea
 1. **Locate the proof.** Exactly one `*.cert.json` at the root, else refuse.
 2. **Canonical pubkeys.** Every `multiproofs/pubkeys/*.pub` MUST be canonical (2.4), compared as **bytes**, not as decoded text — decoding strips a UTF-8 BOM, and `EF BB BF` + a canonical line addresses to a different CID.
 3. **Merkle verification.** Fold the proof to the root in the signed statement; check the SSH signatures over that statement; re-derive the leaf's content commitment. The content leg answers with a state, and only `true` passes — `missing`, `symlink`, `outside`, `directory` and `unverifiable` each block validity.
-4. **Record self-addressing.** Read the record at `leaf.filepath` under both rules of 3.1. Tampered bytes never reach the binding check.
-5. **Signer binding.** The record's `signer` MUST be the CID of a pubkey that *validly signed the root statement*. Both sides of this match are key material. Matching a pubkey by filename is a hole: filing a victim's key as `<attacker-fingerprint>.pub`, with the attacker's own key beside it under any other name, binds the attacker's signature to the victim's signer CID and the bundle reads as the victim's authorship.
+4. **Record self-addressing.** Read the record at `leaf.filepath` under both rules of 3.1, and require the CID v0 *form* of its signer directory — the parent half of the leaf path. Tampered bytes never reach the binding check.
+5. **Signer binding.** The signer named by the leaf's path MUST be the CID of a pubkey that *validly signed the root statement*. Both sides of this match are key material. Matching a pubkey by filename is a hole: filing a victim's key as `<attacker-fingerprint>.pub`, with the attacker's own key beside it under any other name, binds the attacker's signature to the victim's signer CID and the bundle reads as the victim's authorship. This is also the check that gives the signer directory its authority: the path is inside the signed root (5), so a pair refiled under another signer's directory names a signer who never signed that root — or changes the leaf path and breaks the proof outright.
 6. **Endorsement time.** Report the anchor over *that signer's* signature, matched through the same pubkey table. One signer may hold several signature files, so rank all of that signer's rows: an `anchored` row wins, and among those the **lowest** Bitcoin block, since the claim is "no later than T"; failing that a `pending` row, which MUST NOT be ranked together with `absent`; failing that `absent`, meaning the endorsement is real but undated. A signer with no valid signature has no endorsement at all, which is a different answer from an undated one.
 
 The verdict is a record, not a boolean. `valid` is the conjunction of the merkle verdict and the signer binding. Malformed input (no certificate, a non-canonical pubkey) raises; a cryptographic or content mismatch returns `valid: false` with the first failing reason.
 
 ## 9. Conformance vectors
 
-Verified against the reference implementation on 2026-08-18 (`nu toolkit.nu test` — 140 passed).
+Verified against the reference implementation on 2026-08-18 (`nu toolkit.nu test` — 156 passed).
 
 **Link record and derived CIDs** (`tests/test_record.nu`, `tests/test_convention.nu`):
 
@@ -349,6 +351,7 @@ S = QmddrVz92VH3LqT2i7uXeK4AVh6LyU7zjDiLbSdChPsULr
 
 | bytes (plus one trailing `\n`) | CID v0 |
 |---|---|
+| `{"cid_from":"QmUQUHEmv651XCBhiWUQpx2zf4PDts1aXL324ZFyV4QZPF","cid_to":"QmW9519sfmW2MvDb4TU4dKtiFAXm1UPDvE7JrMaBjprVHp"}` | `QmUiARbMPT9WNXqvgb2BB9gWFXRiCEqD96AF5xebwNTCTT` |
 | `{"cid_from":"QmUQUHEmv651XCBhiWUQpx2zf4PDts1aXL324ZFyV4QZPF","cid_to":"QmW9519sfmW2MvDb4TU4dKtiFAXm1UPDvE7JrMaBjprVHp","signer":"QmddrVz92VH3LqT2i7uXeK4AVh6LyU7zjDiLbSdChPsULr"}` | `QmRyRXXRM7ztFTPiyXjDtra9ND2oU64iE2jcydwubW17Ze` |
 | `{"op":"confirm"}` | `QmcLFo8UMWWuUP7ruztAW5C1zPwmF7GTZs8X6Lig4pXkBh` |
 | `{"op":"deny"}` | `QmU8kL28M7yecZ5iPGJZ3e89fytWFzLszU3QtKRj5hV2kK` |
@@ -357,7 +360,7 @@ S = QmddrVz92VH3LqT2i7uXeK4AVh6LyU7zjDiLbSdChPsULr
 | `{"cid_from":A,"cid_to":B}` (the edge address) | `QmawrHuBDdcSRCPumzsKfsMi5FJne8xai9WNPAdr3NmLBV` |
 | `{"cid_from":A,"cid_to":B,"signer":S}` (the cyberlink) | `Qme4L2P7QwNoijw6HzYVrqrrtk99oj1XvJHvAb9yobHVLe` |
 
-The first row is a link record; its CID is both the filename stem in `links/` and the derived CID of the act. Reproduce any row with `printf '<bytes>\n' | ipfs add --only-hash --cid-version=0`.
+The first row is a link file's bytes — the pair; its CID is the filename stem in the signer's directory. The second row is the same act's triple — the particle the writer publishes, whose CID is the cyberlink's derived address. Reproduce any row with `printf '<bytes>\n' | ipfs add --only-hash --cid-version=0`.
 
 **Signer identity.** The canonical form and the fingerprint are pinned by nu-multiproof (`nu-multiproof/pubkey.nu`'s `@example`, `tests/test_allowed-signers.nu`; the canonicalization itself in `tests/test_pubkey.nu`). The signer CID is the row that couples 2.1 to 2.4 to 3.1 to the binding in 8.5:
 
@@ -382,7 +385,7 @@ All five are recorded from the reference IPFS client (nu-multiproof `tests/test_
 
 ## 10. Deliberately not specified
 
-- **Custody, handoff and import.** Taking another signer's bundle, keeping it read-only, and re-exporting it with a signed chain of custody layers is a separate subsystem, described in `README.md` ("Bundles, import, provenance"). Two of its consequences reach the path specified here. A birth bundle exported with a named recipient carries `<link-cid>.handoff.json` and its signature **at the bundle root**, and the reference verifier folds that check into `valid` — so a bundle carrying one falls outside the verdict of section 8, which has no step for it. And a graph that has imported something stages `imported/` and `receipts/` into its seal as well, putting more rows in the manifest and so minting a different root; a graph that never imports has neither directory, so its manifest is unaffected.
+- **Custody, handoff and import.** Taking another signer's bundle, keeping it read-only, and re-exporting it with a signed chain of custody layers is a separate subsystem, described in `README.md` ("Bundles, import, provenance"). Two of its consequences reach the path specified here. A birth bundle exported with a named recipient carries `<edge-cid>.handoff.json` and its signature **at the bundle root**, and the reference verifier folds that check into `valid` — so a bundle carrying one falls outside the verdict of section 8, which has no step for it. And a graph that has imported something stages `imported/` and `receipts/` into its seal as well, putting more rows in the manifest and so minting a different root; a graph that never imports has neither directory, so its manifest is unaffected.
 - **Reading policy.** How to weigh repeats against confirms and denies, whose signature counts, how time decays — bj002 leaves this as `f(repeats, confirms, denies, signer_weights, time_decay)` and so does this format. A reader that sums them is making a policy choice, not implementing this spec.
 - **Human names for keys.** Nothing here stores a label for a key anywhere. A `.pub` filename is decoration.
 - **A provable lower time bound.** OTS bounds time from above only. "Created no earlier than" would need a recent unpredictable value inside the signed bytes.

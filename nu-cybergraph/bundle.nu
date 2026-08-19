@@ -21,13 +21,14 @@ use _deps/pubkey.nu [ pubkey ]
 use _repo.nu graph-root
 use _fs.nu [ list-files list-dirs copy-file copy-tree cwd-relative ]
 use _layout.nu [
-    links-dir
     particles-dir
     exports-dir
+    certs-dir
     cert-path
     cert-filename
+    link-path
     snapshot-dir
-    imported-copies
+    imported-edge-copies
     receipt-relpath
     receipt-cert-path
     receipt-cert-filename
@@ -36,7 +37,7 @@ use _layout.nu [
     handoff-filename
 ]
 use _validate.nu [ CID_V0_RE ]
-use _record.nu [ read-link ]
+use _record.nu [ read-link link-cid ]
 use _receipt.nu [ read-receipt custody-layers ]
 use _signer.nu [ own-signer ]
 use _particle.nu [ particle-find ]
@@ -159,7 +160,7 @@ def resolve-handoff-key [root: path key: any]: nothing -> path {
 # the repo's key, not through a seal: the bundle leaves at export time,
 # before any later seal could catalogue the handoff — a detached signature
 # is the only immediate, local authentication available.
-def write-handoff [root: path dir: path link_cid: string to: string receipt_hash: any key: path]: nothing -> nothing {
+def write-handoff [root: path dir: path edge_cid: string link_cid: string to: string receipt_hash: any key: path]: nothing -> nothing {
     let handoff = {
         schema: $HANDOFF_SCHEMA
         link: $link_cid
@@ -168,7 +169,7 @@ def write-handoff [root: path dir: path link_cid: string to: string receipt_hash
         receipt: $receipt_hash
         handed_at: (date now | format date "%+")
     }
-    let file = $dir | path join (handoff-filename $link_cid)
+    let file = $dir | path join (handoff-filename $edge_cid)
     handoff-bytes $handoff | save --raw $file
     # `ignore`: upstream hands back the .sig path, which no caller reads — and
     # dropping it is what lets every writer in this file share one contract,
@@ -192,72 +193,110 @@ def assert-complete-bundle [out: path]: nothing -> nothing {
 
 # Everything that writes into the destination dir. Split out of main so the
 # whole of it sits under one cleanup: from here down, any raise leaves debris.
-def assemble-bundle [root: path out: path link_cid: string to: any key: any links_only: bool]: nothing -> nothing {
-    let cert = cert-path $root $link_cid
-    if ($cert | path exists) {
-        # Own link: the birth bundle
+# `resolved` is main's answer to which copy of the edge leaves: {own: bool,
+# signer: cid, dir: the imported bundle for a foreign act, null for an own one}.
+def assemble-bundle [root: path out: path edge_cid: string resolved: record link_cid: string to: any key: any links_only: bool]: nothing -> nothing {
+    if $resolved.own {
+        # Own act: the birth bundle, mirroring the graph's own layout — the
+        # leaf path `<signer>/<edge>.json` is what the certificate proves.
+        let cert = cert-path $root $resolved.signer $edge_cid
         let proof = open --raw $cert | from json
-        mkdir (links-dir $out)
         let record_file = $root | path join $proof.leaf.filepath
-        copy-file $record_file (links-dir $out)
-        copy-file $cert ($out | path join (cert-filename $link_cid))
+        mkdir ($out | path join ($proof.leaf.filepath | path dirname))
+        copy-file $record_file ($out | path join $proof.leaf.filepath)
+        copy-file $cert ($out | path join (cert-filename $edge_cid))
         assemble-seal-artifacts $root $out $proof.root
         if not $links_only {
             assemble-particles $root $out (read-link $record_file)
         }
         if $to != null {
             # The author has no receipt — their handoff pins nothing but the link
-            write-handoff $root $out $link_cid $to null $key
+            write-handoff $root $out $edge_cid $link_cid $to null $key
         }
         return
     }
 
-    # Imported link: re-export with this repo's custody layer appended
-    let hits = imported-copies $root $link_cid
-    if ($hits | is-empty) {
-        error make {msg: $"unknown link: ($link_cid) — no birth certificate in certs/ and nothing in imported/"}
-    }
-    let rcert = receipt-cert-path $root $link_cid
+    # Imported act: re-export with this repo's custody layer appended. Paths
+    # go by (author, edge) — the mirrored layout — while the `link` field
+    # inside the receipt and the handoff stays the cyberlink CID (see
+    # _verify-helpers.nu).
+    let author = $resolved.signer
+    let rcert = receipt-cert-path $root $author $edge_cid
     if not ($rcert | path exists) {
-        error make {msg: $"no frozen receipt proof for ($link_cid) — run `nu-cybergraph seal` after import, then re-export"}
+        error make {msg: $"no frozen receipt proof for ($author)'s ($edge_cid) — run `nu-cybergraph seal` after import, then re-export"}
     }
-    copy-tree ($hits | first) $out
+    copy-tree $resolved.dir $out
 
-    let receipt = read-receipt ($root | path join (receipt-relpath $link_cid))
+    let receipt_relpath = receipt-relpath $author $edge_cid
+    let receipt = read-receipt ($root | path join $receipt_relpath)
     let index = (custody-layers $out | length) + 1
     let layer = custody-dir $out | path join (custody-layer-dirname $index $receipt.custodian)
     let proof = open --raw $rcert | from json
-    mkdir ($layer | path join ((receipt-relpath $link_cid) | path dirname))
-    copy-file ($root | path join (receipt-relpath $link_cid)) ($layer | path join (receipt-relpath $link_cid))
-    copy-file $rcert ($layer | path join (receipt-cert-filename $link_cid))
+    mkdir ($layer | path join ($receipt_relpath | path dirname))
+    copy-file ($root | path join $receipt_relpath) ($layer | path join $receipt_relpath)
+    copy-file $rcert ($layer | path join (receipt-cert-filename $edge_cid))
     assemble-seal-artifacts $root $layer $proof.root
     if $to != null {
         # A custodian's handoff pins their receipt — the exact chain state handed over
-        let receipt_hash = open --raw ($root | path join (receipt-relpath $link_cid)) | hash sha256
-        write-handoff $root $layer $link_cid $to $receipt_hash $key
+        let receipt_hash = open --raw ($root | path join $receipt_relpath) | hash sha256
+        write-handoff $root $layer $edge_cid $link_cid $to $receipt_hash $key
     }
 }
 
-# Export a link as a portable, offline-verifiable bundle: the birth bundle
-# for an own link; for an imported link, the foreign bundle unchanged plus
-# this repo's custody layer. --to names the recipient in a signed handoff.
+# Export one act over an edge as a portable, offline-verifiable bundle: the
+# birth bundle for an own act; for an imported one, the foreign bundle
+# unchanged plus this repo's custody layer. --to names the recipient in a
+# signed handoff.
 export def main [
-    link_cid: string # CID of a link: authored here (certs/) or imported (imported/*/)
+    edge_cid: string # Edge CID: authored here (certs/) or imported (imported/*/)
     --repo: path # Source repo root (default: git root of current directory)
-    --out: path # Bundle destination (default: exports/<link_cid>)
+    --out: path # Bundle destination (default: exports/<signer>/<edge-cid>)
     --to: string # Recipient signer CID — adds a signed handoff (default: none, an open export)
+    --signer: string # Whose act to export, when more than one signer holds this edge
     --key: path # SSH private key for the handoff signature (default: from git config user.signingKey)
-    --links-only # own link only: without particles, record + certificate alone (no-op re-exporting an imported link — its particles, if any, are the sender's foreign bytes, copied unchanged either way)
+    --links-only # own act only: without particles, record + certificate alone (no-op re-exporting an imported act — its particles, if any, are the sender's foreign bytes, copied unchanged either way)
 ]: nothing -> path {
     let root = graph-root $repo
     if $to != null and $to !~ $CID_V0_RE {
         error make {msg: $"--to must be a signer CID \(base58btc CID v0\): ($to)"}
     }
     let key = if $to == null { null } else { resolve-handoff-key $root $key }
-    let out = if $out != null { $out | path expand } else { exports-dir $root | path join $link_cid }
+
+    # Which copy of the edge leaves: an own act (a birth certificate under
+    # certs/<signer>/) wins over imported ones, as the certificate lookup did
+    # when the argument named the act directly. More than one candidate is a
+    # question only the caller can answer — refused, never guessed.
+    let own_hits = list-dirs (certs-dir $root)
+        | each { path basename }
+        | where {|s| $signer == null or $s == $signer }
+        | where ((cert-path $root $it $edge_cid) | path exists)
+    let imported_hits = if ($own_hits | is-empty) {
+        imported-edge-copies $root $edge_cid | where {|h| $signer == null or $h.signer == $signer }
+    } else { [] }
+    if ($own_hits | is-empty) and ($imported_hits | is-empty) {
+        error make {msg: $"unknown edge: ($edge_cid) — no birth certificate in certs/ and nothing in imported/"}
+    }
+    if ($own_hits | length) > 1 {
+        error make {msg: $"several signers hold a birth certificate for ($edge_cid): ($own_hits | str join ', ') — pass --signer"}
+    }
+    if ($imported_hits | length) > 1 {
+        error make {msg: $"several imported signers hold ($edge_cid): ($imported_hits | get signer | str join ', ') — pass --signer"}
+    }
+    let resolved = if ($own_hits | is-not-empty) {
+        {own: true signer: ($own_hits | first) dir: null}
+    } else {
+        {own: false signer: $imported_hits.0.signer dir: $imported_hits.0.dir}
+    }
+
+    # exports/ mirrors the layout too — signer above, edge below — so two
+    # signers' exports of one edge cannot collide.
+    let record_root = if $resolved.own { $root } else { $resolved.dir }
+    let link_cid = link-cid (read-link (link-path $record_root $resolved.signer $edge_cid))
+    let out = if $out != null { $out | path expand } else { exports-dir $root | path join $resolved.signer $edge_cid }
     if ($out | path exists) {
         error make {msg: $"bundle destination already exists: ($out)"}
     }
+    mkdir ($out | path dirname)
 
     # Why a cleanup and not more pre-checks: a raise below this line — an
     # unregistered signing key most of all (see resolve-handoff-key) — used to
@@ -267,7 +306,7 @@ export def main [
     # for every cause rather than the one a pre-check could name. The error is
     # re-raised raw: labels, help and location are the operator's evidence.
     try {
-        assemble-bundle $root $out $link_cid $to $key $links_only
+        assemble-bundle $root $out $edge_cid $resolved $link_cid $to $key $links_only
         assert-complete-bundle $out
     } catch {|e|
         rm --recursive --force $out

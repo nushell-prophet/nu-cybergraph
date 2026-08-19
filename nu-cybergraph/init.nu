@@ -1,7 +1,7 @@
 # Bootstrap a signer's repo: multiproof machinery + the cybergraph directories.
 
 use _repo.nu [ repo-root graph-root ]
-use _layout.nu [ links-dir certs-dir ]
+use _layout.nu [ certs-dir ]
 use _fs.nu [ list-files ]
 use _deps/init.nu [ init ]
 
@@ -78,8 +78,10 @@ export def main [
         }
     }
 
-    mkdir (links-dir $root) (certs-dir $root)
-    print $"cybergraph layout ready: links/ certs/ in ($root)"
+    # No signer directory made here: link files live in <signer-cid>/, and the
+    # first `link add` creates it — git tracks no empty directory anyway.
+    mkdir (certs-dir $root)
+    print $"cybergraph layout ready: certs/ in ($root) — link files land in the signer's own <cid> directory at first add"
 }
 
 # Add a key to the trust list without establishing an identity: a co-signer

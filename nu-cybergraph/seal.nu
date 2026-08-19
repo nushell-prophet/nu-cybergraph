@@ -7,8 +7,9 @@
 
 use _repo.nu graph-root
 use _fs.nu [ list-files copy-file move-file cwd-relative ]
-use _layout.nu [ links-dir certs-dir cert-path snapshot-dir receipts-dir receipt-cert-path receipt-relpath receipt-cid RECEIPT_SUFFIX LINKS_DIR CERTS_DIR SEALS_DIR IMPORTED_DIR RECEIPTS_DIR ]
+use _layout.nu [ signer-dirs link-files certs-dir cert-path snapshot-dir receipts-dir receipt-files receipt-cert-path receipt-relpath CERTS_DIR SEALS_DIR IMPORTED_DIR RECEIPTS_DIR ]
 use _record.nu [ read-link ]
+use _validate.nu [ CID_V0_RE ]
 use _signer.nu [ own-signer ]
 use _commit-proposal.nu [ seal-commit-line ]
 use _deps/seal.nu [ seal ]
@@ -113,21 +114,39 @@ export def main [
     # node walks into upstream's `tracked paths do not resolve to regular files`,
     # naming a file they just removed, and only `git rm -r --cached` clears it
     # (measured). Refused before staging, removing the node is the whole recovery.
-    for f in (list-files (links-dir $root) --suffix ".json") {
-        read-link $f
-        assert-frozen-proof (cert-path $root (($f | path parse).stem)) ($f | path relative-to $root)
+    for l in (link-files $root) {
+        read-link $l.file
+        assert-frozen-proof (cert-path $root $l.signer $l.edge) ($l.file | path relative-to $root)
     }
 
     # Receipts, same rule. The leaf comes from `receipt-relpath`, which _layout.nu
     # documents as being exactly this proof's `leaf.filepath` — the alternative,
     # re-deriving it with `path relative-to`, would be a third spelling of a path
     # the layout module already owns.
-    for f in (list-files (receipts-dir $root) --suffix $RECEIPT_SUFFIX) {
-        let cid = receipt-cid $f
-        assert-frozen-proof (receipt-cert-path $root $cid) (receipt-relpath $cid)
+    for r in (receipt-files $root) {
+        assert-frozen-proof (receipt-cert-path $root $r.author $r.edge) (receipt-relpath $r.author $r.edge)
     }
 
-    # Stage the cybergraph dirs: the manifest walks `git ls-files`, so an
+    # The sweep above sees only what `receipt-files` walks — .receipt.json
+    # files inside CID-named author directories — while `$stage` below
+    # git-adds receipts/ WHOLESALE. Anything else at the top of receipts/ (a
+    # flat file, a hand-named directory — including a receipt at the
+    # pre-edge-refactoring flat location) would enter every seal's signed
+    # manifest unvalidated and never get a frozen proof: attested by the
+    # signer while the custody-freeze discipline silently does not apply to
+    # it. Refused before staging, for the sweep's own recovery reason:
+    # removing the node is the whole fix.
+    let stray = if ((receipts-dir $root) | path exists) {
+        ls (receipts-dir $root)
+        | get name
+        | where {|e| ($e | path type) != "dir" or ($e | path basename) !~ $CID_V0_RE }
+    } else { [] }
+    if ($stray | is-not-empty) {
+        error make {msg: $"not custody layout under receipts/: ($stray | each { cwd-relative } | str join ', ') — only <author-cid>/ directories live there, and the pre-seal sweep cannot validate anything else, so a seal would sign it unchecked. Remove it and seal again"}
+    }
+
+    # Stage the cybergraph dirs — the signer directories holding the link
+    # files, plus the fixed set: the manifest walks `git ls-files`, so an
     # untracked newborn link would silently miss its own seal. certs/ and
     # seals/ hold artifacts of PREVIOUS seals — cataloguing them makes each
     # seal also attest the certificates issued so far (custody continuity).
@@ -153,9 +172,10 @@ export def main [
     # that already contains it — a hash self-reference, so not reachable.
     #
     # Measured over five consecutive seals with nothing added between them: five
-    # distinct roots, `seals/` grown 1 -> 5 directories, manifest rows 3, 9, 12,
-    # 15, 18. The +6 at seal 2 is `certs/`, the first certificate and the `seals`
-    # parent row all entering at once; +3 per seal after that, being one snapshot
+    # distinct roots, `seals/` grown 1 -> 5 directories, manifest rows 3, 10, 13,
+    # 16, 19. The +7 at seal 2 is `certs/`, the signer's certificate directory
+    # under it, the first certificate and the `seals` parent row all entering at
+    # once; +3 per seal after that, being one snapshot
     # directory and its two files. What it buys is the continuity above — each
     # seal re-attests the root statements and signatures of every seal before it.
     # What it costs, with stamping on, is a fresh signature and a calendar round
@@ -171,8 +191,9 @@ export def main [
     # them — and with them the ability to verify or export any link born under
     # those roots. Pinned by tests/test_bootstrap.nu "a seal with nothing new
     # still mints a new root".
-    let stage = [$LINKS_DIR $CERTS_DIR $SEALS_DIR $IMPORTED_DIR $RECEIPTS_DIR]
-        | each {|d| $root | path join $d }
+    let stage = (
+        (signer-dirs $root) ++ ([$CERTS_DIR $SEALS_DIR $IMPORTED_DIR $RECEIPTS_DIR] | each {|d| $root | path join $d })
+    )
         | where (($it | path exists) and (ls $it | is-not-empty))
     if ($stage | is-not-empty) {
         ^git -C $root add -- ...$stage
@@ -276,16 +297,18 @@ export def main [
     # "is there a certificate" with a bare `path exists` and the sweep never runs
     # for them, so a junk node at a cert path still reaches those two as a crash
     # rather than a verdict — parked, not fixed here.
-    mkdir (certs-dir $root)
-    let newborn = list-files (links-dir $root) --suffix ".json"
-        | where (not ((cert-path $root (($it | path parse).stem)) | path exists))
+    let newborn = link-files $root
+        | where (not ((cert-path $root $it.signer $it.edge) | path exists))
     # `path expand` because this is a handle, not a label: `merkle prove` returns
     # its path relative to the cwd, and `move-file` must not depend on where the
     # operator happened to stand. The expand is the exact inverse — it resolves
     # against that same cwd — so it is a no-op on the absolute form.
-    for f in $newborn {
-        let proof = merkle prove ($f | path relative-to $root) --repo $root | path expand
-        move-file $proof (cert-path $root (($f | path parse).stem))
+    for l in $newborn {
+        let proof = merkle prove ($l.file | path relative-to $root) --repo $root | path expand
+        # certs mirror the link layout, so the certificate's own signer
+        # directory may not exist yet — `mv` needs the parent standing.
+        mkdir (certs-dir $root | path join $l.signer)
+        move-file $proof (cert-path $root $l.signer $l.edge)
     }
 
     # Same freeze rule for custody receipts, resting on the same sweep: the FIRST
@@ -293,11 +316,13 @@ export def main [
     # its proof freezes beside it and later seals must not touch it.
     # (*.receipt.cert.json does not end with .receipt.json — the suffix skips
     # already-frozen proofs.)
-    let new_receipts = list-files (receipts-dir $root) --suffix $RECEIPT_SUFFIX
-        | where (not ((receipt-cert-path $root (receipt-cid $it)) | path exists))
-    for f in $new_receipts {
-        let proof = merkle prove ($f | path relative-to $root) --repo $root | path expand
-        move-file $proof (receipt-cert-path $root (receipt-cid $f))
+    let new_receipts = receipt-files $root
+        | where (not ((receipt-cert-path $root $it.author $it.edge) | path exists))
+    for r in $new_receipts {
+        let proof = merkle prove ($r.file | path relative-to $root) --repo $root | path expand
+        # The frozen proof lands beside its receipt, in the same author
+        # directory — the parent already exists.
+        move-file $proof (receipt-cert-path $root $r.author $r.edge)
     }
 
     let out = {sealed: $sealed newborn: ($newborn | length) receipts: ($new_receipts | length) snapshot: ($snap | cwd-relative)}
