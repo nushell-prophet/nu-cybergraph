@@ -7,8 +7,7 @@
 # without them an importer has the record but not the preimage of the
 # instruction it names (bj002 "Reading instructions"), and can only decode
 # the edge's meaning by scanning particles/ across every repo it can reach.
-# --links-only drops back to the record + certificate alone, the shape the
-# bundle had before this option existed.
+# --links-only drops the bundle to the record + certificate alone.
 # An IMPORTED link re-exports: the foreign bundle copied unchanged — it stays
 # the authority for authorship and birth time, particles included if the
 # sender attached them — plus this repo's custody layer appended under
@@ -66,8 +65,8 @@ def assemble-seal-artifacts [root: path out: path root_hex: string]: nothing -> 
     # file after `signing-principal`, which is the key's own digest), while a
     # pubkey file's name is decoration — upstream pins that a key registered
     # under any name still signs and verifies. Joining the segment onto
-    # `pubkeys/<name>.pub` therefore shipped a bundle with no signer key at all
-    # for any signer who renamed the file `init` wrote.
+    # `pubkeys/<name>.pub` therefore ships a bundle with no signer key at all
+    # for any signer whose file is not named the way `init` names it.
     # Anchored regex, greedy middle: a fingerprint cannot contain ".sig", but
     # the bare `<file>.sig` form must not parse as one either.
     let signers = list-files $snap --suffix ".sig"
@@ -300,9 +299,9 @@ export def main [
     mkdir ($out | path dirname)
 
     # Why a cleanup and not more pre-checks: a raise below this line — an
-    # unregistered signing key most of all (see resolve-handoff-key) — used to
-    # leave a complete-looking bundle whose handoff was unsigned, and the retry
-    # then hit "bundle destination already exists" above. The dir did not exist
+    # unregistered signing key most of all (see resolve-handoff-key) — leaves a
+    # complete-looking bundle whose handoff is unsigned, and the retry then hits
+    # "bundle destination already exists" above. The dir did not exist
     # before, so removing it restores exactly the state the export started in,
     # for every cause rather than the one a pre-check could name. The error is
     # re-raised raw: labels, help and location are the operator's evidence.

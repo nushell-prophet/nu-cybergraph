@@ -1,16 +1,15 @@
 # Field disciplines shared by every validated record in the format — link
 # records, custody receipts, handoffs.
 #
-# The three validators used to repeat the same four checks with their own
-# wording: exact key set, CID fields, RFC 3339 timestamp, sha256-or-null chain
-# field. Each copy was a place for the rule to drift, and the drift would be
-# invisible — a validator that accepts slightly more than its siblings does not
-# fail, it lets a malformed artifact through. One definition per check, the
-# artifact's name passed in so the message still says what was being read.
+# One definition per check — exact key set, CID fields, RFC 3339 timestamp,
+# sha256-or-null chain field — with the artifact's name passed in, so the
+# message still says what was being read. A copy per validator is a place for
+# the rule to drift, and the drift is invisible: a validator that accepts
+# slightly more than its siblings does not fail, it lets a malformed artifact
+# through.
 #
 # The regexes live here for the same reason: they are the field types of the
-# format, not the property of whichever record first needed one. `_record.nu`
-# used to export them with an apology attached.
+# format, not the property of whichever record needs one.
 
 # The address type of everything in the graph: base58btc CID v0, `Qm` + 44
 # base58 chars (the alphabet excludes 0, O, I and l).

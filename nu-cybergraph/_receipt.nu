@@ -21,10 +21,9 @@ use _layout.nu [ CUSTODY_DIR custody-dir ]
 # CID and the receipt needs nothing else to say what it is about.
 #
 # Why: a receipt is not content-addressed, so a lone derived CID here would
-# name an act whose preimage lives somewhere else — for a while it lived
-# nowhere in the custodian's own repo, and the fix was to make import mint
-# the missing particle. Naming the components removes the dependency instead
-# of satisfying it: a stranger holding one custody layer reads the act from
+# name an act whose preimage lives somewhere else. Naming the components
+# removes that dependency instead of satisfying it: a stranger holding one
+# custody layer reads the act from
 # the receipt's own bytes, with no store to consult and no CID to trust.
 # The path (`receipts/<author>/<edge>`) is the same act spelled on disk and
 # is proven by the seal (`leaf.filepath`); the fields are what survive

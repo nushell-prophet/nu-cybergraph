@@ -39,20 +39,18 @@ export def main [
         | where ((cert-path $root $it $edge_cid) | path exists)
         | each {|s|
             let cert = cert-path $root $s $edge_cid
-            # Own copy: still one verification path for everything — the same
+            # Own copy: one verification path for everything — the same
             # checker, told where this act's proof and its seal's artifacts
-            # are, so "verifies here" still means "verifies anywhere".
+            # are, so "verifies here" means "verifies anywhere".
             #
-            # It used to be told by construction instead: export a portable
-            # bundle into a temp dir and check that, because `merkle verify`
-            # derived the root statement from the same --repo as the content,
-            # and the graph home's multiproofs/tree-root.txt is the CURRENT
-            # root — a certificate from any earlier seal died on "proof is for
-            # a different seal". That cost a mktemp and a full copy per link
-            # (~92ms each, 567 links on the acceptance graph) to rearrange
-            # paths, never to check anything. nu-multiproof 16e3e74's
-            # --multiproofs-dir names the older seal directly; seals/<root12>/
-            # is already that directory, snapshotted at birth by `seal`.
+            # Told, not constructed. The graph home's multiproofs/tree-root.txt
+            # is the CURRENT root, so a certificate from any earlier seal folds
+            # against the wrong statement; nu-multiproof's --multiproofs-dir
+            # names the birth seal directly, and seals/<root12>/ is already that
+            # directory, snapshotted at birth by `seal`. Materializing a bundle
+            # per link instead costs a mktemp and a full copy (~92ms each, 567
+            # links on the acceptance graph) to rearrange paths, never to check
+            # anything.
             let born = open --raw $cert | from json | get root
             let snapshot = snapshot-dir $root $born
             if not ($snapshot | path exists) {

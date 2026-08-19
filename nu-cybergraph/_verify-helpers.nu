@@ -33,14 +33,13 @@ def canonical-pubkeys [dir: path]: nothing -> table {
         # problem for exactly this reason. A bare `try {}` turned that into
         # "non-canonical pubkey file" over a perfectly good ed25519 key (probed
         # with a PATH holding no ssh-keygen), sending the operator after the
-        # wrong problem. Same shape as upstream's own canonical-file, and the
-        # same correction as 115d567 one layer up.
+        # wrong problem. Same shape as upstream's own canonical-file.
         #
-        # The wrapper adds the file name and NO verb. It used to prefix upstream's
-        # message with "is not an SSH public key", which asserts exactly what
-        # upstream's own tail then denies — the operator read "…/x.pub is not an
-        # SSH public key: ssh-keygen is not on PATH … This is a toolchain problem,
-        # not a problem with the key." One sentence, two verdicts.
+        # The wrapper adds the file name and NO verb. A verb like "is not an SSH
+        # public key" asserts exactly what upstream's own tail then denies — the
+        # operator reads "…/x.pub is not an SSH public key: ssh-keygen is not on
+        # PATH … This is a toolchain problem, not a problem with the key." One
+        # sentence, two verdicts.
         #
         # Any verb is wrong here, because the two throws disagree about what
         # happened. Missing ssh-keygen means nothing was decided at all; a padded
@@ -71,10 +70,10 @@ def canonical-pubkeys [dir: path]: nothing -> table {
 # belongs to an older seal. Named, those become `certs/<cid>.cert.json` plus
 # `seals/<root12>/` and the same checker runs over the repo in place.
 #
-# Not a second code path: without the flags this behaves exactly as before, and
-# `verify` used to buy the same thing by exporting a throwaway bundle per link —
-# 567 mktemp + copies over the acceptance graph, ~92ms each, to rearrange paths
-# `merkle verify` can now be told directly (nu-multiproof --multiproofs-dir).
+# Not a second code path: without the flags this is the bundle case unchanged.
+# Naming the two directly is what spares a throwaway bundle per link — 567
+# mktemp + copies over the acceptance graph, ~92ms each, to rearrange paths
+# `merkle verify` can be told about (nu-multiproof --multiproofs-dir).
 def verify-proof-dir [dir: path --cert: path --multiproofs-dir: path]: nothing -> record {
     # Not `default`: it takes a value, so the listing below would run even when
     # the caller named the certificate — and over a graph home it finds none.
@@ -94,15 +93,14 @@ def verify-proof-dir [dir: path --cert: path --multiproofs-dir: path]: nothing -
 # or receipt — under their own key and the signature would still verify,
 # against the wrong identity.
 #
-# Both sides of the match are key material, and that is the whole point. This
-# used to read `where name == $s.signer` — the pubkey file's STEM against the
-# principal in the verdict row — which made a file name authorize an identity.
-# Under nu-multiproof b6d7b11 a principal became the key's own fingerprint, so
-# the stem match survived only because `init` happens to name the file after
-# it; a bundle is free to name its files anything. Filing the victim's key as
+# Both sides of the match are key material, and that is the whole point.
+# Matching the pubkey file's STEM against the principal in the verdict row
+# instead lets a file NAME authorize an identity: a principal is the key's own
+# fingerprint (nu-multiproof b6d7b11) and `init` happens to name the file after
+# it, but a bundle is free to name its files anything. Filing the victim's key as
 # `<attacker-fingerprint>.pub` (with the attacker's own key beside it under any
 # other name, so the trust list still renders it and the signature still
-# validates) bound the attacker's signature to the victim's signer CID:
+# validates) binds the attacker's signature to the victim's signer CID:
 # `valid: true`, `bound: true`, imported by a third repo as the victim's
 # authorship. Pinned by tests/test_roundtrip.nu "a pubkey filed under another
 # key's fingerprint cannot borrow its authorship".
@@ -313,11 +311,8 @@ def verify-custody [bundle: path edge_cid: string record: record root_handoff: a
 
 # The columns this repo adds on top of `merkle verify`'s verdict, in the state
 # they take when nothing could be read. Written once because `verify-bundle` has
-# two exits sixty lines apart, and both used to spell the whole set out. 170a0e7
-# is where that started: the tail had grown these five over several commits, and
-# the new early exit copied all five at once rather than sharing them — the
-# defect 022585d named in `link add`, and from then on every column would cost
-# two edits.
+# two exits sixty lines apart: spelled out at both, every added column costs two
+# edits and the two sets drift.
 # The tail merges its real values over these, so a column added here appears at
 # the unreadable exit without an edit.
 const UNREAD_COLUMNS = {

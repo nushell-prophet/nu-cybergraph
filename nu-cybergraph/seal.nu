@@ -19,8 +19,8 @@ use _deps/merkle.nu [ merkle ]
 # normal answer for a link that has not been sealed yet, and it is the only other
 # one allowed.
 #
-# Three shapes, all measured to pass the bare-existence reading this replaces: a
-# directory, an empty file, and a genuine proof belonging to a DIFFERENT link.
+# Three shapes pass a bare-existence reading, all measured: a directory, an
+# empty file, and a genuine proof belonging to a DIFFERENT link.
 # The last is why the check reads `leaf.filepath` instead of stopping at "parses
 # as JSON" — a proof copied or renamed to the wrong name certifies the wrong
 # record, and that is what a hand-repaired graph produces.
@@ -268,10 +268,9 @@ export def main [
         # never reach the operator. The snapshot is written once and never
         # rebuilt (the guard above), so a half-copied one would stay half-copied
         # for as long as that root is referenced — which is why the operator has
-        # to be able to read what went wrong. Since this block moved ahead of the
-        # freeze loops it is no longer a dead end: a raise here happens before any
-        # certificate is frozen, so no certificate names this root and the retry
-        # simply mints a new one.
+        # to be able to read what went wrong. Not a dead end, since this block
+        # runs ahead of the freeze loops: no certificate names this root yet, so
+        # the retry simply mints a new one.
         for s in (
             list-files ($root | path join multiproofs) --suffix ".sig"
             | where ($it | path basename | str starts-with "tree-root.txt.")

@@ -31,11 +31,10 @@ export def main [
 
     # Refuse a run that established no signer. With neither --pubkey nor a git
     # `user.signingKey`, upstream's resolve-key prints two advisory lines and
-    # returns null; this command then used to report the layout ready over an
-    # empty trust list. The failure surfaced at the first write instead, as
-    # `no pubkey registered — run nu-cybergraph init first` — naming the
-    # command that had just said it was ready, a loop with no exit for an
-    # operator who has not heard of --pubkey.
+    # returns null. Reporting the layout ready over an empty trust list would
+    # push the failure to the first write, as `no pubkey registered — run
+    # nu-cybergraph init first`, naming the command that had just said it was
+    # ready: a loop with no exit for an operator who has not heard of --pubkey.
     #
     # Checked here because this is where identity is established: `init`'s own
     # job, in its own words, and the reason `seal` refuses to register as a

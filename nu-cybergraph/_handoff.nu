@@ -19,21 +19,15 @@ use _derive.nu [ ordered-bytes ]
 use _validate.nu [ assert-keys assert-cids assert-timestamp assert-hash-or-null ]
 
 # Domain separation lives in the SIGNED BYTES, not in the signature namespace.
-# nu-multiproof used to take a `--namespace` on sign/verify; the value was
-# interpolated raw into the allowed_signers line beside the principal, so a
-# crafted namespace injected `cert-authority` and rendered every registered key
-# trusted for anything. The flag is gone and every signature this toolchain
-# makes is under the generic `file` namespace — which is exactly why the bytes
-# must say what they are. Same shape as nu-multiproof's `root-statement`
-# ("multiproof-merkle-v1 <hex>"), in this repo's JSON idiom: a leading schema
-# token, so a handoff signature cannot be replayed as any other artifact this
-# key signs, and vice versa.
-#
-# v1 was the first handoff format that had a name at all — the pre-tag one
-# carried no version claim, so nothing ever called itself v0. v2 is the first
-# real bump: v1 named its act by the cyberlink's derived CID, v2 states the
-# act's three components (below). The token is what tells them apart, which is
-# the job it was added for.
+# Every signature this toolchain makes is under the generic `file` namespace,
+# and nu-multiproof takes no namespace argument: the value is interpolated raw
+# into the allowed_signers line beside the principal, where a crafted one
+# injects `cert-authority` and renders every registered key trusted for
+# anything. So the bytes must say what they are. Same shape as nu-multiproof's
+# `root-statement` ("multiproof-merkle-v1 <hex>"), in this repo's JSON idiom: a
+# leading schema token, so a handoff signature cannot be replayed as any other
+# artifact this key signs, and vice versa. The token carries the format version
+# too, so two handoff shapes can never be read as one.
 export const HANDOFF_SCHEMA = "cybergraph-handoff-v2"
 
 # `schema` FIRST, so the signed bytes open with the domain tag. Then the act

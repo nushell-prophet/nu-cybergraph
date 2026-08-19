@@ -48,9 +48,9 @@
 #
 # Sixteen verbs, twelve conventions: repeat is bj002's edge repetition, which
 # is not one of them (no CID in the source), and claimed-at, update-file and
-# translation are this repo's extensions — claimed-at took over the claimed_at
-# field removed from the link record, so a time claim is an ordinary optional
-# edge instead of a fixture of every record; update-file is bj002's update act
+# translation are this repo's extensions — claimed-at makes a time claim an
+# ordinary optional edge instead of a fixture of every record; update-file is
+# bj002's update act
 # stated about a particle instead of an edge, which is what a version chain of
 # particles needs; translation names the one relation a multilingual corpus lives on, and
 # neither `same` nor `quote` says it. bj002's set of conventions is open, which
@@ -418,8 +418,7 @@ export def claimed-at [
     let t = if $timestamp != null { $timestamp } else {
         date now | date to-timezone UTC | format date "%+"
     }
-    # The discipline the link record used to enforce on the field, now at the
-    # one spot time claims are born: RFC 3339 shape (constrained charset — the
+    # Checked at the one spot time claims are born: RFC 3339 shape (constrained charset — the
     # timestamp file stays escape-free), then a real calendar date (the regex
     # admits month 13, `into datetime` rejects it).
     if $t !~ $RFC3339_RE {

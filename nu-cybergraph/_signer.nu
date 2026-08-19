@@ -1,23 +1,20 @@
 # This repo's own signer identity — the CID of the registered pubkey this
 # checkout writes under.
 #
-# One definition, because it is one question: "who is this repo?". It used to
-# be answered twice (link.nu's own-signer-cid for the record's `signer` field,
-# _receipt.nu's own-signer for the custodian) with two counts of pubkeys and
-# two sets of error messages — a fork waiting to drift, in the one place where
-# a wrong answer signs a statement under the wrong name.
+# One definition, because it is one question: "who is this repo?" — the
+# record's `signer` field and a receipt's custodian are the same answer, and a
+# second copy of it is a fork waiting to drift, in the one place where a wrong
+# answer signs a statement under the wrong name.
 #
-# It also used to be answered by COUNTING those pubkeys: exactly one was the
-# identity, and several were an error. That derived the answer from the wrong
-# directory. `multiproofs/pubkeys/` is nu-multiproof's TRUST LIST — the keys
-# whose signatures this repo accepts — and a second key belongs there on
-# purpose: a co-signer adds its signature to a frozen seal snapshot, which is
-# how one operator holding keys on several devices makes a statement expensive
-# to forge (measured: two signatures under one root, `verify` still bound).
-# Counting answered "who am I" with "whom do I trust", so a graph that gained a
-# co-signer could no longer write a link at all.
+# The answer is NOT a count of `multiproofs/pubkeys/`. That directory is
+# nu-multiproof's TRUST LIST — the keys whose signatures this repo accepts —
+# and a second key belongs there on purpose: a co-signer adds its signature to
+# a frozen seal snapshot, which is how one operator holding keys on several
+# devices makes a statement expensive to forge (measured: two signatures under
+# one root, `verify` still bound). Counting answers "who am I" with "whom do I
+# trust", and a graph that gains a co-signer can then write no link at all.
 #
-# The identity is this checkout's own signing key instead — the same
+# The identity is this checkout's own signing key — the same
 # `user.signingKey` that `seal` signs the root with, so the key a record is
 # authored under is the key whose signature catalogues it. It lives in
 # `.git/config`, which a clone does not carry, so every device answers for

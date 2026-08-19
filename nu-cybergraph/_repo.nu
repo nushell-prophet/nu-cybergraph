@@ -21,10 +21,9 @@ export def repo-root [repo?: path]: nothing -> path {
 }
 
 # The graph home inside a repo: always <root>/cybergraph. One rule, no
-# root-layout fallback — the author recreated the only such graph rather
-# than carry a second layout forever. Whole-repo attestation (what root
-# layout used to give the tool repo) is plain nu-multiproof's job, not the
-# graph's. Files are referenced by CID, not path, so they never need to
+# root-layout fallback — a second layout costs every reader forever, and a
+# graph is cheap to recreate. Whole-repo attestation is plain nu-multiproof's
+# job, not the graph's. Files are referenced by CID, not path, so they never need to
 # live under the graph home (or in the repo at all); the seal manifest
 # covers only the graph subtree.
 export def graph-root [repo?: path]: nothing -> path {

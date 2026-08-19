@@ -126,7 +126,7 @@ A graph home has exactly one **authoring** identity, while `multiproofs/pubkeys/
 
 ### 2.5 SSH signatures
 
-Every signature in this format is a detached SSH signature (SSHSIG) over a file's exact bytes, made and verified under the namespace **`file`** — one fixed value, never a caller's choice. SSHSIG puts the namespace inside the signed preimage, so this is not cosmetic: a verifier using any other value rejects every good signature. It is fixed rather than configurable because the value is interpolated into the rendered trust list, where a crafted namespace once injected `cert-authority` and made every registered key trusted for anything.
+Every signature in this format is a detached SSH signature (SSHSIG) over a file's exact bytes, made and verified under the namespace **`file`** — one fixed value, never a caller's choice. SSHSIG puts the namespace inside the signed preimage, so this is not cosmetic: a verifier using any other value rejects every good signature. It is fixed rather than configurable because the value is interpolated into the rendered trust list, where a crafted namespace injects `cert-authority` and makes every registered key trusted for anything.
 
 Domain separation therefore has to live in the signed bytes. That is why the root statement is a single line opening with the token `multiproof-merkle-v1` (7) rather than a bare hash.
 
@@ -166,9 +166,9 @@ The atomic edge, in its signer's directory. The file holds exactly the pair, two
 - The signer is **not in the bytes**: it is the directory name, which MUST be a CID v0. What binds the pair to the signer is the seal — the path enters the signed root (5) — so a file moved into another signer's directory breaks its own proof. A reader checks the directory's *form* only; the binding is checked at verification (8).
 - There is **no timestamp**. A time inside the record would fork one act into a different CID per recording moment. Provable time comes from the seal (5); a claimed time is an ordinary edge (`claimed-at`, section 4).
 
-The cyberlink — the triple `derive {cid_from, cid_to, signer}` — is still defined and still computed: pair from the file, signer from the path. It stopped being the file's name.
+The cyberlink — the triple `derive {cid_from, cid_to, signer}` — is computed, not stored: pair from the file, signer from the path. It is not the file's name.
 
-**Publishing the triple.** A writer MUST publish the triple record as a store file (3.2) when it writes the link — the same rule section 4 puts on every record a convention mints, and this is the same record `confirm A B S` mints as its target. Without the preimage the cyberlink's derived CID is one no later act can dereference. A writer MUST also still publish the pair record as a store file, even though the link file holds the same bytes: the store (3.2) is the one place derived CIDs are dereferenced, and `confirm A B` / `deny A B` mint the same pair record as their target. Publishing is idempotent, so a repeat, a second signer of the same edge, and a convention minting the same pair all write nothing new.
+**Publishing the triple.** A writer MUST publish the triple record as a store file (3.2) when it writes the link — the same rule section 4 puts on every record a convention mints, and this is the same record `confirm A B S` mints as its target. Without the preimage the cyberlink's derived CID is one no later act can dereference. A writer MUST publish the pair record as a store file too, even though the link file holds the same bytes: the store (3.2) is the one place derived CIDs are dereferenced, and `confirm A B` / `deny A B` mint the same pair record as their target. Publishing is idempotent, so a repeat, a second signer of the same edge, and a convention minting the same pair all write nothing new.
 
 A reader MUST enforce both addressing rules, from a **single** read of the bytes:
 
