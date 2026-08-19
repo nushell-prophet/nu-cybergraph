@@ -1337,14 +1337,14 @@ def "an unsealed own copy does not hide a verifiable imported copy" [] {
     assert equal (verify $born.edge_cid --repo $b.repo | length) 2
 }
 
-# The receipt's `link` field is an address this repo asserts in its own
-# sealed statement, and a holder of a link CID dereferences particles/<cid>
-# first (SPEC 8) — but the bundle carries only the endpoints' particles.
-# Import therefore publishes the triple record itself; before it did, the
-# importer's sealed receipt asserted a CID that dereferenced to nothing in
-# the very repo asserting it.
+# Pins behaviour that rests on no argument: import publishes the triple record
+# under this repo's particles/. It used to be load-bearing — the sealed receipt
+# asserted that CID and nothing here dereferenced it — but the receipt states
+# the act's components now, so the reason is gone and none replaced it. Kept by
+# the user's intuition, and pinned so that a later change to it is a decision
+# rather than an accident. See import.nu for why no rationale is written down.
 @test
-def "import publishes the triple particle the receipt link names" [] {
+def "import publishes the triple particle for the link CID it returns" [] {
     let tmp_dir = $in.tmp_dir
     let a = make-signer $tmp_dir "a"
     let born = link add $P1 $P2 --repo $a.repo --allow-missing
@@ -1395,14 +1395,16 @@ def "verify returns one row per own signer and --signer narrows to one act" [] {
     assert ($err | str contains "unknown edge") $"a signer holding no copy must read as unknown, got: ($err)"
 }
 
-# CLAUDE.md's invariant: receipt paths mirror the edge layout while the
-# `link` field inside stays the cyberlink CID. The writer (import) and the
-# checker (custody verification) recompute that value with the same
-# function, so flipping both to the edge CID — the natural slip of an
-# edge-first refactoring — kept every test green. Pinned here against
-# independently spelled canonical bytes, not against the shared helper.
+# CLAUDE.md's invariant: receipt paths mirror the edge layout, and the
+# receipt itself STATES the act — cid_from, cid_to, signer — rather than
+# addressing it. Pinned two ways, because the writer (import) and the checker
+# (custody verification) share their helpers: the raw bytes against a
+# hand-spelled prefix, and the recovered address against a hand-spelled
+# canonical triple. Before the fields were spelled out this held one derived
+# CID, and flipping it to the edge CID — the natural slip of an edge-first
+# refactoring — kept every test green.
 @test
-def "the receipt link field is the cyberlink CID, pinned to canonical bytes" [] {
+def "the receipt states the act and still derives to the cyberlink CID" [] {
     let tmp_dir = $in.tmp_dir
     let a = make-signer $tmp_dir "a"
     let born = link add $P1 $P2 --repo $a.repo --allow-missing
@@ -1411,11 +1413,17 @@ def "the receipt link field is the cyberlink CID, pinned to canonical bytes" [] 
     let b = make-signer $tmp_dir "b"
     import $out --repo $b.repo | ignore
 
-    let receipt = open --raw ($b.home | path join receipts $born.record.signer $"($born.edge_cid).receipt.json")
-        | from json
+    let raw = open --raw ($b.home | path join receipts $born.record.signer $"($born.edge_cid).receipt.json")
+    let receipt = $raw | from json
     let signer = $born.record.signer
+    assert equal ($receipt | select cid_from cid_to signer) {cid_from: $P1, cid_to: $P2, signer: $signer}
+    assert ("link" not-in ($receipt | columns)) "the receipt must state the act, not address it"
+    # Key order is the byte format: the act first, then who took it.
+    assert ($raw | str starts-with $"{\"cid_from\":\"($P1)\",\"cid_to\":\"($P2)\",\"signer\":\"($signer)\",\"custodian\":")
+
+    # The address stays recoverable from the receipt's own bytes — that is what
+    # spelling the components out buys, with no store to consult.
     let triple_cid = $"{\"cid_from\":\"($P1)\",\"cid_to\":\"($P2)\",\"signer\":\"($signer)\"}\n"
         | into binary | cid-v0
-    assert equal $receipt.link $triple_cid
-    assert ($receipt.link != $born.edge_cid) "the receipt must name the act, not the pair"
+    assert equal (record-bytes ($receipt | select cid_from cid_to signer) | cid-v0) $triple_cid
 }

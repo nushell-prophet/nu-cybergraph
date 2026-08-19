@@ -37,7 +37,7 @@ use _layout.nu [
     handoff-filename
 ]
 use _validate.nu [ CID_V0_RE ]
-use _record.nu [ read-link link-cid ]
+use _record.nu [ read-link ]
 use _receipt.nu [ read-receipt custody-layers ]
 use _signer.nu [ own-signer ]
 use _particle.nu [ particle-find ]
@@ -160,10 +160,12 @@ def resolve-handoff-key [root: path key: any]: nothing -> path {
 # the repo's key, not through a seal: the bundle leaves at export time,
 # before any later seal could catalogue the handoff — a detached signature
 # is the only immediate, local authentication available.
-def write-handoff [root: path dir: path edge_cid: string link_cid: string to: string receipt_hash: any key: path]: nothing -> nothing {
+def write-handoff [root: path dir: path edge_cid: string act: record to: string receipt_hash: any key: path]: nothing -> nothing {
     let handoff = {
         schema: $HANDOFF_SCHEMA
-        link: $link_cid
+        cid_from: $act.cid_from
+        cid_to: $act.cid_to
+        signer: $act.signer
         from: (own-signer $root --key $key)
         to: $to
         receipt: $receipt_hash
@@ -195,7 +197,7 @@ def assert-complete-bundle [out: path]: nothing -> nothing {
 # whole of it sits under one cleanup: from here down, any raise leaves debris.
 # `resolved` is main's answer to which copy of the edge leaves: {own: bool,
 # signer: cid, dir: the imported bundle for a foreign act, null for an own one}.
-def assemble-bundle [root: path out: path edge_cid: string resolved: record link_cid: string to: any key: any links_only: bool]: nothing -> nothing {
+def assemble-bundle [root: path out: path edge_cid: string resolved: record act: record to: any key: any links_only: bool]: nothing -> nothing {
     if $resolved.own {
         # Own act: the birth bundle, mirroring the graph's own layout — the
         # leaf path `<signer>/<edge>.json` is what the certificate proves.
@@ -211,15 +213,14 @@ def assemble-bundle [root: path out: path edge_cid: string resolved: record link
         }
         if $to != null {
             # The author has no receipt — their handoff pins nothing but the link
-            write-handoff $root $out $edge_cid $link_cid $to null $key
+            write-handoff $root $out $edge_cid $act $to null $key
         }
         return
     }
 
     # Imported act: re-export with this repo's custody layer appended. Paths
-    # go by (author, edge) — the mirrored layout — while the `link` field
-    # inside the receipt and the handoff stays the cyberlink CID (see
-    # _verify-helpers.nu).
+    # go by (author, edge) — the mirrored layout — while the receipt and the
+    # handoff inside state the act's three components (see _verify-helpers.nu).
     let author = $resolved.signer
     let rcert = receipt-cert-path $root $author $edge_cid
     if not ($rcert | path exists) {
@@ -239,7 +240,7 @@ def assemble-bundle [root: path out: path edge_cid: string resolved: record link
     if $to != null {
         # A custodian's handoff pins their receipt — the exact chain state handed over
         let receipt_hash = open --raw ($root | path join $receipt_relpath) | hash sha256
-        write-handoff $root $layer $edge_cid $link_cid $to $receipt_hash $key
+        write-handoff $root $layer $edge_cid $act $to $receipt_hash $key
     }
 }
 
@@ -291,7 +292,7 @@ export def main [
     # exports/ mirrors the layout too — signer above, edge below — so two
     # signers' exports of one edge cannot collide.
     let record_root = if $resolved.own { $root } else { $resolved.dir }
-    let link_cid = link-cid (read-link (link-path $record_root $resolved.signer $edge_cid))
+    let act = read-link (link-path $record_root $resolved.signer $edge_cid)
     let out = if $out != null { $out | path expand } else { exports-dir $root | path join $resolved.signer $edge_cid }
     if ($out | path exists) {
         error make {msg: $"bundle destination already exists: ($out)"}
@@ -306,7 +307,7 @@ export def main [
     # for every cause rather than the one a pre-check could name. The error is
     # re-raised raw: labels, help and location are the operator's evidence.
     try {
-        assemble-bundle $root $out $edge_cid $resolved $link_cid $to $key $links_only
+        assemble-bundle $root $out $edge_cid $resolved $act $to $key $links_only
         assert-complete-bundle $out
     } catch {|e|
         rm --recursive --force $out

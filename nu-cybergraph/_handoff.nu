@@ -29,17 +29,28 @@ use _validate.nu [ assert-keys assert-cids assert-timestamp assert-hash-or-null 
 # token, so a handoff signature cannot be replayed as any other artifact this
 # key signs, and vice versa.
 #
-# Why v1 and not v2 after the format bump: the pre-tag handoff carried no
-# version claim at all, so nothing ever called itself v1 and no reader can
-# confuse the two — validate-handoff refuses a record without the key outright.
-# v1 is the first handoff format that has a name.
-export const HANDOFF_SCHEMA = "cybergraph-handoff-v1"
+# v1 was the first handoff format that had a name at all — the pre-tag one
+# carried no version claim, so nothing ever called itself v0. v2 is the first
+# real bump: v1 named its act by the cyberlink's derived CID, v2 states the
+# act's three components (below). The token is what tells them apart, which is
+# the job it was added for.
+export const HANDOFF_SCHEMA = "cybergraph-handoff-v2"
 
-# `schema` FIRST, so the signed bytes open with the domain tag.
-export const HANDOFF_KEYS = [schema link from to receipt handed_at]
+# `schema` FIRST, so the signed bytes open with the domain tag. Then the act
+# spelled out — `cid_from`, `cid_to`, `signer` — the same three components a
+# receipt states, for the same reason: read on its own, the file says which
+# act it moves, with no store to dereference a derived CID in. Symmetry is
+# the rest of the reason — one act described two ways across the two custody
+# artifacts was a needless second notation.
+#
+# `signer` is the act's AUTHOR and does not move; `from` and `to` are the
+# holders this transfer is between. For the author's own handoff they
+# coincide, and that is a fact about the transfer, not a duplicated field.
+export const HANDOFF_KEYS = [schema cid_from cid_to signer from to receipt handed_at]
 
 # Enforce the handoff shape: exact HANDOFF_KEYS set, the schema token byte-exact,
-# CID fields (link, from, to), receipt hash-or-null, RFC 3339 handed_at.
+# CID fields (the act's three, plus from and to), receipt hash-or-null,
+# RFC 3339 handed_at.
 export def validate-handoff [rec: record]: nothing -> nothing {
     assert-keys $rec $HANDOFF_KEYS "handoff"
     # Byte-exact, like parse-root-statement: a wrong or drifted token is a
@@ -47,7 +58,7 @@ export def validate-handoff [rec: record]: nothing -> nothing {
     if $rec.schema != $HANDOFF_SCHEMA {
         error make {msg: $"handoff schema must be exactly ($HANDOFF_SCHEMA): ($rec.schema | to json)"}
     }
-    assert-cids $rec [link from to] "handoff"
+    assert-cids $rec [cid_from cid_to signer from to] "handoff"
     assert-hash-or-null $rec receipt "handoff"
     assert-timestamp $rec handed_at "handoff"
 }

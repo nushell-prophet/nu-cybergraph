@@ -37,17 +37,21 @@ export def main [
     if $v.handed_to != null and $v.handed_to != $me {
         error make {msg: $"refusing to import: bundle was handed to ($v.handed_to), not to this repo's signer ($me)"}
     }
-    # Two halves of the act's identity: paths mirror the graph layout — the
-    # author's CID above, the edge below — while the receipt's `link` field
-    # keeps the cyberlink's derived CID, recomputed from the verified record
-    # (never from a filename).
+    # Paths mirror the graph layout — the author's CID above, the edge below.
+    # The receipt itself spells the act out in fields instead (_receipt.nu),
+    # so nothing it asserts needs dereferencing.
     #
-    # Recomputed THROUGH the store, so the CID this repo's sealed receipt
-    # asserts has a published preimage here, not only in the author's repo:
-    # the bundle carries only the endpoints' particles, and a holder of a
-    # link CID dereferences particles/<link-cid> first (SPEC 8 — `verify`
-    # does not take it). The address comes back from the store, link.nu's
-    # own discipline, so it and the stored bytes cannot drift apart.
+    # The triple particle is still published, and this is an INTUITIVE
+    # decision kept deliberately without a justification. The reason that put
+    # it here was that the sealed receipt asserted a CID which
+    # dereferenced to nothing in the custodian's own repo; the receipt states
+    # the components now, so that reason is gone and nothing has replaced it.
+    # The user chose to keep the mint anyway rather than reason one out.
+    #
+    # So do not read the store call as load-bearing, and do not invent a
+    # rationale for it — writing one down is what this comment exists to
+    # prevent. If it ever gets in the way, deleting it and computing the
+    # returned CID with `link-cid` is the whole change.
     let edge_cid = $v.leaf.filepath | path parse | get stem
     let link_cid = link-bytes $v.record | particle-store $root
     let dest = imported-dir $root | path join $v.signer.cid $edge_cid
@@ -74,7 +78,8 @@ export def main [
         open --raw ($tail_dir | path join (handoff-filename $edge_cid)) | hash sha256
     }
     let receipt = {
-        link: $link_cid
+        cid_from: $v.record.cid_from
+        cid_to: $v.record.cid_to
         signer: $v.signer.cid
         custodian: $me
         received_at: (date now | format date "%+")

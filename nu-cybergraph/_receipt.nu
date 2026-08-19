@@ -16,13 +16,26 @@ use _derive.nu [ ordered-bytes ]
 use _validate.nu [ SHA256_RE assert-keys assert-cids assert-timestamp assert-hash-or-null ]
 use _layout.nu [ CUSTODY_DIR custody-dir ]
 
-export const RECEIPT_KEYS = [link signer custodian received_at files prev handoff]
+# The act is spelled OUT, not addressed: `cid_from`, `cid_to` and `signer`
+# are the cyberlink's three components, so `derive` over them recovers its
+# CID and the receipt needs nothing else to say what it is about.
+#
+# Why: a receipt is not content-addressed, so a lone derived CID here would
+# name an act whose preimage lives somewhere else — for a while it lived
+# nowhere in the custodian's own repo, and the fix was to make import mint
+# the missing particle. Naming the components removes the dependency instead
+# of satisfying it: a stranger holding one custody layer reads the act from
+# the receipt's own bytes, with no store to consult and no CID to trust.
+# The path (`receipts/<author>/<edge>`) is the same act spelled on disk and
+# is proven by the seal (`leaf.filepath`); the fields are what survive
+# leaving the repo.
+export const RECEIPT_KEYS = [cid_from cid_to signer custodian received_at files prev handoff]
 
 # Enforce the receipt shape: exact RECEIPT_KEYS set, CID fields, RFC 3339
 # received_at, non-empty files manifest, hash-or-null chain fields (prev, handoff).
 export def validate-receipt [rec: record]: nothing -> nothing {
     assert-keys $rec $RECEIPT_KEYS "receipt"
-    assert-cids $rec [link signer custodian] "receipt"
+    assert-cids $rec [cid_from cid_to signer custodian] "receipt"
     assert-timestamp $rec received_at "receipt"
     if ($rec.files | is-empty) {
         error make {msg: "receipt files manifest is empty"}

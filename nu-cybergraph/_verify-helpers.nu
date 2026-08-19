@@ -6,7 +6,7 @@ use _deps/cid-v0.nu [cid-v0]
 use _deps/pubkey.nu [pubkey]
 use _deps/ssh-sign.nu [ssh-sign]
 use _fs.nu list-files
-use _record.nu [read-link link-cid]
+use _record.nu [read-link LINK_KEYS]
 use _receipt.nu [read-receipt bundle-manifest custody-layers]
 use _handoff.nu [read-handoff]
 use _layout.nu [receipt-relpath custody-layer-dirname handoff-filename]
@@ -189,13 +189,17 @@ export def stamp-cell [stamp: record]: nothing -> string {
 # read-handoff requires the schema token byte-exact, so what keeps this
 # signature from being replayed as some other artifact is the signed bytes
 # themselves — no signature namespace is involved (see _handoff.nu).
-def check-handoff [dir: path edge_cid: string link_cid: string holder: string expected_receipt: any pubs: table]: nothing -> any {
+def check-handoff [dir: path edge_cid: string record: record holder: string expected_receipt: any pubs: table]: nothing -> any {
     let file = $dir | path join (handoff-filename $edge_cid)
     if not ($file | path exists) {
         return null
     }
     let h = read-handoff $file
-    let claims_ok = $h.link == $link_cid and $h.from == $holder and $h.receipt == $expected_receipt
+    let claims_ok = (
+        ($h | select ...$LINK_KEYS) == ($record | select ...$LINK_KEYS)
+        and $h.from == $holder
+        and $h.receipt == $expected_receipt
+    )
     # No try/catch: `ssh-sign verify` throws only when it cannot form a verdict
     # at all — no signature file beside the handoff, no pubkey in the bundle,
     # ssh-keygen unusable. Swallowing those into an empty table turned every
@@ -237,7 +241,8 @@ def check-handoff [dir: path edge_cid: string link_cid: string holder: string ex
 # crypto/content/chain mismatches return valid: false rows.
 # root_handoff: the author's outgoing handoff (check-handoff on the bundle
 # root, null if absent) — the seam checks treat the birth bundle as layer 0.
-def verify-custody [bundle: path edge_cid: string link_cid: string author: string root_handoff: any]: nothing -> table {
+def verify-custody [bundle: path edge_cid: string record: record root_handoff: any]: nothing -> table {
+    let author = $record.signer
     let layers = custody-layers $bundle
     if ($layers | is-empty) {
         return []
@@ -257,7 +262,9 @@ def verify-custody [bundle: path edge_cid: string link_cid: string author: strin
             error make {msg: $"custody layer ($layer.dir) proves ($v.leaf.filepath), not this link's receipt"}
         }
         let receipt = read-receipt ($layer.dir | path join $v.leaf.filepath)
-        if $receipt.link != $link_cid or $receipt.signer != $author {
+        # Field by field against the verified record — the receipt states the
+        # act's three components, so this is a compare, not a re-derivation.
+        if ($receipt | select ...$LINK_KEYS) != ($record | select ...$LINK_KEYS) {
             error make {msg: $"custody layer ($layer.dir) receipt is for a different link or author"}
         }
         if ($layer.dir | path basename) != (custody-layer-dirname $layer.index $receipt.custodian) {
@@ -271,7 +278,7 @@ def verify-custody [bundle: path edge_cid: string link_cid: string author: strin
         let handoff_hash_ok = $receipt.handoff == (if $prev_handoff == null { null } else { $prev_handoff.hash })
         let addressed_ok = $prev_handoff == null or $prev_handoff.to == $receipt.custodian
         let receipt_hash = open --raw ($layer.dir | path join $v.leaf.filepath) | hash sha256
-        let own_handoff = check-handoff $layer.dir $edge_cid $link_cid $receipt.custodian $receipt_hash $checked.pubs
+        let own_handoff = check-handoff $layer.dir $edge_cid $record $receipt.custodian $receipt_hash $checked.pubs
         let handoff_ok = $handoff_hash_ok and $addressed_ok and ($own_handoff == null or $own_handoff.valid)
         let valid = $v.valid and $custodian_bound and $files_ok and $prev_ok and $handoff_ok
         let error = if $v.error != null { $v.error } else if not $custodian_bound {
@@ -387,15 +394,15 @@ export def verify-bundle [bundle: path --cert: path --multiproofs-dir: path]: no
     }
     print $"signer:    ($signer_line)"
 
-    # Two halves of the act's identity, used side by side below: paths and
-    # filenames go by (author, edge) — the mirrored layout — while the `link`
-    # field inside receipts and handoffs stays the cyberlink's derived CID,
-    # recomputed the way every reader gets it: pair from the file, signer from
-    # the path, never from a filename.
+    # Two spellings of one act, used side by side below: paths and filenames go
+    # by (author, edge) — the mirrored layout — while receipts and handoffs
+    # state the act's three components, compared field by field against the
+    # record read the way every reader gets it: pair from the file, signer from
+    # the path, never from a filename. No derived CID is computed here at all;
+    # that was the point of spelling the components out.
     let edge_cid = $v.leaf.filepath | path parse | get stem
-    let link_cid = link-cid $rec
-    let root_handoff = check-handoff $bundle $edge_cid $link_cid $rec.signer null $birth.pubs
-    let custody = verify-custody $bundle $edge_cid $link_cid $rec.signer $root_handoff
+    let root_handoff = check-handoff $bundle $edge_cid $rec $rec.signer null $birth.pubs
+    let custody = verify-custody $bundle $edge_cid $rec $root_handoff
     let custody_ok = $custody | all { $in.valid }
     let root_handoff_ok = $root_handoff == null or $root_handoff.valid
     if ($custody | is-not-empty) {
