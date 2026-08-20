@@ -24,6 +24,26 @@ Certificates frozen under roots stated in the old format stop verifying,
 which is why a format change is a decision about the graph,
 not an edit.
 
+## An academic prototype, not a product
+
+This is a canonical implementation:
+it exists to show the format is right and the reasoning holds,
+on a graph small enough to read by hand.
+So prefer the plain reading over the clever one
+— a walk over a cache, a recomputation over a stored copy —
+and never add a mechanism whose only argument is speed.
+When graphs outgrow this,
+the answer is optimization or a rewrite in a real language,
+decided then with the numbers in hand.
+
+Two things this does not license.
+It is not permission to undo a cost already measured here
+(`link list` at 43s over 567 links, `rg` narrowing at 0.5s against 41s)
+— those numbers bought the shape the code has.
+And "correct under correct circumstances" is about scale and load, never about input:
+refusing malformed, tampered or unprovable bytes loudly is the product,
+so a check is never what gets dropped for simplicity.
+
 ## Conventions (shared with nu-multiproof)
 
 - `nu-cybergraph/mod.nu` re-exports the non-`_` submodules wholesale;
