@@ -129,9 +129,10 @@ export def seal-commit-line [
     # and a deletion appears in no result field. It is the set seal owns, which is
     # what makes the wholesale add exact here rather than an `add -A` in disguise.
     #
-    # `particles/` is absent because seal does not stage it either: a sealed link
-    # anchors particle bytes through their CID, so committing them is the
-    # operator's own act, not part of the seal.
+    # `particles/` is absent because seal does not stage it either: publishing
+    # the bytes a link names is the operator's own act, and it has its own
+    # commit — `particle uncommitted --propose-commit`, which has to run BEFORE the
+    # seal for the manifest to cover them. Seal refuses when it has not.
     let staged = (
         (signer-dirs $root | each { path basename }) ++ [$CERTS_DIR $SEALS_DIR $IMPORTED_DIR $RECEIPTS_DIR "multiproofs"]
     )
@@ -144,6 +145,47 @@ export def seal-commit-line [
     # --repo` can target another one, and even for the local graph a bare pathspec
     # resolves against the CWD, so it fails whenever the prompt sits elsewhere.
     # `--` because the pathspec is data.
+    [
+        $"let repo = (quote-arg $root)"
+        $"let msg = (quote-arg $message --multiline)"
+        ""
+        $"git -C $repo add -- ($staged | str join ' ')"
+        "git -C $repo commit -m $msg"
+    ] | str join "\n"
+}
+
+# The commit for a store the graph has outgrown — the files `particle uncommitted`
+# found untracked and reachable, staged and committed as their own act.
+#
+# Its own commit and not a line added to the seal's: the two answer different
+# questions. A seal commit says when a root was minted and what froze under it;
+# this one says which bytes the graph can now dereference. They also have to run
+# in that order — the manifest walks `git ls-files`, so bytes staged after the
+# seal are covered by nothing until the next one.
+#
+# The CIDs are listed rather than counted. A commit body is what an operator
+# reads when asking later which bytes entered here, and the addresses are the
+# only names these files have; a diff of a binary store answers nothing.
+export def particle-commit-line [
+    rows: table # stageable rows from `_uncommitted.nu uncommitted-files`
+    root: path # graph home the store belongs to
+]: nothing -> string {
+    let staged = $rows | get file | each { path relative-to $root }
+
+    let message = [
+        $"particles: publish (count-of ($rows | length) 'file') the graph names"
+        ""
+        "Each is named by a link here, so the next seal catalogues the bytes a"
+        "reader will dereference — the manifest is every git-tracked file under"
+        "the graph home, and these were outside it."
+        ""
+        ...($rows | each {|r| $"($r.cid)  ($r.size)" })
+    ] | str join "\n"
+
+    # Bare paths in the pathspec, unlike the message: a store filename is a CID
+    # and an optional alphanumeric extension by `store-cid`'s own rule, so it
+    # holds no space, quote or glob character to protect. `--` still, because a
+    # pathspec is data.
     [
         $"let repo = (quote-arg $root)"
         $"let msg = (quote-arg $message --multiline)"

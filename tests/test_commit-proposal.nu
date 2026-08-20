@@ -7,6 +7,12 @@
 # this copy of `quote-arg` carries its guarantee on its own. The last two seal a
 # real graph: one that asking for the proposal changes nothing about the seal,
 # one that runs the block and reads back what git ended up with.
+#
+# Every seal here passes --allow-untracked-particles. None of these tests is
+# about the store's own commit discipline, and they never commit anything: the
+# guard `seal` grew would otherwise refuse them all, for a reason each of them
+# has already agreed to ignore. tests/test_uncommitted.nu is where the guard itself
+# is under test, both ways.
 use std/assert
 use std/testing *
 
@@ -227,8 +233,8 @@ def "a newline in a path cannot break out of the quoted argument" [] {
 def "asking for a commit proposal leaves the seal result untouched" [] {
     let g = graph-with-a-link $in.tmp_dir
 
-    let plain = seal --repo $g.repo --no-stamp
-    let proposed = seal --repo $g.repo --no-stamp --propose-commit
+    let plain = seal --repo $g.repo --no-stamp --allow-untracked-particles
+    let proposed = seal --repo $g.repo --no-stamp --allow-untracked-particles --propose-commit
 
     # Not the same record: a second seal mints a new root, and with it a new
     # snapshot — that is what "a repeated seal is not a no-op" means. What must
@@ -246,7 +252,7 @@ def "asking for a commit proposal leaves the seal result untouched" [] {
 @test
 def "the proposed block runs and commits exactly what the seal wrote" [] {
     let g = graph-with-a-link $in.tmp_dir
-    let result = seal --repo $g.repo --no-stamp
+    let result = seal --repo $g.repo --no-stamp --allow-untracked-particles
     let root_hex = $result.sealed.merkle_root
     let signer = own-signer $g.root
 

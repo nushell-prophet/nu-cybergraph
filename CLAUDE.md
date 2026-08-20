@@ -19,6 +19,7 @@ Pre-1.0: no backwards compatibility to keep. A format change is allowed — it m
 ## Key invariants
 
 - The seal chain is contiguous: every root statement carries `seq` (from 0, `prev` = the root it supersedes, `genesis` only at 0), and `seal chain` refuses a gap — a missing `seals/<root12>/` snapshot is certificates that verify against nothing, not a shorter list.
+- The store is committed before the seal, not after: the manifest is every git-tracked file under the graph home, so a `particles/` file outside the index enters no root while the link naming it is signed and frozen. `seal` refuses while the graph reaches an untracked store file (`--allow-untracked-particles` seals without those bytes, but never past a name under `particles/` that is no address); `particle uncommitted` is the reading, `--propose-commit` writes the commit.
 - A certificate in `certs/` is frozen at birth: never regenerate it on later seals — its OTS anchor is the link's earliest provable time bound.
 - `verify` must always check against the birth seal (via `seals/<root12>/` snapshots or the bundle's own root), never the repo's current `multiproofs/tree-root.txt`.
 - `import` refuses anything that fails merkle structure, signature, record self-addressing, canonical pubkey form, or signer binding. No partial imports.

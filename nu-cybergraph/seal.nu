@@ -12,6 +12,7 @@ use _record.nu [ read-link ]
 use _validate.nu [ CID_V0_RE ]
 use _signer.nu [ own-signer ]
 use _commit-proposal.nu [ seal-commit-line ]
+use _uncommitted.nu [ uncommitted-files stageable ]
 use _deps/seal.nu [ seal ]
 use _deps/merkle.nu [ merkle ]
 
@@ -65,6 +66,7 @@ export def main [
     --no-stamp # Skip OTS timestamping (stamping is the point — tests only)
     --response-file: path # TESTS ONLY: take the calendar's answer from this file instead of posting the digest
     --propose-commit # Leave a `git commit` for this seal in the prompt, unrun
+    --allow-untracked-particles # Seal without the store files the graph names (see the guard below)
 ]: nothing -> record {
     let root = graph-root $repo
 
@@ -191,6 +193,34 @@ export def main [
     # them — and with them the ability to verify or export any link born under
     # those roots. Pinned by tests/test_bootstrap.nu "a seal with nothing new
     # still mints a new root".
+    # A store file the graph names but git does not track is bytes no root
+    # covers: the manifest walks `git ls-files`, so the link naming it gets
+    # signed and frozen while its endpoint is catalogued by nothing. Nothing
+    # said so before — the seal succeeded, and only a reader coming back later
+    # found the certificate proving an edge whose bytes were never attested.
+    #
+    # Refused, not staged: publishing the bytes a link names is the operator's
+    # act, and `particle uncommitted` is where they read what is about to be
+    # committed. So this makes "the seal covers the bytes it names" an invariant
+    # instead of a habit, at the price of a command that can now fail on a graph
+    # nothing is wrong with.
+    #
+    # `uncommitted-files` runs whether or not the flag is set, and only the
+    # refusal is gated: it also raises on a name under particles/ that is no
+    # address at all, which is not something to seal past — a signature over it
+    # is the signer attesting what the store's own filename rule rejects. So the
+    # flag says "seal without these bytes", never "seal a store whose layout is
+    # already broken". A clean store costs one `git status`; the reachability
+    # walk runs only when something is dirty.
+    #
+    # Through `stageable` and not a second copy of its rule: what this refuses on
+    # has to be exactly what `particle uncommitted --propose-commit` would stage,
+    # or the seal refuses over a file the proposal never offers to commit.
+    let loose = stageable (uncommitted-files $root)
+    if ($loose | is-not-empty) and not $allow_untracked_particles {
+        error make --unspanned {msg: $"the graph names bytes git does not track: ($loose | each {|r| $r.file | cwd-relative } | str join ', ') — the seal manifest walks `git ls-files`, so these would enter no root and the links naming them would be frozen pointing at nothing attested. Run `nu-cybergraph particle uncommitted --propose-commit` first, or seal with --allow-untracked-particles"}
+    }
+
     let stage = (
         (signer-dirs $root) ++ ([$CERTS_DIR $SEALS_DIR $IMPORTED_DIR $RECEIPTS_DIR] | each {|d| $root | path join $d })
     )

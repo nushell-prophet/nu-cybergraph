@@ -4,6 +4,9 @@
 
 use _repo.nu graph-root
 use _particle.nu [ particle-store particle-read resolve-arg-bytes ]
+use _uncommitted.nu [ uncommitted-files stageable ]
+use _commit-proposal.nu [ particle-commit-line ]
+use _fs.nu [ cwd-relative ]
 use _validate.nu [ CID_V0_RE ]
 
 # Publish content as a self-addressed file under particles/ and return its
@@ -72,4 +75,44 @@ export def cat [
         error make {msg: $"not a CID v0: ($cid) — particle cat takes the bare 46-char CID, not a filename"}
     }
     particle-read (graph-root $repo) $cid --optional=$optional
+}
+
+# What the store holds that git does not — one row per file, with whether the
+# graph reaches it. An empty table means every byte the graph names is already
+# in the index, which is the state `seal` requires.
+#
+# Why this command exists at all: `link add` publishes bytes as a side effect of
+# stating an edge, so a store grows without anyone deciding to add a file. The
+# seal manifest is every git-tracked file under the graph home, so those files
+# are sealed only if they were committed first — and until now nothing said so
+# or listed them.
+#
+# `state` is the whole answer. `reachable` — a link here names this CID, so the
+# bytes belong with the graph, and it is the only state the proposal stages.
+# `orphan` — published, named by nothing yet, so not in the graph at all;
+# committing it is a plain `git add`, and there is no flag here to do it for
+# you. `missing` — tracked, but gone from the working tree.
+#
+# --propose-commit writes `git add` and `git commit` into the prompt unrun,
+# exactly as `seal --propose-commit` does. It stages nothing itself: the point
+# is a command you read and edit, and a helper that quietly staged files would
+# be the opposite of that.
+@example "what the store holds that git does not" { particle uncommitted }
+@example "leave the commit for the reachable ones in the prompt" { particle uncommitted --propose-commit }
+export def uncommitted [
+    --repo: path # Target repo root (default: git root of current directory)
+    --propose-commit # Leave a `git add` + `git commit` for these files in the prompt, unrun
+]: nothing -> table {
+    let root = graph-root $repo
+    let rows = uncommitted-files $root
+
+    if $propose_commit {
+        let take = stageable $rows
+        if ($take | is-empty) {
+            error make {msg: "nothing to propose: no untracked store file is named by this graph"}
+        }
+        commandline edit (particle-commit-line $take $root)
+    }
+
+    $rows | update file { cwd-relative }
 }

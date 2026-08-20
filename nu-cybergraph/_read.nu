@@ -15,8 +15,9 @@
 # "this parses as an instruction", never "this was meant as one".
 
 use _layout.nu [ signer-dirs link-files particles-dir ]
-use _particle.nu [ index-find particle-verify store-cid ]
+use _particle.nu [ index-find particle-verify store-cid store-index ]
 use _record.nu [ read-link link-cid EDGE_KEYS ]
+use _validate.nu [ CID_V0_RE ]
 use _fs.nu list-files
 
 # Every link in the graph home, walked over the signer directories, each
@@ -166,4 +167,47 @@ export def touches [root: path cid: string --scan]: nothing -> table {
 # fields walked to reach it.
 def role-path [prefix: string path: string]: nothing -> string {
     if $path == "" { $prefix } else { $"($prefix).($path)" }
+}
+
+# Every CID this graph's own links name — the set a store file has to fall in
+# for the graph to reach its bytes at all. The question `particle uncommitted` and
+# the seal guard both ask, and the reason it is answered downward from the links
+# rather than upward from each file: `touches` costs one `rg` over the graph per
+# CID, which is the right shape for one vertex and the wrong one for a sweep of
+# the whole store.
+#
+# Five seeds per link, not the pair's two. The signer is named by the path, and
+# a signer published as a particle (`link add --signer alice`) has its bytes in
+# the store like any endpoint. The other two are the records `link add` itself
+# publishes: the pair and the triple. Those are addresses this graph hands out —
+# `confirm A B S` targets the triple — so a store file holding one is as
+# reachable as an endpoint, and a sweep that missed them would call the writer's
+# own output an orphan.
+#
+# Then the step `touches` walks upward, walked downward: an instruction preimage
+# names its operands as CIDs, so dereferencing a seed adds them, and the
+# expansion repeats until a round finds nothing new. The fixpoint is what ends
+# it, not a depth limit — a cycle would need a record containing the hash of
+# bytes that contain it, so it is not constructible.
+export def reachable-cids [root: path]: nothing -> list<string> {
+    let index = store-index $root
+    let seeds = read-links $root
+        | each {|l| [$l.cid_from $l.cid_to $l.signer $l.edge_cid $l.link_cid] }
+        | flatten
+        | uniq
+    mut seen = []
+    mut frontier = $seeds
+    while ($frontier | is-not-empty) {
+        $seen = ($seen ++ $frontier | uniq)
+        # `deref` returns null for a CID whose bytes are not local and for one
+        # whose file is not an instruction preimage — both are ordinary, and
+        # both simply add no operands.
+        $frontier = $frontier
+            | each {|cid| deref $index $cid | default {} | values }
+            | flatten
+            | where $it =~ $CID_V0_RE
+            | uniq
+            | where $it not-in $seen
+    }
+    $seen
 }

@@ -149,7 +149,7 @@ cybergraph/
 
 Signer directories sit at the graph root and are told from the reserved directories by form alone: a directory named by a CID v0 is a signer's, and the reserved names never match that pattern. The pubkey filename is the reference implementation's choice and carries no authority — see 2.4.
 
-The signer directories, `certs/` and `seals/` are what a seal stages into git; `particles/` and `exports/` are not staged by the seal (see 5).
+The signer directories, `certs/` and `seals/` are what a seal stages into git; `particles/` and `exports/` are not staged by the seal (see 5) — but a store file the graph reaches has to be in the index before the seal, and the seal refuses while it is not.
 
 A sha256 git backend (`git init --object-format=sha256`) is recommended. The format works on sha1 repos too.
 
@@ -191,6 +191,8 @@ Arbitrary content published as a self-addressed file, storing the exact bytes: n
 The store holds content published by a user, the instruction and address records minted by conventions (section 4), and the pair and triple records of every link (3.1). Publishing the derived records is what makes a derived CID readable — the record is its own preimage.
 
 Store files are not sealed directly. A file is time-anchored the moment a sealed link names its CID, because showing bytes that hash to an anchored CID extends the anchor to those bytes.
+
+They still have to be committed, and before the seal, not after. The manifest is git-tracked files (section 5), so a store file outside the index enters no root — the anchor above reaches its bytes only for whoever already holds them. A file is **reachable** when a link in this graph names its CID: as `cid_from`, `cid_to` or `signer`, as one of the pair and triple records the link itself publishes (3.1), or as an operand inside a record reached that way (section 4), applied until nothing new appears. A store file that is reachable by none of those is published and linked to nothing, and only its publisher can say whether that was the intent.
 
 ### 3.3 Birth certificate — `certs/<signer-cid>/<edge-cid>.cert.json`
 
@@ -275,10 +277,11 @@ A seal is one signing moment over the whole graph home. The proof layer is roote
 
 1. Refuse if no pubkey is registered.
 2. Read and validate **every** link record (3.1) — walking the signer directories, CID-v0-named directories at the root — and check that whatever stands at each certificate path is the frozen proof for that exact leaf. Refuse before anything is staged or mutated: a seal is where a file crosses from junk on disk to a statement signed by this signer.
-3. `git add` the non-empty ones of the signer directories, `certs/` and `seals/`. This list only ever *adds*; it does not bound the manifest.
-4. Run the proof layer's seal (section 7) with the content anchor **off** — signatures only.
-5. Write the snapshot `seals/<root12>/` (3.4) if it does not exist yet. This MUST happen **before** step 6: freezing runs per link and can fail part-way, and a certificate naming a root whose snapshot was never written can never be verified or exported again — a re-seal does not repair it, because the retry mints a different root.
-6. For every link with no certificate, extract its inclusion proof and freeze it at `certs/<signer-cid>/<edge-cid>.cert.json`.
+3. Refuse if any store file the graph *reaches* (3.2) is outside the git index. The manifest is git-tracked files, so such a file enters no root while the link naming it is signed and frozen — a certificate proving an edge whose endpoint bytes were never attested. An implementation MAY offer an explicit override for sealing without those bytes, and MUST NOT let it also skip the store's layout rule: a name under `particles/` that is no address MUST refuse either way. Publishing is the operator's act, so this step refuses rather than staging on their behalf.
+4. `git add` the non-empty ones of the signer directories, `certs/` and `seals/`. This list only ever *adds*; it does not bound the manifest.
+5. Run the proof layer's seal (section 7) with the content anchor **off** — signatures only.
+6. Write the snapshot `seals/<root12>/` (3.4) if it does not exist yet. This MUST happen **before** step 7: freezing runs per link and can fail part-way, and a certificate naming a root whose snapshot was never written can never be verified or exported again — a re-seal does not repair it, because the retry mints a different root.
+7. For every link with no certificate, extract its inclusion proof and freeze it at `certs/<signer-cid>/<edge-cid>.cert.json`.
 
 **A repeated seal is not a no-op.** `seals/` is staged, so each seal catalogues the snapshots of every seal before it — the manifest differs, so the root differs, so another snapshot directory appears. Measured over five consecutive seals with nothing added: five distinct roots, manifest rows 3, 10, 13, 16, 19. This is accepted with its cost, not designed; a fixpoint would need a directory named after a root computed from a tree that already contains it.
 

@@ -7,6 +7,12 @@
 # reaches a real (pending) stamp with no network. A calendar can only ever answer
 # pending, so the anchored case is reached by building a Bitcoin attestation here
 # — the one OTS byte format this file writes for itself.
+#
+# Every seal here passes --allow-untracked-particles. None of these tests is
+# about the store's own commit discipline, and they never commit anything: the
+# guard `seal` grew would otherwise refuse them all, for a reason each of them
+# has already agreed to ignore. tests/test_uncommitted.nu is where the guard itself
+# is under test, both ways.
 use std/assert
 use std/testing *
 
@@ -67,7 +73,7 @@ def "birth, seal, bundle, import, verify — the full link journey" [] {
 
     # Birth + seal: certificate frozen, root snapshot archived
     let born = link add $P1 $P2 --repo $a.repo --allow-missing
-    let sealed = seal --repo $a.repo --no-stamp
+    let sealed = seal --repo $a.repo --no-stamp --allow-untracked-particles
     assert equal $sealed.newborn 1
     assert (($a.home | path join certs $born.record.signer $"($born.edge_cid).cert.json") | path exists)
     assert (($sealed.snapshot | path join tree-root.txt) | path exists)
@@ -105,7 +111,7 @@ def "birth, seal, bundle, import, verify — the full link journey" [] {
 
     # B's own seal catalogues the imported bundle — the custody layer:
     # "this signer held the link no later than block K"
-    seal --repo $b.repo --no-stamp | ignore
+    seal --repo $b.repo --no-stamp --allow-untracked-particles | ignore
     let b_manifest = open --raw ($b.home | path join multiproofs tree-hashes.csv)
         | from csv --no-infer
     let bundled_record = $"imported/($born.record.signer)/($born.edge_cid)/($born.record.signer)/($born.edge_cid).json"
@@ -115,7 +121,7 @@ def "birth, seal, bundle, import, verify — the full link journey" [] {
     let cert = $a.home | path join certs $born.record.signer $"($born.edge_cid).cert.json"
     let before = open --raw $cert | hash sha256
     link add $P2 $P1 --repo $a.repo --allow-missing
-    let sealed2 = seal --repo $a.repo --no-stamp
+    let sealed2 = seal --repo $a.repo --no-stamp --allow-untracked-particles
     assert equal $sealed2.newborn 1
     assert equal (open --raw $cert | hash sha256) $before
     # ...and the old link still verifies against its archived root
@@ -133,7 +139,7 @@ def "bundle carries the ends particles by default, links-only drops them" [] {
     let tmp_dir = $in.tmp_dir
     let a = make-signer $tmp_dir "a"
     let born = link add "cyber" "bostrom" --repo $a.repo
-    seal --repo $a.repo --no-stamp | ignore
+    seal --repo $a.repo --no-stamp --allow-untracked-particles | ignore
 
     let out = bundle $born.edge_cid --repo $a.repo --out ($tmp_dir | path join out)
     let particle_names = list-files ($out | path join particles) | each { path basename }
@@ -156,7 +162,7 @@ def "bundle carries the ends particles by default, links-only drops them" [] {
     # CID the bytes need not be local for is legitimate, so `bundle` ships
     # whatever preimages it actually holds, not a promise every end resolves.
     let unresolved = link add $P1 $P2 --repo $a.repo --allow-missing
-    seal --repo $a.repo --no-stamp | ignore
+    seal --repo $a.repo --no-stamp --allow-untracked-particles | ignore
     let out_unresolved = bundle $unresolved.edge_cid --repo $a.repo --out ($tmp_dir | path join out-unresolved)
     assert not (($out_unresolved | path join particles) | path exists)
 }
@@ -172,7 +178,7 @@ def "a bundle whose record file is absent returns a verdict, not a crash" [] {
     let tmp_dir = $in.tmp_dir
     let a = make-signer $tmp_dir "a"
     let born = link add $P1 $P2 --repo $a.repo --allow-missing
-    seal --repo $a.repo --no-stamp | ignore
+    seal --repo $a.repo --no-stamp --allow-untracked-particles | ignore
     let out = bundle $born.edge_cid --repo $a.repo --out ($tmp_dir | path join out)
 
     rm ($out | path join $born.record.signer $"($born.edge_cid).json")
@@ -210,7 +216,7 @@ def "an import that could not copy every file is refused, not truncated" [] {
     let tmp_dir = $in.tmp_dir
     let a = make-signer $tmp_dir "a"
     let born = link add $P1 $P2 --repo $a.repo --allow-missing
-    seal --repo $a.repo --no-stamp | ignore
+    seal --repo $a.repo --no-stamp --allow-untracked-particles | ignore
     let out = bundle $born.edge_cid --repo $a.repo --out ($tmp_dir | path join out)
 
     # An extra file in the bundle that the importer cannot read. It is not part
@@ -247,7 +253,7 @@ def "a verify that fails deep still carries the real cause" [] {
     let tmp_dir = $in.tmp_dir
     let a = make-signer $tmp_dir "a"
     let born = link add $P1 $P2 --repo $a.repo --allow-missing
-    seal --repo $a.repo --no-stamp | ignore
+    seal --repo $a.repo --no-stamp --allow-untracked-particles | ignore
 
     # A PATH holding git and nothing else. Reading the bundle's pubkeys needs
     # ssh-keygen, so the failure lands well below `verify` — which is the only
@@ -272,7 +278,7 @@ def "a recipient with no repo of their own can verify a bundle they received" []
     let tmp_dir = $in.tmp_dir
     let a = make-signer $tmp_dir "a"
     let born = link add $P1 $P2 --repo $a.repo --allow-missing
-    seal --repo $a.repo --no-stamp | ignore
+    seal --repo $a.repo --no-stamp --allow-untracked-particles | ignore
     let out = bundle $born.edge_cid --repo $a.repo --out ($tmp_dir | path join out)
 
     # The recipient's whole world: a directory that arrived. No init has run
@@ -317,7 +323,7 @@ def "a bundle that could not copy an OTS file names the file" [] {
     let tmp_dir = $in.tmp_dir
     let a = make-signer $tmp_dir "a"
     let born = link add $P1 $P2 --repo $a.repo --allow-missing
-    seal --repo $a.repo --no-stamp | ignore
+    seal --repo $a.repo --no-stamp --allow-untracked-particles | ignore
 
     let mp = $a.home | path join multiproofs
     let root_hex = open --raw ($mp | path join tree-root.txt) | str trim
@@ -454,7 +460,7 @@ def stamped-bundle [tmp_dir: path]: nothing -> record {
     let born = link add $P1 $P2 --repo $a.repo --allow-missing
     let response = $tmp_dir | path join calendar-response.bin
     calendar-response | save --raw --force $response
-    seal --repo $a.repo --response-file $response | ignore
+    seal --repo $a.repo --response-file $response --allow-untracked-particles | ignore
     let out = bundle $born.edge_cid --repo $a.repo --out ($tmp_dir | path join out)
 
     let ots_dir = list-dirs ($out | path join multiproofs ots-timestamps) | first
@@ -529,7 +535,7 @@ def "with a co-signer present, the endorsement reported belongs to the record si
     let tmp_dir = $in.tmp_dir
     let a = make-signer $tmp_dir "a"
     let born = link add $P1 $P2 --repo $a.repo --allow-missing
-    seal --repo $a.repo --no-stamp | ignore
+    seal --repo $a.repo --no-stamp --allow-untracked-particles | ignore
     let out = bundle $born.edge_cid --repo $a.repo --out ($tmp_dir | path join out)
 
     # A second registered key signs the same root statement out of band —
@@ -577,7 +583,7 @@ def "an unstamped signature does not hide the signers stamped one" [] {
     let born = link add $P1 $P2 --repo $a.repo --allow-missing
     let response = $tmp_dir | path join calendar-response.bin
     calendar-response | save --raw --force $response
-    seal --repo $a.repo --response-file $response | ignore
+    seal --repo $a.repo --response-file $response --allow-untracked-particles | ignore
     let out = bundle $born.edge_cid --repo $a.repo --out ($tmp_dir | path join out)
 
     let mp = $out | path join multiproofs
@@ -610,7 +616,7 @@ def "two signature spellings by one key do not fork the endorsement" [] {
     let tmp_dir = $in.tmp_dir
     let a = make-signer $tmp_dir "a"
     let born = link add $P1 $P2 --repo $a.repo --allow-missing
-    seal --repo $a.repo --no-stamp | ignore
+    seal --repo $a.repo --no-stamp --allow-untracked-particles | ignore
     let out = bundle $born.edge_cid --repo $a.repo --out ($tmp_dir | path join out)
 
     let mp = $out | path join multiproofs
@@ -641,25 +647,25 @@ def "a wrong node at the receipt cert path is refused like a birth certificate" 
     let tmp_dir = $in.tmp_dir
     let a = make-signer $tmp_dir "a"
     let born = link add $P1 $P2 --repo $a.repo --allow-missing
-    seal --repo $a.repo --no-stamp | ignore
+    seal --repo $a.repo --no-stamp --allow-untracked-particles | ignore
     let a_out = bundle $born.edge_cid --repo $a.repo --out ($tmp_dir | path join a-out)
 
     let b = make-signer $tmp_dir "b"
     import $a_out --repo $b.repo | ignore
-    assert equal (seal --repo $b.repo --no-stamp | get receipts) 1
+    assert equal (seal --repo $b.repo --no-stamp --allow-untracked-particles | get receipts) 1
     let frozen = $b.home | path join receipts ($born.record.signer) $"($born.edge_cid).receipt.cert.json"
     assert ($frozen | path exists) "the fixture needs a frozen receipt proof"
 
     # Truncated, as an interrupted write leaves it. The proof is gone but the
     # path is still occupied, which is exactly what bare existence cannot tell.
     "" | save --force --raw $frozen
-    let err = try { seal --repo $b.repo --no-stamp; null } catch {|e| $e.msg }
+    let err = try { seal --repo $b.repo --no-stamp --allow-untracked-particles; null } catch {|e| $e.msg }
     assert ($err != null) "an empty file passed as a frozen receipt proof"
     assert ($err | str contains $born.edge_cid) $"the refusal should name the receipt: ($err)"
 
     # And the recovery is removing it — the refusal must not have staged anything
     rm $frozen
-    assert equal (seal --repo $b.repo --no-stamp | get receipts) 1
+    assert equal (seal --repo $b.repo --no-stamp --allow-untracked-particles | get receipts) 1
     assert equal (open $frozen | get leaf.filepath) $"receipts/($born.record.signer)/($born.edge_cid).receipt.json"
 }
 
@@ -668,7 +674,7 @@ def "custody chain: each re-export appends a provable, ordered layer" [] {
     let tmp_dir = $in.tmp_dir
     let a = make-signer $tmp_dir "a"
     let born = link add $P1 $P2 --repo $a.repo --allow-missing
-    seal --repo $a.repo --no-stamp | ignore
+    seal --repo $a.repo --no-stamp --allow-untracked-particles | ignore
     let a_out = bundle $born.edge_cid --repo $a.repo --out ($tmp_dir | path join a-out)
 
     # B imports the birth bundle: receipt written, first custodian chains to nothing
@@ -685,7 +691,7 @@ def "custody chain: each re-export appends a provable, ordered layer" [] {
     # Re-export before sealing must refuse: custody is provable only once sealed
     assert error {|| bundle $born.edge_cid --repo $b.repo --out ($tmp_dir | path join too-early) }
 
-    let sealed_b = seal --repo $b.repo --no-stamp
+    let sealed_b = seal --repo $b.repo --no-stamp --allow-untracked-particles
     assert equal $sealed_b.receipts 1
     assert (($b.home | path join receipts ($born.record.signer) $"($born.edge_cid).receipt.cert.json") | path exists)
     let b_out = bundle $born.edge_cid --repo $b.repo --out ($tmp_dir | path join b-out)
@@ -698,7 +704,7 @@ def "custody chain: each re-export appends a provable, ordered layer" [] {
     let b_layer_receipt = $b_out | path join custody $"1-($b_receipt.custodian | str substring 0..11)" receipts ($born.record.signer) $"($born.edge_cid).receipt.json"
     assert equal $c_receipt.prev (open --raw $b_layer_receipt | hash sha256)
 
-    seal --repo $c.repo --no-stamp | ignore
+    seal --repo $c.repo --no-stamp --allow-untracked-particles | ignore
     let c_out = bundle $born.edge_cid --repo $c.repo --out ($tmp_dir | path join c-out)
 
     # A stranger verifies the whole dissemination path offline: A authored,
@@ -752,7 +758,7 @@ def "handoff makes direction a signed claim, woven into the custody chain" [] {
     let c = make-signer $tmp_dir "c"
 
     let born = link add $P1 $P2 --repo $a.repo --allow-missing
-    seal --repo $a.repo --no-stamp | ignore
+    seal --repo $a.repo --no-stamp --allow-untracked-particles | ignore
 
     # A hands the birth bundle to B by signer CID: signed handoff at the root
     let a_out = bundle $born.edge_cid --repo $a.repo --out ($tmp_dir | path join a-out) --to (signer-cid $b.home)
@@ -783,7 +789,7 @@ def "handoff makes direction a signed claim, woven into the custody chain" [] {
     open --raw $m_imported.receipt
     | str replace (signer-cid $m.home) (signer-cid $b.home)
     | save --raw --force $m_imported.receipt
-    seal --repo $m.repo --no-stamp | ignore
+    seal --repo $m.repo --no-stamp --allow-untracked-particles | ignore
     let m_out = bundle $born.edge_cid --repo $m.repo --out ($tmp_dir | path join m-out)
     let mv = verify-bundle $m_out
     assert not $mv.valid
@@ -794,11 +800,11 @@ def "handoff makes direction a signed claim, woven into the custody chain" [] {
     let b_receipt = open --raw $b_imported.receipt | from json
     assert equal $b_receipt.handoff (open --raw $root_handoff | hash sha256)
 
-    seal --repo $b.repo --no-stamp | ignore
+    seal --repo $b.repo --no-stamp --allow-untracked-particles | ignore
     let b_out = bundle $born.edge_cid --repo $b.repo --out ($tmp_dir | path join b-out) --to (signer-cid $c.home)
 
     import $b_out --repo $c.repo | ignore
-    seal --repo $c.repo --no-stamp | ignore
+    seal --repo $c.repo --no-stamp --allow-untracked-particles | ignore
     # C re-exports openly (no recipient): legal, the chain just ends unaddressed
     let c_out = bundle $born.edge_cid --repo $c.repo --out ($tmp_dir | path join c-out)
 
@@ -827,7 +833,7 @@ def "forged authorship is refused: signer CID of a key that never signed" [] {
     ^ssh-keygen -t ed25519 -f $mallory -N "" -C mallory -q
     let mallory_cid = open --raw $"($mallory).pub" | into binary | cid-v0
     let born = link add $P1 $P2 --repo $a.repo --signer $mallory_cid --allow-missing
-    seal --repo $a.repo --no-stamp | ignore
+    seal --repo $a.repo --no-stamp --allow-untracked-particles | ignore
 
     let bundle_dir = bundle $born.edge_cid --repo $a.repo --out ($tmp_dir | path join out-bundle)
     let v = verify-bundle $bundle_dir
@@ -858,7 +864,7 @@ def "a pubkey filed under the fingerprint of another key cannot borrow its autho
 
     # mallory claims the victim authored the link, and seals with her own key
     let born = link add $P1 $P2 --repo $m.repo --signer $victim_cid --allow-missing
-    seal --repo $m.repo --no-stamp | ignore
+    seal --repo $m.repo --no-stamp --allow-untracked-particles | ignore
     let out = bundle $born.edge_cid --repo $m.repo --out ($tmp_dir | path join out)
     assert not (verify-bundle $out | get signer.bound) "unforged bundle already bound"
 
@@ -896,7 +902,7 @@ def "a repo path holding glob metacharacters still seals, exports and imports" [
     let b = make-signer $tmp_dir "b?[2]"
 
     let born = link add $P1 $P2 --repo $a.repo --allow-missing
-    let sealed = seal --repo $a.repo --no-stamp
+    let sealed = seal --repo $a.repo --no-stamp --allow-untracked-particles
     assert equal $sealed.newborn 1
     # `ls`, not `glob`: the assertion must not repeat the bug it is pinning
     assert equal (ls $sealed.snapshot | get name | where ($it | str ends-with ".sig") | length) 1
@@ -923,7 +929,7 @@ def "a renamed pubkey file still exports a verifiable bundle" [] {
     mv (glob ($pubkeys | path join *.pub) | first) ($pubkeys | path join "my-laptop.pub")
 
     let born = link add $P1 $P2 --repo $a.repo --allow-missing
-    seal --repo $a.repo --no-stamp | ignore
+    seal --repo $a.repo --no-stamp --allow-untracked-particles | ignore
     let v = verify-bundle (bundle $born.edge_cid --repo $a.repo --out ($tmp_dir | path join out))
     assert $v.valid
     assert $v.signer.bound
@@ -934,7 +940,7 @@ def "non-canonical pubkey file in a bundle is refused" [] {
     let tmp_dir = $in.tmp_dir
     let a = make-signer $tmp_dir "a"
     let born = link add $P1 $P2 --repo $a.repo --allow-missing
-    seal --repo $a.repo --no-stamp | ignore
+    seal --repo $a.repo --no-stamp --allow-untracked-particles | ignore
     let bundle_dir = bundle $born.edge_cid --repo $a.repo --out ($tmp_dir | path join out-bundle)
 
     # Re-adding a comment keeps the key material — the signature would still
@@ -956,7 +962,7 @@ def "a pubkey file with a byte-order mark is not the canonical form" [] {
     let tmp_dir = $in.tmp_dir
     let a = make-signer $tmp_dir "a"
     let born = link add $P1 $P2 --repo $a.repo --allow-missing
-    seal --repo $a.repo --no-stamp | ignore
+    seal --repo $a.repo --no-stamp --allow-untracked-particles | ignore
     let bundle_dir = bundle $born.edge_cid --repo $a.repo --out ($tmp_dir | path join out-bundle)
 
     let pub = glob ($bundle_dir | path join multiproofs pubkeys *.pub) | first
@@ -976,7 +982,7 @@ def "a broken toolchain is refused as a toolchain problem, not as a bad key" [] 
     let tmp_dir = $in.tmp_dir
     let a = make-signer $tmp_dir "a"
     let born = link add $P1 $P2 --repo $a.repo --allow-missing
-    seal --repo $a.repo --no-stamp | ignore
+    seal --repo $a.repo --no-stamp --allow-untracked-particles | ignore
     let out = bundle $born.edge_cid --repo $a.repo --out ($tmp_dir | path join out)
 
     let err = with-env {PATH: []} {
@@ -1005,7 +1011,7 @@ def "a second encoding of a real key is refused without calling it unreadable" [
     let tmp_dir = $in.tmp_dir
     let a = make-signer $tmp_dir "a"
     let born = link add $P1 $P2 --repo $a.repo --allow-missing
-    seal --repo $a.repo --no-stamp | ignore
+    seal --repo $a.repo --no-stamp --allow-untracked-particles | ignore
     let out = bundle $born.edge_cid --repo $a.repo --out ($tmp_dir | path join out)
 
     let pub = glob ($out | path join multiproofs pubkeys *.pub) | first
@@ -1025,7 +1031,7 @@ def "tampered record in a bundle fails self-addressing" [] {
     let tmp_dir = $in.tmp_dir
     let a = make-signer $tmp_dir "a"
     let born = link add $P1 $P2 --repo $a.repo --allow-missing
-    seal --repo $a.repo --no-stamp | ignore
+    seal --repo $a.repo --no-stamp --allow-untracked-particles | ignore
     let bundle_dir = bundle $born.edge_cid --repo $a.repo --out ($tmp_dir | path join out-bundle)
 
     let rec_file = $bundle_dir | path join $born.record.signer $"($born.edge_cid).json"
@@ -1046,7 +1052,7 @@ def "a handoff that is tampered, unsigned, or misclaiming is refused" [] {
     let a = make-signer $tmp_dir "a"
     let b = make-signer $tmp_dir "b"
     let born = link add $P1 $P2 --repo $a.repo --allow-missing
-    seal --repo $a.repo --no-stamp | ignore
+    seal --repo $a.repo --no-stamp --allow-untracked-particles | ignore
     let a_out = bundle $born.edge_cid --repo $a.repo --out ($tmp_dir | path join a-out) --to (signer-cid $b.home)
     let handoff_name = $"($born.edge_cid).handoff.json"
 
@@ -1099,7 +1105,7 @@ def "a handoff that is tampered, unsigned, or misclaiming is refused" [] {
     # to a hash that is not B's receipt
     let c = make-signer $tmp_dir "c"
     import $a_out --repo $b.repo | ignore
-    seal --repo $b.repo --no-stamp | ignore
+    seal --repo $b.repo --no-stamp --allow-untracked-particles | ignore
     let b_out = bundle $born.edge_cid --repo $b.repo --out ($tmp_dir | path join b-out) --to (signer-cid $c.home)
     assert (verify-bundle $b_out | get valid)
 
@@ -1121,11 +1127,11 @@ def "custody layer names cannot lie — forged dirname, duplicated custodian, re
     let tmp_dir = $in.tmp_dir
     let a = make-signer $tmp_dir "a"
     let born = link add $P1 $P2 --repo $a.repo --allow-missing
-    seal --repo $a.repo --no-stamp | ignore
+    seal --repo $a.repo --no-stamp --allow-untracked-particles | ignore
     let a_out = bundle $born.edge_cid --repo $a.repo --out ($tmp_dir | path join a-out)
     let b = make-signer $tmp_dir "b"
     import $a_out --repo $b.repo | ignore
-    seal --repo $b.repo --no-stamp | ignore
+    seal --repo $b.repo --no-stamp --allow-untracked-particles | ignore
     let b_out = bundle $born.edge_cid --repo $b.repo --out ($tmp_dir | path join b-out)
     let a12 = signer-cid $a.home | str substring 0..11
     let b12 = signer-cid $b.home | str substring 0..11
@@ -1166,7 +1172,7 @@ def "bundle --to without a signing key fails before writing anything" [] {
     let tmp_dir = $in.tmp_dir
     let a = make-signer $tmp_dir "a"
     let born = link add $P1 $P2 --repo $a.repo --allow-missing
-    seal --repo $a.repo --no-stamp | ignore
+    seal --repo $a.repo --no-stamp --allow-untracked-particles | ignore
 
     ^git -C $a.repo config --unset user.signingKey
     let dest = $tmp_dir | path join out
@@ -1187,11 +1193,11 @@ def "a re-export that comes out without a root certificate is refused and remove
     let tmp_dir = $in.tmp_dir
     let a = make-signer $tmp_dir "a"
     let born = link add $P1 $P2 --repo $a.repo --allow-missing
-    seal --repo $a.repo --no-stamp | ignore
+    seal --repo $a.repo --no-stamp --allow-untracked-particles | ignore
     let a_out = bundle $born.edge_cid --repo $a.repo --out ($tmp_dir | path join a-out)
     let b = make-signer $tmp_dir "b"
     import $a_out --repo $b.repo | ignore
-    seal --repo $b.repo --no-stamp | ignore
+    seal --repo $b.repo --no-stamp --allow-untracked-particles | ignore
 
     # Corrupt the source copy so assembly produces a certless bundle root
     rm ($b.home | path join imported $born.record.signer $born.edge_cid $"($born.edge_cid).cert.json")
@@ -1213,7 +1219,7 @@ def "an export whose handoff key upstream refuses leaves nothing behind" [] {
     let a = make-signer $tmp_dir "a"
     let b = make-signer $tmp_dir "b"
     let born = link add $P1 $P2 --repo $a.repo --allow-missing
-    seal --repo $a.repo --no-stamp | ignore
+    seal --repo $a.repo --no-stamp --allow-untracked-particles | ignore
 
     # A real key with its .pub sibling, absent from pubkeys/ — nothing local
     # can fault it, so only `ssh-sign sign` refuses, at the very last step.
@@ -1247,11 +1253,11 @@ def "link imported decodes every landed bundle, across signers" [] {
     let c = make-signer $tmp_dir "c"
 
     let aq = convention question $P1 "why?" --repo $a.repo --allow-missing
-    seal --repo $a.repo --no-stamp | ignore
+    seal --repo $a.repo --no-stamp --allow-untracked-particles | ignore
     let a_out = bundle $aq.edge_cid --repo $a.repo --out ($tmp_dir | path join a-out)
 
     let bp = link add "cyber" "bostrom" --repo $b.repo
-    seal --repo $b.repo --no-stamp | ignore
+    seal --repo $b.repo --no-stamp --allow-untracked-particles | ignore
     let b_out = bundle $bp.edge_cid --repo $b.repo --out ($tmp_dir | path join b-out)
 
     import $a_out --repo $c.repo | ignore
@@ -1286,7 +1292,7 @@ def "link imported never reaches into this own repo particles" [] {
     let c = make-signer $tmp_dir "c"
 
     let aq = convention question $P1 "why?" --repo $a.repo --allow-missing
-    seal --repo $a.repo --no-stamp | ignore
+    seal --repo $a.repo --no-stamp --allow-untracked-particles | ignore
     let a_out = bundle $aq.edge_cid --repo $a.repo --out ($tmp_dir | path join a-out) --links-only
     import $a_out --repo $c.repo | ignore
 
@@ -1312,7 +1318,7 @@ def "an unsealed own copy does not hide a verifiable imported copy" [] {
     let tmp_dir = $in.tmp_dir
     let a = make-signer $tmp_dir "a"
     let born = link add $P1 $P2 --repo $a.repo --allow-missing
-    seal --repo $a.repo --no-stamp | ignore
+    seal --repo $a.repo --no-stamp --allow-untracked-particles | ignore
     let out = bundle $born.edge_cid --repo $a.repo --out ($tmp_dir | path join out)
 
     let b = make-signer $tmp_dir "b"
@@ -1333,7 +1339,7 @@ def "an unsealed own copy does not hide a verifiable imported copy" [] {
     assert ($err | str contains "no birth certificate yet") $"wrong refusal for an edge held only unsealed: ($err)"
 
     # After B's seal the same query returns both copies.
-    seal --repo $b.repo --no-stamp | ignore
+    seal --repo $b.repo --no-stamp --allow-untracked-particles | ignore
     assert equal (verify $born.edge_cid --repo $b.repo | length) 2
 }
 
@@ -1348,7 +1354,7 @@ def "import publishes the triple particle for the link CID it returns" [] {
     let tmp_dir = $in.tmp_dir
     let a = make-signer $tmp_dir "a"
     let born = link add $P1 $P2 --repo $a.repo --allow-missing
-    seal --repo $a.repo --no-stamp | ignore
+    seal --repo $a.repo --no-stamp --allow-untracked-particles | ignore
     let out = bundle $born.edge_cid --repo $a.repo --out ($tmp_dir | path join out)
 
     let b = make-signer $tmp_dir "b"
@@ -1374,7 +1380,7 @@ def "verify returns one row per own signer and --signer narrows to one act" [] {
     let own = link add $P1 $P2 --repo $a.repo --allow-missing
     let adhoc = link add $P1 $P2 --repo $a.repo --allow-missing --signer alice
     assert equal $own.edge_cid $adhoc.edge_cid "one pair, one edge address, whoever signs"
-    let sealed = seal --repo $a.repo --no-stamp
+    let sealed = seal --repo $a.repo --no-stamp --allow-untracked-particles
     assert equal $sealed.newborn 2
     assert (($a.home | path join certs $adhoc.record.signer $"($adhoc.edge_cid).cert.json") | path exists) "certs must mirror the second signer directory too"
 
@@ -1408,7 +1414,7 @@ def "the receipt states the act and still derives to the cyberlink CID" [] {
     let tmp_dir = $in.tmp_dir
     let a = make-signer $tmp_dir "a"
     let born = link add $P1 $P2 --repo $a.repo --allow-missing
-    seal --repo $a.repo --no-stamp | ignore
+    seal --repo $a.repo --no-stamp --allow-untracked-particles | ignore
     let out = bundle $born.edge_cid --repo $a.repo --out ($tmp_dir | path join out)
     let b = make-signer $tmp_dir "b"
     import $out --repo $b.repo | ignore
