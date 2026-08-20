@@ -7,7 +7,7 @@
 
 use _repo.nu graph-root
 use _fs.nu [ list-files copy-file move-file cwd-relative ]
-use _layout.nu [ signer-dirs link-files certs-dir cert-path snapshot-dir receipts-dir receipt-files receipt-cert-path receipt-relpath CERTS_DIR SEALS_DIR IMPORTED_DIR RECEIPTS_DIR ]
+use _layout.nu [ signer-dirs link-files certs-dir cert-path snapshot-dir seals-dir receipts-dir receipt-files receipt-cert-path receipt-relpath CERTS_DIR SEALS_DIR IMPORTED_DIR RECEIPTS_DIR ]
 use _record.nu [ read-link ]
 use _validate.nu [ CID_V0_RE ]
 use _signer.nu [ own-signer ]
@@ -345,4 +345,47 @@ export def main [
     }
 
     $out
+}
+
+# The seal chain, oldest first — one row per snapshot under seals/.
+#
+# Why this lives here and not in nu-multiproof: a repo there keeps only the LIVE
+# statement, so nothing upstream can see more than one link of the chain. This
+# repo keeps every seal it ever minted, because a birth certificate has to stay
+# verifiable against the seal it was born under — so it is the only place the
+# run of numbers can actually be checked.
+#
+# Two things are checked, and a break is an error rather than a false column:
+# the seq values must run 0..N with no gap, and each statement's `prev` must be
+# the root of the seal before it. A gap means a snapshot directory is missing —
+# certificates born under it can no longer be verified — and that is a fact
+# about the repo, not about the row it is discovered on.
+@example "list the seal chain" { nu-cybergraph seal chain }
+export def chain [
+    --repo: path # Repo root (default: git root of current directory)
+]: nothing -> table {
+    let root = graph-root $repo
+    let dir = seals-dir $root
+    if not ($dir | path exists) {
+        error make {msg: $"no seals/ directory at ($dir) — either this graph was never sealed, or the snapshots were removed and every certificate here verifies against nothing"}
+    }
+    # Read through nu-multiproof's own reader, never a second copy of the
+    # statement regex: the format is upstream's to define.
+    let rows = ls $dir
+        | where type == dir
+        | get name
+        | each { merkle read-root ($in | path join "tree-root.txt") }
+        | sort-by seq
+
+    for i in 0..<($rows | length) {
+        let row = $rows | get $i
+        if $row.seq != $i {
+            error make {msg: $"seal chain breaks at seq ($row.seq): expected ($i) — a snapshot under seals/ is missing, and every certificate born under it verifies against nothing"}
+        }
+        let expected_prev = if $i == 0 { "genesis" } else { ($rows | get ($i - 1)).root }
+        if $row.prev != $expected_prev {
+            error make {msg: $"seal ($row.seq) supersedes ($row.prev) but the seal before it is ($expected_prev) — the chain forks here"}
+        }
+    }
+    $rows
 }

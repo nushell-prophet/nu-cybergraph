@@ -61,7 +61,7 @@ export def certs-dir [root: path]: nothing -> path {
 }
 
 # <root>/seals
-def seals-dir [root: path]: nothing -> path {
+export def seals-dir [root: path]: nothing -> path {
     $root | path join $SEALS_DIR
 }
 

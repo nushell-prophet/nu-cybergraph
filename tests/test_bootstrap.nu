@@ -408,6 +408,49 @@ def "a seal with nothing new still mints a new root" [] {
     assert equal ($under_seals | length) 9 $"expected 3 snapshots at 3 rows each, got: ($under_seals | get filepath)"
 }
 
+# The counter's whole purpose: seals are named by root, so from any single
+# statement a chain of four and a chain of three look alike. Reading them in
+# order is what makes a missing one visible.
+@test
+def "the seal chain runs from genesis with no gaps" [] {
+    let r = make-bare-repo $in.tmp_dir
+    init --repo $r.repo
+    link add $P1 $P2 --repo $r.repo --allow-missing | ignore
+    let roots = 1..4 | each {|_| seal --repo $r.repo --no-stamp } | get sealed.merkle_root
+
+    let chain = seal chain --repo $r.repo
+    assert equal ($chain | get seq) [0 1 2 3]
+    assert equal ($chain | get root) $roots
+    # Each seal names the root it superseded; the first names none.
+    assert equal ($chain | get prev) (["genesis"] ++ ($roots | first 3))
+}
+
+@test
+def "a seal chain missing a snapshot is refused, not reported short" [] {
+    let r = make-bare-repo $in.tmp_dir
+    init --repo $r.repo
+    link add $P1 $P2 --repo $r.repo --allow-missing | ignore
+    let roots = 1..3 | each {|_| seal --repo $r.repo --no-stamp } | get sealed.merkle_root
+
+    # Drop the middle seal's snapshot: every certificate born under that root
+    # now verifies against nothing, which is a fact about the repo — so the
+    # chain must raise rather than hand back two rows that look complete.
+    rm --recursive ($r.repo | path join cybergraph seals ($roots | get 1 | str substring 0..11))
+    let err = try { seal chain --repo $r.repo; null } catch {|e| $e.msg }
+    assert str contains $err "seal chain breaks at seq"
+}
+
+# The largest gap of all: no snapshots at all. An empty table would read as
+# "this graph has no seals", which is the one thing a wiped seals/ also looks
+# like — so the absence is raised, not reported.
+@test
+def "a graph with no seals directory is refused, not reported empty" [] {
+    let r = make-bare-repo $in.tmp_dir
+    init --repo $r.repo
+    let err = try { seal chain --repo $r.repo; null } catch {|e| $e.msg }
+    assert str contains $err "no seals/ directory"
+}
+
 # Asking only whether something EXISTS at the cert path let any node there answer
 # "already certified". Measured, for a directory and for an empty file alike:
 # seal reported success with newborn=0, the link went uncertified but WAS

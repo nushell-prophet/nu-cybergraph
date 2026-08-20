@@ -1,10 +1,10 @@
 # nu-cybergraph
 
-The cybergraph layer over nu-multiproof: link records, birth certificates, portable bundles. The concept is developed in `bostrom-journal` (bj003) — this repo holds the operational spec (README, pinned to code and golden tests) and the thin implementation. Keep concept prose there, mechanics here; don't duplicate.
+The cybergraph layer over nu-multiproof: link records, birth certificates, portable bundles. The concept is developed in `bostrom-journal` (bj002) — this repo holds the operational spec (`SPEC.md`, pinned to code and golden tests), the reasons behind it (`README.md`) and the thin implementation. Keep concept prose there, mechanics here; don't duplicate.
 
 All the changes where relevant should be propagated to nu-multiproof.
 
-Pre-1.0: no backwards compatibility to keep. A format change is allowed — it only means every CID is recomputed, and the regeneration script below exists so that costs one run.
+Pre-1.0: no backwards compatibility to keep. A format change is allowed — it means every CID is recomputed, and there is no script for it: the old artifacts are refused, not migrated. What it costs, measured on the v1 -> v2 root statement bump: delete `multiproofs/tree-root.txt` and re-seal, which restarts the seal chain at `genesis`. Rewriting the old file in place is not an alternative — the signature beside it covers exact bytes, so editing them breaks it. Certificates frozen under roots stated in the old format stop verifying, which is why a format change is a decision about the graph, not an edit.
 
 ## Conventions (shared with nu-multiproof)
 
@@ -18,6 +18,7 @@ Pre-1.0: no backwards compatibility to keep. A format change is allowed — it o
 
 ## Key invariants
 
+- The seal chain is contiguous: every root statement carries `seq` (from 0, `prev` = the root it supersedes, `genesis` only at 0), and `seal chain` refuses a gap — a missing `seals/<root12>/` snapshot is certificates that verify against nothing, not a shorter list.
 - A certificate in `certs/` is frozen at birth: never regenerate it on later seals — its OTS anchor is the link's earliest provable time bound.
 - `verify` must always check against the birth seal (via `seals/<root12>/` snapshots or the bundle's own root), never the repo's current `multiproofs/tree-root.txt`.
 - `import` refuses anything that fails merkle structure, signature, record self-addressing, canonical pubkey form, or signer binding. No partial imports.

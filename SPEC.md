@@ -128,7 +128,7 @@ A graph home has exactly one **authoring** identity, while `multiproofs/pubkeys/
 
 Every signature in this format is a detached SSH signature (SSHSIG) over a file's exact bytes, made and verified under the namespace **`file`** — one fixed value, never a caller's choice. SSHSIG puts the namespace inside the signed preimage, so this is not cosmetic: a verifier using any other value rejects every good signature. It is fixed rather than configurable because the value is interpolated into the rendered trust list, where a crafted namespace injects `cert-authority` and makes every registered key trusted for anything.
 
-Domain separation therefore has to live in the signed bytes. That is why the root statement is a single line opening with the token `multiproof-merkle-v1` (7) rather than a bare hash.
+Domain separation therefore has to live in the signed bytes. That is why the root statement is a single line opening with the token `multiproof-merkle-v2` (7) rather than a bare hash.
 
 A signature sits beside the file it signs, named `<file>.<fingerprint>.sig`. Verification renders its trust list from the proof directory's own `multiproofs/pubkeys/`, one line per key: `<fingerprint> namespaces="file" <type> <base64>`.
 
@@ -198,7 +198,7 @@ The inclusion proof extracted from the **first** seal that catalogued the link, 
 
 ```json
 {
-  "schema": "multiproof-merkle-v1",
+  "schema": "multiproof-merkle-v2",
   "leaf": {
     "filepath": "<signer-cid>/<edge-cid>.json",
     "content_sha256": "<64 hex>",
@@ -226,6 +226,8 @@ seals/<root12>/tree-root.txt.<fingerprint>.sig   # and/or the bare tree-root.txt
 ```
 
 This is what makes a frozen certificate exportable: certificates verify against the root they were born under, and `multiproofs/tree-root.txt` is overwritten every seal.
+
+The snapshots are also the only place the run of seals can be read: a statement names its own `seq` and the root it supersedes (7), while `multiproofs/` keeps just the live one. An implementation MUST read them in order and refuse a gap — `seq` running 0..N, each `prev` the root before it — instead of reporting a shorter chain, because a missing snapshot is every certificate born under that root verifying against nothing.
 
 ## 4. Conventions — instructions as ordinary edges
 
@@ -311,7 +313,7 @@ Attaching the ends' particle files is the default: without them a recipient has 
 The merkle and timestamp layer is [nu-multiproof](https://codeberg.org/nushell-prophet/nu-multiproof/), and this spec does not restate it. A reimplementation needs, from that project's `README.md`:
 
 - **"Content manifest"** — `multiproofs/tree-hashes.csv`: one row per git-tracked file, per parent directory, and one `.` row; columns `filepath`, `content_sha256`, `content_git`, `content_cid`; rows under `multiproofs/` excluded.
-- **"Tree specification"** — leaf ordering and charsets, leaf bytes (the four parsed field values joined with `\n`), RFC 6962 domain separation (`sha256(0x00 ++ leaf)`, `sha256(0x01 ++ left ++ right)`), the MTH split shape, proof-step encoding, and the root statement: exactly `multiproof-merkle-v1 <64 lowercase hex>` plus one trailing `\n`.
+- **"Tree specification"** — leaf ordering and charsets, leaf bytes (the four parsed field values joined with `\n`), RFC 6962 domain separation (`sha256(0x00 ++ leaf)`, `sha256(0x01 ++ left ++ right)`), the MTH split shape, proof-step encoding, and the root statement: exactly `multiproof-merkle-v2 <64 lowercase hex> <seq> <prev>` plus one trailing `\n`, where `seq` is a decimal count with no leading zeros starting at 0 and `prev` is the root that seal supersedes — or the literal `genesis`, which pairs with `seq 0` and with nothing else.
 - **"Bundle contract"** — the OTS bundle grammar `<stem>.<HASH8>/`, including `<stem>.<ext>.<fingerprint>.ots`, the anchor over a signature that this format's time claim rests on.
 - **"Verifying without the origin repo"** — the portable layout section 6 follows, except for the certificate's position (6). Its `--bundle` enumeration rule does not bite in this format, whose leaves are always file rows, but a reimplementation that ever proves a directory row needs it.
 - **"Merkle inclusion proofs"** — the `content_verified` states, of which only `true` passes; a verifier SHOULD treat any non-boolean value as a divergence rather than enumerate them, so a state added upstream cannot drift out of sync. Its `manifest_root` cross-check applies to a repo, not to a bundle, which carries no manifest and reports `null`.
