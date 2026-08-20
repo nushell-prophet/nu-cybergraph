@@ -1,6 +1,6 @@
 # nu-cybergraph
 
-The cybergraph layer over nu-multiproof: link records, birth certificates, portable bundles. The concept is developed in `bostrom-journal` (bj002) — this repo holds the operational spec (`SPEC.md`, pinned to code and golden tests), the reasons behind it (`README.md`) and the thin implementation. Keep concept prose there, mechanics here; don't duplicate.
+The cybergraph layer over nu-multiproof: link records, birth certificates, portable bundles. The concept is developed in `bostrom-journal` (bj002 and bj003) — this repo holds the operational spec (`SPEC.md`, pinned to code and golden tests), the reasons behind it (`README.md`) and the thin implementation. Keep concept prose there, mechanics here; don't duplicate.
 
 All the changes where relevant should be propagated to nu-multiproof.
 
