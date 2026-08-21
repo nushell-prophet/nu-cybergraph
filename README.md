@@ -35,6 +35,7 @@ nu-cybergraph link add Qm…from Qm…to     # write <signer>/<edge>.json (non-C
 nu-cybergraph link list                  # the whole graph as a table, each edge with the verb it states
 nu-cybergraph link touching Qm…          # which links name this CID, and in which position
 nu-cybergraph link tally Qm…             # per verb and position: how many links, how many signers
+nu-cybergraph link imported              # the same reading over every link a landed bundle carries
 nu-cybergraph seal                       # sign the root + stamp that signature, freeze new certificates
 nu-cybergraph seal --propose-commit      # …and leave the git commit for that seal in the prompt, unrun
 nu-cybergraph seal chain                 # the run of seals, oldest first — refuses a gap
@@ -136,13 +137,14 @@ The cyberlink target of `confirm A B S` / `deny A B S` is the triple record, and
 
 ## Reading the graph
 
-An edge is opaque on purpose: `X → Y` says nothing about what X is. Reading it back is bj002's "Reading instructions" — dereference the source, which works because every convention publishes the record it minted, so a derived CID has its named fields on disk. Three commands do that over the local graph.
+An edge is opaque on purpose: `X → Y` says nothing about what X is. Reading it back is bj002's "Reading instructions" — dereference the source, which works because every convention publishes the record it minted, so a derived CID has its named fields on disk. Four commands do that: three over this signer's own graph, and one over what imported bundles carry.
 
 | command | what it answers |
 |---|---|
 | `link list` | the whole graph, one row per record: `edge_cid` and `link_cid` (both addresses), the pair as stored, `signer` read off the path, then `op`, `src`, `tgt` — the verb the source declares and the endpoints' own records, where this repo holds them |
 | `link touching <cid>` | which links name this CID, and **where**: `role` is `cid_from`, `cid_to`, `signer`, or a dotted path into an instruction's record (`cid_from.about`, `cid_to.cid_from`) |
 | `link tally <cid>` | one row per verb and position: how many links say it, and how many distinct signers signed them |
+| `link imported` | the same rows as `link list`, but for every link a landed bundle under `imported/` carries — one bundle at a time, each decoded against its own `particles/` and never this repo's |
 
 `role` is the part a CID alone cannot carry. As `cid_to` of an `update` a particle is the new version; as `cid_from.about` it is the one being replaced; as `cid_to.cid_from` it is an endpoint of an edge somebody confirmed; as `signer` it is the identity that signed the link — read off the path, since the signer is the directory and not a field, so no text search can narrow that case and every link in the signer's directory names them. A link that names the same CID in two positions comes back twice — that is a fact about the act, not a duplicate.
 
@@ -152,7 +154,7 @@ Counts stay separate and are never summed. Repeats and confirms are two signals 
 
 The aggregate is not the end of the line — it is the next particle. `link tally <cid> | to json | nu-cybergraph particle add` publishes the count as a self-addressed file, and `link add` hangs it off what it counts: the aggregate becomes an ordinary vertex others can quote, confirm or deny, without recomputing it.
 
-Two limits, both deliberate. Own links only (the signer directories at the graph root) — an imported bundle is another signer's copy, checked by `verify` against its birth seal, and mixing it in would silently turn "what this signer said" into "what everyone said", which is the distinction aggregation rests on; so `signers` reads 1 in a fresh repo. And every file the reader opens is hashed back to the CID that names it, which is the cost that remains: `link list` reads the whole graph by definition and takes ~20 seconds over 567 links, and `touching` a CID whose neighbourhood *is* the graph — a signer, named by every link it signed — costs the same.
+Two limits, both deliberate. `list`, `touching` and `tally` read own links only (the signer directories at the graph root) — an imported bundle is another signer's copy, checked by `verify` against its birth seal, and mixing it in would silently turn "what this signer said" into "what everyone said", which is the distinction aggregation rests on; so `signers` reads 1 in a fresh repo. `link imported` is the way past that boundary, and it keeps the distinction rather than dissolving it: the rows arrive separately, each carrying the `signer` whose claim it is, so combining them — consensus, cross-signer tallies, dedup — stays a reading policy the caller writes, the same way `tally` never sums across positions. And every file the reader opens is hashed back to the CID that names it, which is the cost that remains: `link list` reads the whole graph by definition and takes ~20 seconds over 567 links, and `touching` a CID whose neighbourhood *is* the graph — a signer, named by every link it signed — costs the same.
 
 ## Birth certificate
 
