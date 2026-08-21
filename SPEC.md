@@ -568,7 +568,8 @@ Normative order:
    a name under `particles/` that is no address MUST refuse either way.
    Publishing is the operator's act,
    so this step refuses rather than staging on their behalf.
-4. `git add` the non-empty ones of the signer directories, `certs/` and `seals/`.
+4. `git add` the non-empty ones of the signer directories, `certs/` and `seals/`
+   — plus `imported/` and `receipts/` in a graph that has imported something, which section 10 covers.
    This list only ever *adds*;
    it does not bound the manifest.
 5. Run the proof layer's seal (section 7) with the content anchor **off** — signatures only.
