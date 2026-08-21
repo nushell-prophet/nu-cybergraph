@@ -3,9 +3,8 @@
 # arguments through.
 
 use _repo.nu graph-root
-use _particle.nu [ particle-store particle-read resolve-arg-bytes resolve-particle store-index ]
-use _record.nu [ edge-bytes link-bytes ]
-use _signer.nu [ resolve-signer ]
+use _particle.nu [ particle-store particle-read resolve-arg-bytes ]
+use _publish.nu [ publish-edge publish-link ]
 use _uncommitted.nu [ uncommitted-files stageable ]
 use _commit-proposal.nu [ particle-commit-line ]
 use _fs.nu [ cwd-relative ]
@@ -82,12 +81,7 @@ export def "add-edge" [
     --allow-missing # skip the local-file check on a CID operand (see resolve-particle)
     --literal # treat a text operand as literal content even if it names a path
 ]: nothing -> string {
-    let root = graph-root $repo
-    let index = store-index $root
-    edge-bytes {
-        cid_from: (resolve-particle $root $index $cid_from --allow-missing=$allow_missing --literal=$literal)
-        cid_to: (resolve-particle $root $index $cid_to --allow-missing=$allow_missing --literal=$literal)
-    } | particle-store $root
+    publish-edge (graph-root $repo) $cid_from $cid_to $allow_missing $literal
 }
 
 # The same for a cyberlink address — the triple, the one `confirm A B S`
@@ -107,13 +101,7 @@ export def "add-link" [
     --allow-missing # skip the local-file check on a CID operand (see resolve-particle)
     --literal # treat a text operand as literal content even if it names a path
 ]: nothing -> string {
-    let root = graph-root $repo
-    let index = store-index $root
-    link-bytes {
-        cid_from: (resolve-particle $root $index $cid_from --allow-missing=$allow_missing --literal=$literal)
-        cid_to: (resolve-particle $root $index $cid_to --allow-missing=$allow_missing --literal=$literal)
-        signer: (resolve-signer $root $signer)
-    } | particle-store $root
+    publish-link (graph-root $repo) $cid_from $cid_to $signer $allow_missing $literal
 }
 
 # Read a stored file's exact bytes by CID. The argument is the bare 46-char

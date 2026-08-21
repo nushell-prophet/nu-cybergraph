@@ -2,6 +2,7 @@ use std/assert
 use std/testing *
 
 use ../nu-cybergraph/convention.nu
+use ../nu-cybergraph/particle.nu
 use ../nu-cybergraph/_derive.nu [ derive record-bytes ]
 use ../nu-cybergraph/_layout.nu [ particles-dir particle-path ]
 use ../nu-cybergraph/_deps/cid-v0.nu [ cid-v0 ]
@@ -33,6 +34,12 @@ const CYBERLINK_ABS = "Qme4L2P7QwNoijw6HzYVrqrrtk99oj1XvJHvAb9yobHVLe" # {"cid_f
 def "a convention publishes nothing when the repo has no signer identity" [] {
     let tmp = $in.tmp
     assert error {|| convention agree "bostrom" --repo $tmp }
+    # `confirm` and `deny` reach the store before `edge` does — they publish
+    # their own target through `_publish.nu` — so they resolve the signer
+    # themselves, or a refused act leaves its target record behind. Both
+    # arities of one verb, since `deny` shares the same `subject`.
+    assert error {|| convention confirm $A $B --repo $tmp --allow-missing }
+    assert error {|| convention deny $A $B $S --repo $tmp --allow-missing }
     assert not ((particles-dir ($tmp | path join cybergraph)) | path exists)
 }
 
@@ -71,6 +78,39 @@ def setup []: nothing -> record {
 @after-each
 def cleanup [] {
     rm --recursive --force $in.tmp
+}
+
+# The subject signer of `confirm A B S` is an identity, not a stored particle.
+# It used to be resolved as an ordinary operand, so confirming anyone's
+# cyberlink was refused with "no local file" unless the caller passed
+# --allow-missing — which also drops the check on A and B — or published a
+# copy of the pubkey bytes into particles/. Both publishers come through
+# `_publish.nu` now, so the signer follows `resolve-signer` here exactly as it
+# does everywhere else.
+@test
+def "confirming a cyberlink does not demand the subject signer in the store" [] {
+    let tmp = $in.tmp
+    let r = convention confirm $A $B $S --repo $tmp --signer $S --allow-missing
+    assert equal $r.record.cid_to $CYBERLINK_ABS
+    # And with both endpoints local, no flag at all is needed — the signer is
+    # not what the check is about.
+    let a = particle add "cyber" --repo $tmp
+    let b = particle add "prophet" --repo $tmp
+    let r2 = convention confirm $a $b $S --repo $tmp --signer $S
+    assert equal $r2.record.cid_to (derive {cid_from: $a cid_to: $b signer: $S})
+}
+
+# One construction site: the address a convention targets is the address the
+# public publisher returns, byte-identical, or the two have drifted again.
+@test
+def "the convention target and the public publisher agree" [] {
+    let tmp = $in.tmp
+    let a = particle add "cyber" --repo $tmp
+    let b = particle add "prophet" --repo $tmp
+    let confirmed = convention confirm $a $b $S --repo $tmp --signer $S
+    assert equal $confirmed.record.cid_to (particle add-link $a $b $S --repo $tmp)
+    let plain = convention confirm $a $b --repo $tmp --signer $S
+    assert equal $plain.record.cid_to (particle add-edge $a $b --repo $tmp)
 }
 
 @test

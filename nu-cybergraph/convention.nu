@@ -74,6 +74,7 @@ use _particle.nu [ particle-store resolve-particle store-index ]
 use _signer.nu [ resolve-signer ]
 use _validate.nu [ RFC3339_RE ]
 use link.nu
+use _publish.nu [ publish-edge publish-link ]
 
 # Re-exported so a reader can compute any address by hand: the edge address
 # `derive {cid_from: A, cid_to: B}`, the cyberlink's derived CID
@@ -131,13 +132,41 @@ def edge [
     link add (address $root $index $src $allow_missing $literal) (address $root $index $tgt $allow_missing $literal) --signer $signer_cid --repo $repo --allow-missing
 }
 
-# What `confirm` and `deny` speak about: the fields of the edge itself, plus
-# its signer when a specific cyberlink rather than the edge is meant. The two
-# verbs take the same three arguments and differ only in the op word — one
-# shape, so it is built once.
-def subject [cid_from: string cid_to: string about_signer: any]: nothing -> record {
-    let pair = {cid_from: $cid_from cid_to: $cid_to}
-    if $about_signer == null { $pair } else { $pair | insert signer $about_signer }
+# What `confirm` and `deny` speak about, published and handed back as its
+# address: the edge itself, or a specific signer's cyberlink when the third
+# argument is given. The two verbs take the same three arguments and differ
+# only in the op word, so this is built once.
+#
+# Through `_publish.nu` — the bodies behind `particle add-edge` / `add-link` —
+# and not by building the record here and letting `address` publish it.
+# Those verbs mint exactly these two records, and a second construction site is
+# how the two drifted: `address`
+# resolves every value as an ordinary operand, so `confirm A B S` demanded the
+# SIGNER's bytes in particles/ — but a signer CID names a pubkey file, which
+# lives in multiproofs/pubkeys/, and `_signer.nu` says plainly that a signer
+# CID is never checked against the store because `own-signer`'s own answer
+# would fail that check. One publisher, and the question cannot be answered
+# two ways.
+#
+# The result is a CID that is local by construction, so `address` passes it
+# through as a leaf and the caller below needs no special case.
+#
+# Takes the graph root already resolved, and never the signer of the act: this
+# call PUBLISHES, so its caller must have resolved its signer first — see the
+# verbs below.
+def subject [
+    root: path
+    cid_from: string
+    cid_to: string
+    about_signer: any
+    allow_missing: bool
+    literal: bool
+]: nothing -> string {
+    if $about_signer == null {
+        publish-edge $root $cid_from $cid_to $allow_missing $literal
+    } else {
+        publish-link $root $cid_from $cid_to $about_signer $allow_missing $literal
+    }
 }
 
 # Repeat an edge: state the same thing yourself. Both endpoints are leaves —
@@ -175,7 +204,14 @@ export def confirm [
     --allow-missing # skip the local-file check on a CID operand (see resolve-particle)
     --literal # treat a content operand as literal even if it names a path (see resolve-arg-bytes)
 ]: nothing -> record {
-    edge {op: "confirm"} (subject $cid_from $cid_to $confirmed_signer) $signer $repo $allow_missing $literal
+    let root = graph-root $repo
+    # Why the signer is resolved here rather than left to `edge`: `subject`
+    # below PUBLISHES the target record, and a signer resolved after it would
+    # leave that file behind when the repo cannot name one — `link add` states
+    # the same order for the same reason. `edge` re-resolves the CID it gets,
+    # which passes it through unchanged (resolve-signer).
+    let signer_cid = resolve-signer $root $signer
+    edge {op: "confirm"} (subject $root $cid_from $cid_to $confirmed_signer $allow_missing $literal) $signer_cid $repo $allow_missing $literal
 }
 
 # Deny an edge (`deny A B`) or a specific cyberlink (`deny A B S`). Source is
@@ -193,7 +229,14 @@ export def deny [
     --allow-missing # skip the local-file check on a CID operand (see resolve-particle)
     --literal # treat a content operand as literal even if it names a path (see resolve-arg-bytes)
 ]: nothing -> record {
-    edge {op: "deny"} (subject $cid_from $cid_to $disputed_signer) $signer $repo $allow_missing $literal
+    let root = graph-root $repo
+    # Why the signer is resolved here rather than left to `edge`: `subject`
+    # below PUBLISHES the target record, and a signer resolved after it would
+    # leave that file behind when the repo cannot name one — `link add` states
+    # the same order for the same reason. `edge` re-resolves the CID it gets,
+    # which passes it through unchanged (resolve-signer).
+    let signer_cid = resolve-signer $root $signer
+    edge {op: "deny"} (subject $root $cid_from $cid_to $disputed_signer $allow_missing $literal) $signer_cid $repo $allow_missing $literal
 }
 
 # Update an edge: {cid_from: A, cid_to: B, op: update} → C marks C as the new
