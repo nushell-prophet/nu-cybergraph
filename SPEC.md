@@ -849,4 +849,14 @@ except a file DAG deeper than two levels (~7.9 GB), which nothing outside that r
 - Deriving content time through the signature inherits every way SSH verification can rot over decades,
   where a content anchor would stay a bare sha256 compare.
   That trade is taken knowingly (5).
+- **Verification reads the OTS stamp, it does not confirm it.**
+  The endorsement time of 8.6 is what the bundle's own attestation says,
+  and that attestation is neither signed nor under the merkle root
+  — it rides along beside them.
+  So a bundle whose stamp names a Bitcoin height no block carries still verifies:
+  the height is a claim by whoever assembled the bundle, not a proven bound,
+  until a verifier checks it against Bitcoin itself
+  (`ots verify` in the proof layer, which cross-checks independent block explorers and so needs a network).
+  Everything else section 8 checks is offline and structural,
+  which is why this one field is the exception worth naming.
 - The reference implementation is a proof of concept, agent-written and never reviewed by an outside cryptographer.

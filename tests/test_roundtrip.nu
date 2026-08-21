@@ -499,9 +499,8 @@ def "an endorsement anchored in a block is reported with that block" [] {
     # And the cell the operator reads, over the record this run produced
     assert equal (stamp-cell $after.signer.endorsed) "anchored 123456"
 
-    # What this test also shows, and the reason README calls the block bound the
-    # provable one only against a proof you checked yourself: the stamp is not
-    # signed and not in the sealed manifest, so the bundle still reports
+    # What this test also shows, and the limit SPEC 11 names for it: the stamp is
+    # not signed and not in the sealed manifest, so the bundle still reports
     # `valid: true` with an attestation no block contains. `verify` is an offline
     # structural check; confirming the block needs upstream's `ots verify`.
     assert not (($s.out | path join multiproofs tree-hashes.csv) | path exists)
