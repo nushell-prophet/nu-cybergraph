@@ -8,7 +8,10 @@
 # `particle uncommitted`: `stray` is already `seal`'s own word for a file it
 # refuses to sign. An empty table is the state `seal` requires.
 
-use _repo.nu graph-root
+# `graph-home` and not `graph-root`: the latter refuses a home whose top level
+# it does not recognise, which is exactly the home this command exists to
+# describe. The reading has to survive what the refusal is about.
+use _repo.nu graph-home
 use _layout.nu [ strays ]
 
 # Every path under the graph home the layout does not describe — `path`, the
@@ -22,5 +25,5 @@ use _layout.nu [ strays ]
 export def main [
     --repo: path # Repo root (default: git root of current directory)
 ]: nothing -> table {
-    strays (graph-root $repo)
+    strays (graph-home $repo)
 }

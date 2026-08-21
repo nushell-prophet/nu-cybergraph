@@ -37,7 +37,19 @@ export def repo-root [repo?: path]: nothing -> path {
 # this function is the one definition of "the graph home": `link imported` walks
 # a bundle through the same layout helpers, and a bundle is not a home.
 export def graph-root [repo?: path]: nothing -> path {
-    let root = repo-root $repo | path join cybergraph
+    let root = graph-home $repo
     assert-known-home $root
     $root
+}
+
+# The same path, without asking whether what stands there is a graph home.
+#
+# For the one caller that must be able to read a home `graph-root` refuses:
+# `strays`, whose whole job is to say what is wrong with it. A diagnostic that
+# fails on the case it diagnoses is no diagnostic — and `seal`'s refusal names
+# this command as the way to see the list without sealing, so it has to work
+# exactly then. Split out rather than given a flag, so the path rule above
+# stays stated once and the check is the only thing that varies.
+export def graph-home [repo?: path]: nothing -> path {
+    repo-root $repo | path join cybergraph
 }

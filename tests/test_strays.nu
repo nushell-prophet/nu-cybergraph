@@ -166,6 +166,29 @@ def "what a bundle holds inside is not this rule to enforce" [] {
     assert equal (_layout strays $g.root) []
 }
 
+# The reading has to survive the very thing the refusal is about. `seal`'s
+# refusal names this command as the way to see the list without sealing, so a
+# `strays` that failed on an unrecognised top level would be no diagnostic at
+# all — it would fail exactly when it is needed. Written after the first
+# version did precisely that, because it resolved the home through
+# `graph-root`.
+@test
+def "the reading survives a top level the refusal rejects" [] {
+    let g = empty-graph $in.tmp_dir
+    let added = link add "cyber" "bostrom" --repo $g.repo
+    mkdir ($g.root | path join links)
+    open --raw $added.path | save --raw ($g.root | path join links $"($added.edge_cid).json")
+
+    # A reading of the graph refuses...
+    let err = try { link list --repo $g.repo; null } catch {|e| $e.msg }
+    assert str contains $err "unknown graph home"
+
+    # ...and the command that says why does not.
+    let rows = strays --repo $g.repo
+    assert equal ($rows | get path | each { path basename }) ["links"]
+    assert str contains ($rows | get 0.allowed) "<signer-cid>/ directories"
+}
+
 @test
 def "an absent graph home is not an unknown one" [] {
     let bare = $in.tmp_dir | path join nothing-here
