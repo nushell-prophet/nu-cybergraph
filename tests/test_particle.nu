@@ -301,45 +301,76 @@ def "link add takes a signer CID this repo holds no file for" [] {
 }
 
 @test
-def "link add passes CID endpoints through and publishes the pair and the triple" [] {
+def "link add publishes neither of its own addresses" [] {
     let r = link add $A $B --repo $in.tmp --signer $N --allow-missing
-    # The endpoints were addresses already, so nothing was minted for them; the
-    # two files written are the derived records both reported addresses name —
-    # the pair (the edge address) and the triple (the cyberlink's preimage,
-    # published because the link file stopped being it).
-    let stored = ls (particles-dir $in.root) | get name | each { path basename } | sort
-    assert equal $stored ([$r.edge_cid $r.link_cid] | sort)
-    assert equal (open --raw (particle-path $in.root $r.edge_cid)) $"{\"cid_from\":\"($A)\",\"cid_to\":\"($B)\"}\n"
-    assert equal (open --raw (particle-path $in.root $r.link_cid)) $"{\"cid_from\":\"($A)\",\"cid_to\":\"($B)\",\"signer\":\"($N)\"}\n"
+    # The endpoints were addresses already, so nothing was minted for them,
+    # and the two addresses the command reports are derived, not published —
+    # so the store is not created at all. The store holds bytes something
+    # points at; nothing points at this act yet.
+    assert not ((particles-dir $in.root) | path exists)
+    assert equal $r.edge_cid (derive {cid_from: $A cid_to: $B})
+    # No link_cid in the return at all — it addresses nothing yet.
+    assert equal ($r | columns) [edge_cid path record]
 }
 
-# The reference `link add` hands out has to be one `link add` accepts back. It
-# reported the edge address while nothing held its preimage, so stating anything
-# about the edge just made — the plainest next act there is — was refused as a
-# CID this repo holds no file for.
+# The other half of the same rule, with content endpoints: those DO get
+# published, because the link points at them.
 @test
-def "the edge address link add reports can be linked to without a flag" [] {
+def "link add publishes its endpoints and nothing besides" [] {
+    let r = link add "cyber" "prophet" --repo $in.tmp --signer $N
+    let stored = ls (particles-dir $in.root) | get name | each { path basename } | sort
+    assert equal $stored ([$r.record.cid_from $r.record.cid_to] | sort)
+}
+
+# The edge address `link add` reports is not dereferenceable until someone
+# publishes its preimage. Two steps by design: the store gains a file because
+# a writer decided to put it there — ahead of the reference they mean to
+# make — never because a command computed an address on the way.
+@test
+def "an edge is linked to by publishing its preimage first" [] {
     let tmp = $in.tmp
     let born = link add "cyber" "prophet" --repo $tmp --signer $N
+    # Step one refuses, and says so, rather than resolving the address out of
+    # the link file that happens to hold the same bytes.
+    assert error {|| link add "cyber" $born.edge_cid --repo $tmp --signer $N }
+    let published = particle add-edge $born.record.cid_from $born.record.cid_to --repo $tmp
+    assert equal $published $born.edge_cid
     let about = link add "cyber" $born.edge_cid --repo $tmp --signer $N
     assert equal $about.record.cid_to $born.edge_cid
     # ...and it reads back as the edge itself, not as an opaque address.
-    let row = link list --repo $tmp | where link_cid == $about.link_cid | first
+    let row = link list --repo $tmp | where edge_cid == $about.edge_cid | first
     assert equal $row.tgt {cid_from: $born.record.cid_from cid_to: $born.record.cid_to}
 }
 
-# The publish sits before the triple guard's no-op, so re-adding a link written
-# before this rule existed heals the store. Pinned because moving the publish
-# into the guard's `else` branch is the obvious tidy, and it would take the heal
-# with it without failing anything else.
+# One record, one admission rule. `convention confirm A B` mints the same pair
+# record through `resolve-particle`, so publishing it directly has to refuse
+# the same operands — otherwise which command wrote it decides what got in.
 @test
-def "re-adding an existing link restores a missing edge particle" [] {
+def "the publishers apply the same operand rule as every other write command" [] {
+    let tmp = $in.tmp
+    # A CID this repo holds no bytes for is refused, exactly as `link add`
+    # refuses it, and the same flag lets a deliberate forward reference past.
+    assert error {|| particle add-edge $A $B --repo $tmp }
+    assert equal (particle add-edge $A $B --repo $tmp --allow-missing) (derive {cid_from: $A cid_to: $B})
+    # Text is content: published first, then named by its CID.
+    let edge = particle add-edge "cyber" "prophet" --repo $tmp
+    let published = ls (particles-dir $in.root) | get name | each { path basename }
+    let cyber = "cyber" | into binary | cid-v0
+    assert ($cyber in $published)
+    assert ($edge in $published)
+}
+
+# The signer is in the path, so `link add` never sees the triple as bytes —
+# but its address still has to have a publishable preimage, or `confirm A B S`
+# names something no reader can resolve.
+@test
+def "a cyberlink preimage is published the same way, signer included" [] {
     let tmp = $in.tmp
     let born = link add "cyber" "prophet" --repo $tmp --signer $N
-    rm (particle-path $in.root $born.edge_cid)
-    let again = link add "cyber" "prophet" --repo $tmp --signer $N
-    assert equal $again.link_cid $born.link_cid # the record itself was the no-op it always was
-    assert ((particle-path $in.root $born.edge_cid) | path exists) "the missing edge particle was not restored"
+    let expected = derive $born.record
+    let published = particle add-link $born.record.cid_from $born.record.cid_to $N --repo $tmp
+    assert equal $published $expected
+    assert equal (open --raw (particle-path $in.root $expected) | into binary | cid-v0) $expected
 }
 
 # The default this repo's own resolve-particle enforces: a CID it holds no

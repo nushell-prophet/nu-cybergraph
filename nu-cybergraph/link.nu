@@ -1,9 +1,9 @@
 # Create link records in a signer's repo, and read the graph they make.
 
 use _repo.nu graph-root
-use _record.nu [ link-bytes link-cid edge-bytes read-link ]
+use _record.nu [ link-cid edge-bytes edge-cid read-link ]
 use _layout.nu [ signer-dir link-path imported-dir ]
-use _particle.nu [ resolve-particle store-index particle-store ]
+use _particle.nu [ resolve-particle store-index ]
 use _signer.nu [ resolve-signer ]
 use _read.nu [ read-links deref touches ]
 use _validate.nu [ CID_V0_RE ]
@@ -47,27 +47,25 @@ export def add [
         cid_to: (resolve-particle $root $index $cid_to --allow-missing=$allow_missing --literal=$literal)
     }
     let rec = $pair | insert signer $signer_cid
-    # Both derived records are published as particles, and each address comes
-    # back from the store, so what is reported is the address of bytes that
-    # exist.
+    # Both addresses are DERIVED, never published. `particles/` holds bytes a
+    # writer decided to put there, not bytes this command computed on the
+    # way — so the only files `link add` writes to the store are the ones its
+    # endpoints resolved to.
     #
-    # The pair, even though the link file holds the same bytes: the store index
-    # (resolve-particle, deref) walks particles/ only, so without this copy
-    # `link add A <edge>` — a statement about the edge just made — was refused
-    # as a CID this repo holds no file for, which is exactly the reference the
-    # command had just handed out. Not solved by indexing signer directories
-    # instead: conventions publish the pair record they mint (`confirm A B`),
-    # so the index would then see two files for one CID and refuse the store as
-    # ambiguous. It is also what keeps `confirm A B` and `link add A B` — two
-    # writers of the same record — interchangeable preimage publishers.
+    # What that costs: stating something about the edge just made
+    # (`link add A <edge>`) is now two steps — `particle add-edge` puts the
+    # pair record in the store, then its CID can be named. The bytes that
+    # writes are byte-identical to this link file, which looks like the copy
+    # that used to live here; the difference is that a writer decided on it,
+    # for a reference they are about to make. It is also what keeps
+    # `link touching` whole: its walk upward reaches an edge through a store
+    # file, and that file is there whenever someone meant to point at it.
     #
-    # The triple, because the file stopped being its preimage: the cyberlink's
-    # derived CID — the address `confirm A B S` targets — must stay
-    # dereferenceable, so the rule SPEC 3.1 put on the edge record moves to
-    # the triple. Idempotent, so a repeat and a second signer of the same edge
-    # cost nothing.
-    let edge = edge-bytes $pair | particle-store $root
-    let cid = link-bytes $rec | particle-store $root
+    # Not solved by resolving an edge CID out of the link file instead: that
+    # buys one step at the price of a second index beside the store, and speed
+    # is not an argument here (CLAUDE.md, "An academic prototype, not a
+    # product").
+    let edge = edge-cid $pair
     mkdir (signer-dir $root $signer_cid)
     let out = link-path $root $signer_cid $edge
     # The path IS the triple — signer in the directory, edge in the filename —
@@ -91,7 +89,12 @@ export def add [
     } else {
         edge-bytes $pair | save --raw $out
     }
-    {link_cid: $cid edge_cid: $edge path: ($out | cwd-relative) record: $rec}
+    # No link_cid: `edge_cid` addresses the file just written, but the
+    # cyberlink's derived CID addresses nothing until someone publishes its
+    # preimage (`particle add-link`) — and reporting a non-address beside an
+    # address invites treating them alike. `record` carries all three
+    # components, so a caller who wants it computes it.
+    {edge_cid: $edge path: ($out | cwd-relative) record: $rec}
 }
 
 # One link, read: both addresses, the triple, then what its endpoints say.

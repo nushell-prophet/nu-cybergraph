@@ -7,7 +7,7 @@ use ../nu-cybergraph/_deps/cid-v0.nu [ cid-v0 ]
 
 # Fixed triple for golden pinning — same file/signer CIDs as the
 # bostrom-journal bj003 smoke experiment. The pair is what a link file holds;
-# the triple is the particle the writer publishes.
+# the triple is written to no file until someone publishes it.
 def golden-record []: nothing -> record {
     {
         cid_from: "QmUQUHEmv651XCBhiWUQpx2zf4PDts1aXL324ZFyV4QZPF"
@@ -35,8 +35,9 @@ def "golden bytes: alphabetical key order, compact JSON, one trailing newline" [
 }
 
 # The file holds exactly the pair, so its self-address IS the edge address;
-# the published triple particle's self-address IS the cyberlink's derived CID.
-# Both are plain `derive` under the one canon — bj002's two special cases.
+# the triple record's self-address IS the cyberlink's derived CID, whether or
+# not anyone published those bytes. Both are plain `derive` under the one
+# canon — bj002's two special cases.
 @test
 def "both addresses are plain derived CIDs under the one canon" [] {
     assert equal (edge-cid (golden-pair)) (derive (golden-pair))

@@ -8,8 +8,10 @@
 #
 # The argument is the EDGE address, not the cyberlink's derived CID: the two
 # can only be told apart by trying, and a guessed argument fails silently.
-# A caller holding a link CID dereferences it first — `particles/<link-cid>`
-# is the published triple, which names the signer and the pair.
+# A caller holding a link CID dereferences it first: `particles/<link-cid>`
+# holds the triple, which names the signer and the pair. It is there when some
+# act named that cyberlink and published its preimage — no writer publishes it
+# on the caller's behalf.
 
 use _repo.nu graph-root
 use _layout.nu [ signer-dirs link-path cert-path snapshot-dir imported-edge-copies ]

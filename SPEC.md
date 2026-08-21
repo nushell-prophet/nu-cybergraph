@@ -200,7 +200,7 @@ Two derived names, not to be confused:
 
 | name | value | used for |
 |---|---|---|
-| signer CID | CID v0 of the canonical file bytes | the signer directory a link file lives in; the `signer` field of the triple particle; the signer binding at verification |
+| signer CID | CID v0 of the canonical file bytes | the signer directory a link file lives in; the `signer` field of the triple record; the signer binding at verification |
 | fingerprint | sha256 of the base64-decoded key blob, lowercase hex | the pubkey filename, the middle segment of a `.sig` filename, nu-multiproof's principal |
 
 A pubkey file's **name is decoration**.
@@ -316,15 +316,25 @@ The cyberlink — the triple `derive {cid_from, cid_to, signer}` — is computed
 pair from the file, signer from the path.
 It is not the file's name.
 
-**Publishing the triple.** A writer MUST publish the triple record as a store file (3.2) when it writes the link
-— the same rule section 4 puts on every record a convention mints,
-and this is the same record `confirm A B S` mints as its target.
-Without the preimage the cyberlink's derived CID is one no later act can dereference.
-A writer MUST publish the pair record as a store file too, even though the link file holds the same bytes:
-the store (3.2) is the one place derived CIDs are dereferenced,
-and `confirm A B` / `deny A B` mint the same pair record as their target.
+**Neither address is published by the writer.** A writer MUST NOT publish the pair or the triple as a store file when it writes the link.
+The store holds bytes a writer decided to put there,
+never bytes a command derived on the way:
+writing a link points at its two endpoints and at nothing else.
+So `link add` publishes what its endpoints resolve to, and no more.
+
+A derived address becomes dereferenceable when an act names it,
+and publishing the preimage is part of making that act
+— the same rule section 4 puts on every record a convention mints.
+`confirm A B` / `deny A B` mint the pair as their target and publish it;
+`confirm A B S` does the same for the triple;
+naming either in a plain link means publishing it first (`particle add-edge` / `particle add-link`, 3.2).
 Publishing is idempotent,
-so a repeat, a second signer of the same edge, and a convention minting the same pair all write nothing new.
+so a second signer of the same edge and a convention minting the same pair write nothing new.
+
+An implementation MUST NOT close this gap by resolving a derived CID out of the link file that holds the same bytes.
+The bytes are there and the resolution would work,
+but it costs a second index beside the store,
+and it puts a preimage where nothing pointed at one.
 
 A reader MUST enforce both addressing rules,
 from a **single** read of the bytes:
@@ -368,10 +378,25 @@ no newline appended, no encoding transform.
   and still raises for a file that fails its hash.
 
 The store holds content published by a user,
-the instruction and address records minted by conventions (section 4),
-and the pair and triple records of every link (3.1).
-Publishing the derived records is what makes a derived CID readable
-— the record is its own preimage.
+and the instruction and address records minted by conventions (section 4)
+or published deliberately (`particle add-edge`, `particle add-link`) so a later act can name them.
+Publishing a derived record is what makes a derived CID readable
+— the record is its own preimage —
+and it is a decision a writer makes, never a side effect of computing an address (3.1).
+A preimage MAY therefore sit in the store before anything names it
+— the writer publishes it for a reference they are about to make.
+
+A canonical record's preimage MUST be publishable through the implementation's own serializer.
+Hand-writing one is not an alternative:
+any byte string other than the canonical form (2.2) hashes to a different CID,
+and both files are self-addressed, so nothing reports the mistake.
+
+That publisher's operands are admitted by the same rule as every other write command's:
+a CID must resolve to bytes this repo holds, unless the caller says otherwise;
+anything else is content, published first and named by its CID.
+One record MUST NOT have two admission rules
+— a convention minting a pair as its target and a caller publishing that same pair directly are the same record,
+and which command wrote it cannot decide what got in.
 
 Store files are not sealed directly.
 A file is time-anchored the moment a sealed link names its CID,
@@ -383,7 +408,7 @@ so a store file outside the index enters no root
 — the anchor above reaches its bytes only for whoever already holds them.
 A file is **reachable** when a link in this graph names its CID:
 as `cid_from`, `cid_to` or `signer`,
-as one of the pair and triple records the link itself publishes (3.1),
+as the pair or triple record derived from a link, once someone published that preimage (3.1),
 or as an operand inside a record reached that way (section 4),
 applied until nothing new appears.
 A store file that is reachable by none of those is published and linked to nothing,
@@ -501,11 +526,12 @@ then the outer record is serialized.
 
 The edge address is `derive {cid_from: A, cid_to: B}` and the cyberlink's derived CID is `derive {cid_from: A, cid_to: B, signer: S}`
 — bj002's two special cases, which are just records here.
-The first is byte-identical to the link file itself (3.1);
-both are published under `particles/` by every writer that mints them
-— the link writer publishes the pair and the triple (3.1),
-and `confirm A B` / `deny A B` mint the pair as their target —
-so the CID a `confirm` or `deny` targets, in either arity, is always a published preimage.
+The first is byte-identical to the link file itself (3.1),
+which does not make it a store file:
+the link writer publishes neither address (3.1),
+and `confirm A B` / `deny A B` publish the pair because they mint it as their target.
+So the CID a `confirm` or `deny` targets, in either arity, is always a published preimage
+— published by the act that names it.
 
 Reading these edges back means dereferencing the source CID in `particles/`.
 An operand's CID appears as a literal string in every record that names it,
@@ -683,7 +709,8 @@ one row per copy.
 It deliberately does not take the cyberlink CID:
 the two kinds of CID can only be told apart by trying,
 and a guessed argument fails silently
-— a caller holding a link CID dereferences `particles/<link-cid>` first (3.1).
+— a caller holding a link CID dereferences `particles/<link-cid>` first (3.2),
+which resolves when some act named that cyberlink and published its preimage.
 Same checker, same verdict,
 so "verifies here" always means "verifies anywhere".
 
@@ -760,7 +787,7 @@ S = QmddrVz92VH3LqT2i7uXeK4AVh6LyU7zjDiLbSdChPsULr
 The first row is a link file's bytes — the pair;
 its CID is the filename stem in the signer's directory.
 The second row is the same act's triple
-— the particle the writer publishes, whose CID is the cyberlink's derived address.
+— written by no writer, and stored only when someone publishes it (3.2), whose CID is the cyberlink's derived address.
 Reproduce any row with `printf '<bytes>\n' | ipfs add --only-hash --cid-version=0`.
 
 **Signer identity.** The canonical form and the fingerprint are pinned by nu-multiproof (`nu-multiproof/pubkey.nu`'s `@example`, `tests/test_allowed-signers.nu`; the canonicalization itself in `tests/test_pubkey.nu`).

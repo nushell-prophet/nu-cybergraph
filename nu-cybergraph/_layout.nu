@@ -31,11 +31,15 @@ export def signer-dirs [root: path]: nothing -> list<path> {
     list-dirs $root | where ($it | path basename) =~ $CID_V0_RE
 }
 
-# <root>/particles — the particle store, every file self-addressed: instruction and
-# address records (published so a reader can dereference an instruction edge,
-# bj002 "Reading instructions") and content published by `particle add` or by a
-# text argument to a write command. Not in the seal manifest: a stored file is
-# anchored the moment a sealed link names its CID (README "Graph home").
+# <root>/particles — the particle store, every file self-addressed: content
+# published by `particle add` or by a text argument to a write command, and
+# instruction and address records published so a reader can dereference an
+# instruction edge (bj002 "Reading instructions"). A record lands here because
+# a writer put it there — a convention minting it, or `particle add-edge` /
+# `particle add-link` before a plain link names it — never because a command
+# derived it as a side effect.
+# Not in the seal manifest: a stored file is anchored the moment a sealed link names
+# its CID (README "Graph home").
 export def particles-dir [root: path]: nothing -> path {
     $root | path join $PARTICLES_DIR
 }

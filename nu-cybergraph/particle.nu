@@ -3,7 +3,9 @@
 # arguments through.
 
 use _repo.nu graph-root
-use _particle.nu [ particle-store particle-read resolve-arg-bytes ]
+use _particle.nu [ particle-store particle-read resolve-arg-bytes resolve-particle store-index ]
+use _record.nu [ edge-bytes link-bytes ]
+use _signer.nu [ resolve-signer ]
 use _uncommitted.nu [ uncommitted-files stageable ]
 use _commit-proposal.nu [ particle-commit-line ]
 use _fs.nu [ cwd-relative ]
@@ -48,6 +50,72 @@ export def add [
     $bytes | particle-store $root --ext $ext
 }
 
+# Publish the preimage of an edge address — the pair record — and return that
+# address. The components, not a record: a hand-built record with a wrong key
+# set serializes fine and yields an address nothing derives, and nothing
+# reports it, because the file is self-addressed either way. Passing A and B
+# makes that unrepresentable.
+#
+# Why this exists: `link add` publishes neither of the addresses it derives
+# (`particles/` is not a place for bytes a command computed), so a later act
+# naming an edge — `link add X <edge>`, whose endpoint must resolve locally —
+# needs its preimage put there deliberately. The bytes are byte-identical to
+# the link file already on disk; that duplication is accepted, not desired.
+#
+# Timing, stated honestly: this runs BEFORE the reference exists, on the
+# writer's intention to make one. The store therefore holds a record nothing
+# names yet — read as `reachable` when this repo holds the link it derives
+# from (that link seeds both addresses, _read.nu), as `orphan` when it does
+# not. An interim solution, kept until a better one is found.
+#
+# The operands go through `resolve-particle`, the same rule every other write
+# command applies: a CID must resolve to bytes this repo holds (--allow-missing
+# is the escape hatch), and anything else is content, published first and
+# replaced by its CID. `convention confirm A B` mints this very record, so a
+# second policy here would mean one record with two admission rules depending
+# on which command wrote it.
+@example "publish an edge address so a later act can name it" { particle add-edge QmA… QmB… }
+export def "add-edge" [
+    cid_from: string # source vertex: a CID v0, a path to publish, or content to publish as a particle
+    cid_to: string # target vertex: a CID v0, a path to publish, or content to publish as a particle
+    --repo: path # Target repo root (default: git root of current directory)
+    --allow-missing # skip the local-file check on a CID operand (see resolve-particle)
+    --literal # treat a text operand as literal content even if it names a path
+]: nothing -> string {
+    let root = graph-root $repo
+    let index = store-index $root
+    edge-bytes {
+        cid_from: (resolve-particle $root $index $cid_from --allow-missing=$allow_missing --literal=$literal)
+        cid_to: (resolve-particle $root $index $cid_to --allow-missing=$allow_missing --literal=$literal)
+    } | particle-store $root
+}
+
+# The same for a cyberlink address — the triple, the one `confirm A B S`
+# targets. Its bytes exist nowhere else: the link file holds the pair and the
+# signer lives in the path, so nothing on disk is this record until this
+# command writes it.
+# The signer goes through `resolve-signer`, not `resolve-particle`: a signer
+# names an identity, so a bare string is published as its own bytes and never
+# opened as a path — the same rule `link add --signer` and every convention
+# verb apply.
+@example "publish a cyberlink address so a later act can name it" { particle add-link QmA… QmB… QmS… }
+export def "add-link" [
+    cid_from: string # source vertex: a CID v0, a path to publish, or content to publish as a particle
+    cid_to: string # target vertex: a CID v0, a path to publish, or content to publish as a particle
+    signer: string # signer whose cyberlink this is: a CID v0, or content published as a particle
+    --repo: path # Target repo root (default: git root of current directory)
+    --allow-missing # skip the local-file check on a CID operand (see resolve-particle)
+    --literal # treat a text operand as literal content even if it names a path
+]: nothing -> string {
+    let root = graph-root $repo
+    let index = store-index $root
+    link-bytes {
+        cid_from: (resolve-particle $root $index $cid_from --allow-missing=$allow_missing --literal=$literal)
+        cid_to: (resolve-particle $root $index $cid_to --allow-missing=$allow_missing --literal=$literal)
+        signer: (resolve-signer $root $signer)
+    } | particle-store $root
+}
+
 # Read a stored file's exact bytes by CID. The argument is the bare 46-char
 # CID — never a filename or path — and the file is found whatever extension it
 # carries. The bytes are verified to hash back to the CID before being
@@ -81,8 +149,9 @@ export def cat [
 # graph reaches it. An empty table means every byte the graph names is already
 # in the index, which is the state `seal` requires.
 #
-# Why this command exists at all: `link add` publishes bytes as a side effect of
-# stating an edge, so a store grows without anyone deciding to add a file. The
+# Why this command exists at all: `link add` publishes its text endpoints as
+# particles, so a store grows out of stating an edge rather than out of a
+# `particle add` someone typed. The
 # seal manifest is every git-tracked file under the graph home, so those files
 # are sealed only if they were committed first — and until now nothing said so
 # or listed them.

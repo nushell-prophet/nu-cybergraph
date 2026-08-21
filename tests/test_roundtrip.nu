@@ -1268,13 +1268,13 @@ def "link imported decodes every landed bundle, across signers" [] {
     # Own graph stays untouched by the import — the boundary `list` draws
     assert equal (link list --repo $c.repo | length) 0
 
-    let a_row = $rows | where link_cid == $aq.link_cid | first
+    let a_row = $rows | where edge_cid == $aq.edge_cid | first
     assert equal $a_row.signer (signer-cid $a.home)
     assert equal $a_row.cid_from $aq.record.cid_from
     assert equal $a_row.op "question"
     assert equal $a_row.src {about: $P1, op: "question"}
 
-    let b_row = $rows | where link_cid == $bp.link_cid | first
+    let b_row = $rows | where edge_cid == $bp.edge_cid | first
     assert equal $b_row.signer (signer-cid $b.home)
     assert equal $b_row.op null "a plain edge's cid_from is not an instruction — op must stay null"
 }
@@ -1343,14 +1343,14 @@ def "an unsealed own copy does not hide a verifiable imported copy" [] {
     assert equal (verify $born.edge_cid --repo $b.repo | length) 2
 }
 
-# Pins behaviour that rests on no argument: import publishes the triple record
-# under this repo's particles/. It used to be load-bearing — the sealed receipt
-# asserted that CID and nothing here dereferenced it — but the receipt states
-# the act's components now, so the reason is gone and none replaced it. Kept by
-# the user's intuition, and pinned so that a later change to it is a decision
-# rather than an accident. See import.nu for why no rationale is written down.
+# Import takes custody of an act; it does not speak about one. So the link CID
+# it returns is derived and its preimage is not written here — the custodian's
+# store gains a file when the custodian names the cyberlink, not when the bytes
+# arrive. The previous behaviour minted it, on a reason that had already
+# expired (the sealed receipt states the act's components now, so nothing here
+# needed that CID dereferenced).
 @test
-def "import publishes the triple particle for the link CID it returns" [] {
+def "import derives the link CID it returns and publishes no preimage for it" [] {
     let tmp_dir = $in.tmp_dir
     let a = make-signer $tmp_dir "a"
     let born = link add $P1 $P2 --repo $a.repo --allow-missing
@@ -1359,11 +1359,14 @@ def "import publishes the triple particle for the link CID it returns" [] {
 
     let b = make-signer $tmp_dir "b"
     let landed = import $out --repo $b.repo
-    let particle = $b.home | path join particles $landed.link
-    assert ($particle | path exists) "the imported link CID has no preimage in this repo's store"
-    let bytes = open --raw $particle | into binary
-    assert equal ($bytes | cid-v0) $landed.link
-    assert equal $bytes (record-bytes $born.record)
+    assert equal $landed.link ((record-bytes $born.record) | cid-v0)
+    assert not (($b.home | path join particles $landed.link) | path exists)
+
+    # And the custodian can still publish it deliberately, to say something
+    # about the cyberlink it now holds. --allow-missing because the endpoints'
+    # bytes are in the read-only imported copy, not in this repo's own store:
+    # the one case the flag exists for, a reference to bytes held elsewhere.
+    assert equal (particle add-link $born.record.cid_from $born.record.cid_to $born.record.signer --repo $b.repo --allow-missing) $landed.link
 }
 
 # The layout's whole point: one edge filename may exist under several signer

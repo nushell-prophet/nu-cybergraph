@@ -12,10 +12,10 @@
 #
 # The cyberlink — `derive {cid_from, cid_to, signer}`, bj002's triple — is
 # still defined and still computed: pair from the file, signer from the path.
-# It stopped being the file's name; the writer publishes the triple record as
-# a particle instead, so the derived CID keeps a published preimage
-# (`confirm A B S` targets that address, and without the preimage nothing
-# dereferences it).
+# It is not the file's name, and the writer publishes no preimage for it: the
+# store holds bytes something points at. `confirm A B S` targets that address
+# and publishes the record as it mints it; anything else naming it publishes
+# it first (`particle add-link`).
 #
 # Writers MUST emit canonical bytes (the one canon of _derive.nu:
 # alphabetical key order, compact JSON, one trailing newline) so independent
@@ -34,8 +34,9 @@ use _validate.nu [ assert-keys assert-cids CID_V0_RE ]
 # edge over the graph (`convention claimed-at`).
 export const EDGE_KEYS = [cid_from cid_to]
 
-# The triple — the cyberlink record the writer publishes as a particle. Its
-# derived CID is the act's address, the one `confirm A B S` computes.
+# The triple — the cyberlink record. Its derived CID is the act's address,
+# the one `confirm A B S` computes; `particle add-link` is what puts the
+# preimage in the store, and no writer does it on the caller's behalf.
 export const LINK_KEYS = [cid_from cid_to signer]
 
 # Enforce the on-disk shape: exact EDGE_KEYS set, CID v0 values throughout.
@@ -62,16 +63,16 @@ export def edge-cid [rec: record]: nothing -> string {
     edge-bytes $rec | cid-v0
 }
 
-# Canonical bytes of the triple — what `link add` publishes as a particle.
-# Bytes and not only the CID: the writer stores these bytes and takes the
-# address back from the store, so the address it reports and the preimage it
-# stores cannot drift apart.
+# Canonical bytes of the triple — the preimage `particle add-link` stores so
+# an act about this cyberlink can name it. Exported as bytes and not only as a
+# CID because that publisher stores exactly these bytes.
 export def link-bytes [rec: record]: nothing -> binary {
     validate-link $rec
     record-bytes $rec
 }
 
-# The cyberlink's derived CID — the published particle's address.
+# The cyberlink's derived CID — the address a preimage is published under
+# (`particle add-link`), not an address anything writes by itself.
 export def link-cid [rec: record]: nothing -> string {
     link-bytes $rec | cid-v0
 }

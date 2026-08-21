@@ -178,11 +178,13 @@ def role-path [prefix: string path: string]: nothing -> string {
 #
 # Five seeds per link, not the pair's two. The signer is named by the path, and
 # a signer published as a particle (`link add --signer alice`) has its bytes in
-# the store like any endpoint. The other two are the records `link add` itself
-# publishes: the pair and the triple. Those are addresses this graph hands out —
-# `confirm A B S` targets the triple — so a store file holding one is as
-# reachable as an endpoint, and a sweep that missed them would call the writer's
-# own output an orphan.
+# the store like any endpoint. The other two are the link's derived addresses,
+# the pair and the triple. `link add` publishes neither, but a convention
+# minting one as its target does, and so does `particle add-edge`/`add-link`
+# run ahead of a reference — and those bytes are then as reachable as an
+# endpoint. Without the seeds a convention's own target
+# record would sweep up as an orphan, which `stageable` never stages, so it
+# would silently miss every root.
 #
 # Then the step `touches` walks upward, walked downward: an instruction preimage
 # names its operands as CIDs, so dereferencing a seed adds them, and the

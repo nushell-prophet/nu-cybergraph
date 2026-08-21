@@ -55,9 +55,10 @@ def "link add leaves every byte it published outside the index" [] {
 
     let rows = uncommitted-files $g.root
 
-    # Four files for one link: the two endpoints, and the two records link add
-    # publishes as their own particles — the pair and the triple.
-    assert equal ($rows | length) 4
+    # Two files for one link: its endpoints. The edge and cyberlink addresses
+    # the command reports are derived, and a derived address gets a preimage
+    # only when someone publishes it (`particle add-edge` / `add-link`).
+    assert equal ($rows | length) 2
     assert ($rows | all {|r| $r.state == "reachable" })
     assert ($rows | all {|r| not $r.tracked })
 }
@@ -74,7 +75,7 @@ def "a staged store file counts as tracked and leaves nothing to stage" [] {
 
     let rows = uncommitted-files $g.root
 
-    assert equal ($rows | length) 4
+    assert equal ($rows | length) 2
     assert ($rows | all {|r| $r.tracked })
     assert equal (stageable $rows) []
 }
@@ -164,10 +165,10 @@ def "the proposal names the files it stages and the addresses they carry" [] {
 
     let line = particle-commit-line (stageable (uncommitted-files $g.root)) $g.root
 
-    assert str contains $line "particles: publish 4 files the graph names"
-    assert str contains $line $out.link_cid
+    assert str contains $line "particles: publish 2 files the graph names"
+    assert str contains $line $out.record.cid_from
     assert str contains $line $"git -C $repo add -- "
-    assert str contains $line $"particles/($out.edge_cid)"
+    assert str contains $line $"particles/($out.record.cid_to)"
 }
 
 @test
@@ -196,12 +197,12 @@ def "the proposed block runs, and the seal it unblocks covers the bytes" [] {
 
     assert equal (uncommitted-files $g.root) []
     let committed = ^git -C $g.repo show --name-only --format= HEAD | lines | where $it != ""
-    assert equal ($committed | length) 4
+    assert equal ($committed | length) 2
     assert ($committed | all {|f| $f | str starts-with "cybergraph/particles/" })
 
     let sealed = seal --repo $g.repo --no-stamp
     let manifest = open ($g.root | path join multiproofs tree-hashes.csv) | get filepath
-    assert equal ($manifest | where {|p| $p | str starts-with "particles/" } | length) 4
+    assert equal ($manifest | where {|p| $p | str starts-with "particles/" } | length) 2
     assert equal $sealed.newborn 1
 }
 

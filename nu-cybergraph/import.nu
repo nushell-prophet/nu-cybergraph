@@ -13,8 +13,7 @@ use _repo.nu graph-root
 use _layout.nu [ imported-dir receipt-relpath handoff-filename ]
 use _fs.nu [ copy-tree cwd-relative ]
 use _receipt.nu [ receipt-bytes bundle-manifest custody-layers ]
-use _record.nu [ link-bytes ]
-use _particle.nu [ particle-store ]
+use _record.nu [ link-cid ]
 use _signer.nu [ own-signer ]
 use _verify-helpers.nu [ verify-bundle ]
 
@@ -41,19 +40,15 @@ export def main [
     # The receipt itself spells the act out in fields instead (_receipt.nu),
     # so nothing it asserts needs dereferencing.
     #
-    # The triple particle is still published, and this is an INTUITIVE
-    # decision kept deliberately without a justification. The reason that put
-    # it here was that the sealed receipt asserted a CID which
-    # dereferenced to nothing in the custodian's own repo; the receipt states
-    # the components now, so that reason is gone and nothing has replaced it.
-    # The user chose to keep the mint anyway rather than reason one out.
-    #
-    # So do not read the store call as load-bearing, and do not invent a
-    # rationale for it — writing one down is what this comment exists to
-    # prevent. If it ever gets in the way, deleting it and computing the
-    # returned CID with `link-cid` is the whole change.
+    # The triple is DERIVED here, not published. It used to be minted into the
+    # custodian's store, and that comment said plainly the mint was intuitive
+    # and load-bearing on nothing — so it went with the same rule that took
+    # the mint out of `link add`: the store holds bytes something points at,
+    # and importing an act points at nothing. Until this custodian makes an
+    # act about the imported cyberlink, its CID dereferences to nothing here,
+    # which is the honest state: nobody has said anything about it yet.
     let edge_cid = $v.leaf.filepath | path parse | get stem
-    let link_cid = link-bytes $v.record | particle-store $root
+    let link_cid = link-cid $v.record
     let dest = imported-dir $root | path join $v.signer.cid $edge_cid
     if ($dest | path exists) {
         error make {msg: $"already imported: ($dest)"}
