@@ -267,6 +267,8 @@ cybergraph/
   certs/<signer-cid>/<edge-cid>.cert.json   # frozen birth certificates, mirroring the layout     3.3
   seals/<root-hex-12>/                      # per-seal root statement + signatures                3.4
   exports/<signer-cid>/<edge-cid>/          # bundles this repo built                             6
+  imported/<signer-cid>/<edge-cid>/         # bundles landed from others, read-only               10
+  receipts/<author-cid>/<edge-cid>.receipt.json   # custody receipts (+ .receipt.cert.json)       10
   multiproofs/pubkeys/<fingerprint>.pub     # the registered key, canonical bytes                 2.4
   multiproofs/                              # the rest of the proof layer                         7
 ```
@@ -275,6 +277,27 @@ Signer directories sit at the graph root
 and are told from the reserved directories by form alone:
 a directory named by a CID v0 is a signer's,
 and the reserved names never match that pattern.
+
+**The tree above is closed.**
+It is the whole set of what may exist under the graph home,
+and an implementation MUST refuse anything else there rather than ignore it
+— a hand-written `README.md` or `.gitignore` at `cybergraph/` included,
+because a seal signs whatever is committed under the graph home,
+and what a signer has not checked they must not be made to attest.
+Anything written by hand belongs beside the graph home, not inside it.
+`multiproofs/` is the one directory named here and governed elsewhere:
+it is the proof layer's (section 7),
+so an implementation recognises it and does not police its contents.
+Nor does the rule reach inside a bundle under `exports/` or `imported/`,
+which is one artifact checked as a whole (section 8),
+or inside a seal snapshot, which the proof layer owns.
+
+Two refusals carry it, and they answer different questions.
+A reader MUST refuse a graph home whose **top level** it does not recognise,
+rather than report the graph as empty:
+a reader that cannot tell a foreign layout from an empty one turns a silent
+misread into every count, tally and walkthrough built on it.
+A seal MUST refuse on the **whole** closed set (5), because it is the moment those bytes get signed.
 The pubkey filename is the reference implementation's choice and carries no authority
 — see 2.4.
 
@@ -554,6 +577,12 @@ That the path enters the signed root is also what binds each pair to its signer 
 Normative order:
 
 1. Refuse if no pubkey is registered.
+1a. Refuse if anything under the graph home falls outside the closed tree of section 3.
+   Step 4 stages those directories wholesale,
+   so a file the layout cannot describe would enter this seal's signed manifest unvalidated
+   — attested by the signer while none of the checks that make an attestation mean something apply to it.
+   The recovery is to remove it or move it out, and there is no override:
+   a flag to sign past an unnamed object is the thing the closed set exists to prevent.
 2. Read and validate **every** link record (3.1)
    — walking the signer directories, CID-v0-named directories at the root —
    and check that whatever stands at each certificate path is the frozen proof for that exact leaf.
@@ -563,9 +592,10 @@ Normative order:
    The manifest is git-tracked files,
    so such a file enters no root while the link naming it is signed and frozen
    — a certificate proving an edge whose endpoint bytes were never attested.
-   An implementation MAY offer an explicit override for sealing without those bytes,
-   and MUST NOT let it also skip the store's layout rule:
-   a name under `particles/` that is no address MUST refuse either way.
+   An implementation MAY offer an explicit override for sealing without those bytes.
+   It never reaches the store's layout rule:
+   a name under `particles/` that is no address is refused by step 1a,
+   which no override touches.
    Publishing is the operator's act,
    so this step refuses rather than staging on their behalf.
 4. `git add` the non-empty ones of the signer directories, `certs/` and `seals/`

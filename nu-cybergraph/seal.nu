@@ -7,7 +7,7 @@
 
 use _repo.nu graph-root
 use _fs.nu [ list-files copy-file move-file cwd-relative ]
-use _layout.nu [ signer-dirs link-files certs-dir cert-path snapshot-dir seals-dir receipts-dir receipt-files receipt-cert-path receipt-relpath CERTS_DIR SEALS_DIR IMPORTED_DIR RECEIPTS_DIR ]
+use _layout.nu [ signer-dirs link-files certs-dir cert-path snapshot-dir seals-dir receipts-dir receipt-files receipt-cert-path receipt-relpath strays CERTS_DIR SEALS_DIR IMPORTED_DIR RECEIPTS_DIR ]
 use _record.nu [ read-link ]
 use _validate.nu [ CID_V0_RE ]
 use _signer.nu [ own-signer ]
@@ -129,22 +129,24 @@ export def main [
         assert-frozen-proof (receipt-cert-path $root $r.author $r.edge) (receipt-relpath $r.author $r.edge)
     }
 
-    # The sweep above sees only what `receipt-files` walks — .receipt.json
-    # files inside CID-named author directories — while `$stage` below
-    # git-adds receipts/ WHOLESALE. Anything else at the top of receipts/ (a
-    # flat file, a hand-named directory — including a receipt at the
-    # pre-edge-refactoring flat location) would enter every seal's signed
-    # manifest unvalidated and never get a frozen proof: attested by the
-    # signer while the custody-freeze discipline silently does not apply to
-    # it. Refused before staging, for the sweep's own recovery reason:
-    # removing the node is the whole fix.
-    let stray = if ((receipts-dir $root) | path exists) {
-        ls (receipts-dir $root)
-        | get name
-        | where {|e| ($e | path type) != "dir" or ($e | path basename) !~ $CID_V0_RE }
-    } else { [] }
+    # `$stage` below git-adds the graph home's directories WHOLESALE, so
+    # anything sitting in them that the layout does not describe enters this
+    # seal's signed manifest unvalidated: attested by the signer while none of
+    # the checks that make an attestation mean something — self-addressing,
+    # the pre-seal sweep, the certificate freeze — apply to it. Refused before
+    # staging, and the recovery is the whole fix: remove the node and seal
+    # again.
+    #
+    # One rule at one point, and it replaces two near-copies of itself: the
+    # receipts-only version that used to stand here, and the refusal in
+    # `_uncommitted.nu` for a name under particles/ that is no address. Both
+    # were the same invariant stated where it happened to bite first. The
+    # tree it enforces is SPEC section 3, which this turns from prose into a
+    # check — see `_layout.nu strays`.
+    let stray = strays $root
     if ($stray | is-not-empty) {
-        error make {msg: $"not custody layout under receipts/: ($stray | each { cwd-relative } | str join ', ') — only <author-cid>/ directories live there, and the pre-seal sweep cannot validate anything else, so a seal would sign it unchecked. Remove it and seal again"}
+        let named = $stray | each {|r| $"($r.path | cwd-relative) \(($r.under | path basename) holds ($r.allowed))" } | str join ', '
+        error make {msg: $"not the graph layout: ($named) — a seal signs whatever is committed under the graph home, so it refuses while it reaches a file the layout does not describe. Remove it and seal again, or move it beside the graph home rather than inside it. `nu-cybergraph strays` lists them without sealing"}
     }
 
     # Stage the cybergraph dirs — the signer directories holding the link

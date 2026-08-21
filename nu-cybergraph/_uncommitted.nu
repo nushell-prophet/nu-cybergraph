@@ -9,8 +9,7 @@
 # covers, while the link naming it is signed and frozen. That gap used to be
 # closed only by the operator remembering to commit `particles/` before sealing.
 
-use _layout.nu [ particles-dir ]
-use _particle.nu [ store-cid ]
+use _layout.nu [ particles-dir store-cid ]
 use _read.nu [ reachable-cids ]
 
 # The store files git does not hold clean, one row each — `file` absolute,
@@ -58,10 +57,13 @@ export def uncommitted-files [root: path]: nothing -> table {
         # which is the right answer: a name needing quotes is not an address.
         let rel = $line | str substring 3.. | split row " -> " | last
         let file = $top | path join $rel
+        # A name under particles/ that is no address reads as null here and
+        # stays null in the row. It used to be refused on the spot; that
+        # refusal is now `strays`, one rule over the whole graph home rather
+        # than this one directory — and `seal`, the reason it mattered,
+        # enforces it before staging anything. A reading reports what is
+        # there; refusing is the seal's job.
         let cid = store-cid $file
-        if $cid == null {
-            error make {msg: $"not a store address: ($rel) — particles/ holds <cid> and <cid>.<ext> files and nothing else, and a seal would catalogue this one unchecked. Remove it, or publish its bytes with `particle add`"}
-        }
         # A tracked file deleted from the working tree: nothing to size, and
         # nothing to stage either. Reported rather than dropped — the graph
         # names bytes that are no longer here, and that is worth seeing.

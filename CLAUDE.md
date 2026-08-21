@@ -73,6 +73,15 @@ or park a note in `todo/`.
   and `seal chain` refuses a gap
   — a missing `seals/<root12>/` snapshot is certificates that verify against nothing,
   not a shorter list.
+- The graph home is a closed set:
+  SPEC section 3's tree is the whole of what may sit under it,
+  and `_layout.nu strays` is that drawing as a check.
+  `seal` refuses on the whole set with no override
+  — it stages those directories wholesale, so an undescribed file would be signed unchecked —
+  while every reading refuses on the top level alone, through `graph-root`,
+  because a reader that cannot tell a foreign layout from an empty one answers `[]` and is believed.
+  The rule recognises `multiproofs/` without policing it,
+  and stops at a bundle's edge under `exports/` and `imported/`.
 - The store is committed before the seal, not after:
   the manifest is every git-tracked file under the graph home,
   so a `particles/` file outside the index enters no root

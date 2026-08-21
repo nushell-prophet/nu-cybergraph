@@ -4,7 +4,7 @@
 # comfortable: a CID passes through untouched, anything else becomes a file
 # first.
 
-use _layout.nu [ particles-dir particle-path PARTICLE_EXT_RE ]
+use _layout.nu [ particles-dir particle-path store-cid PARTICLE_EXT_RE ]
 use _validate.nu [ CID_V0_RE ]
 use _fs.nu list-files
 use _deps/cid-v0.nu [ cid-v0 ]
@@ -25,19 +25,6 @@ export def store-index [root: path]: nothing -> record {
             $acc | upsert $cid (($acc | get --optional $cid | default []) ++ [$p])
         }
     }
-}
-
-# The address a store filename claims — `<cid>` or `<cid>.<ext>` — or null when
-# the name is not a store file at all. The one place that rule is spelled out,
-# so the index and a reader sorting search hits cannot disagree about what
-# belongs to the store.
-export def store-cid [file: path]: nothing -> any {
-    let base = $file | path basename
-    let cid = $base | split row "." | first
-    if $cid !~ $CID_V0_RE { return null }
-    let ext = $base | str substring (($cid | str length) + 1)..
-    if ($base != $cid) and ($ext !~ $PARTICLE_EXT_RE) { return null }
-    $cid
 }
 
 # All store files addressing a CID: `<cid>` bare or `<cid>.<ext>`. The store

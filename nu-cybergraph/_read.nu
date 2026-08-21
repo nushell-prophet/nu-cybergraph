@@ -14,8 +14,8 @@
 # file, so anything published in that shape answers this test. A reader gets
 # "this parses as an instruction", never "this was meant as one".
 
-use _layout.nu [ signer-dirs link-files particles-dir ]
-use _particle.nu [ index-find particle-verify store-cid store-index ]
+use _layout.nu [ signer-dirs link-files particles-dir store-cid ]
+use _particle.nu [ index-find particle-verify store-index ]
 use _record.nu [ read-link link-cid EDGE_KEYS ]
 use _validate.nu [ CID_V0_RE ]
 use _fs.nu list-files
