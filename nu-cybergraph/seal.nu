@@ -176,10 +176,11 @@ export def main [
     # Measured over five consecutive seals with nothing added between them: five
     # distinct roots, `seals/` grown 1 -> 5 directories, manifest rows 3, 10, 13,
     # 16, 19. The +7 at seal 2 is `certs/`, the signer's certificate directory
-    # under it, the first certificate and the `seals` parent row all entering at
-    # once; +3 per seal after that, being one snapshot
-    # directory and its two files. What it buys is the continuity above — each
-    # seal re-attests the root statements and signatures of every seal before it.
+    # under it, the first certificate, the `seals` parent row, and the first
+    # snapshot directory with its two files, all entering at once; +3 per seal
+    # after that, being one snapshot directory and its two files. What it buys
+    # is the continuity above — each seal re-attests the root statements and
+    # signatures of every seal before it.
     # What it costs, with stamping on, is a fresh signature and a calendar round
     # trip per empty run, while README advises sealing on every append.
     #

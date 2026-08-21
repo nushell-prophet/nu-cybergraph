@@ -162,7 +162,8 @@ export def custody-layer-dirname [index: int signer_cid: string]: nothing -> str
 # proof dir it leaves from: the bundle root for the author, the sender's
 # custody layer for a custodian. Named by the edge, like every file at a
 # bundle's root — one act per bundle, so the bare edge is unambiguous; the
-# act's full identity stays in the handoff's own `link` field.
+# act's full identity is spelled out inside, as `cid_from`, `cid_to` and
+# `signer` (_handoff.nu). v1 carried it as one derived CID in a `link` field.
 export def handoff-filename [edge_cid: string]: nothing -> string {
     $"($edge_cid).handoff.json"
 }

@@ -3,7 +3,7 @@
 # What is under test is one invariant: the seal manifest is every git-tracked
 # file under the graph home, so a store file outside the index is bytes no root
 # covers — while the link naming it is signed and frozen all the same. `particle
-# status` is the reading, and `seal` refuses on it.
+# uncommitted` is the reading, and `seal` refuses on it.
 use std/assert
 use std/testing *
 

@@ -28,7 +28,7 @@ use _fs.nu [ list-dirs cwd-relative ]
 export def add [
     cid_from: string # source vertex: a CID v0, a path to publish, or content to publish as a particle
     cid_to: string # target vertex: a CID v0, a path to publish, or content to publish as a particle
-    --signer: string # signer: a CID v0, or content published as a particle — never a path (default: CID of the single registered pubkey)
+    --signer: string # signer: a CID v0, or content published as a particle — never a path (default: this repo's own identity, the key it signs with)
     --repo: path # Target repo root (default: git root of current directory)
     --allow-missing # skip the local-file check on a CID endpoint (see resolve-particle)
     --literal # treat a text endpoint as literal content even if it names a path

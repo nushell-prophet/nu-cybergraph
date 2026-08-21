@@ -1,7 +1,7 @@
 # Verify a portable bundle directory — the command a stranger runs.
 #
-# README "Portability" claims anyone can check a received bundle offline with
-# no access to the origin repo, and this file is the command behind that claim:
+# README "Bundles, import, provenance" claims anyone can check a received bundle
+# offline with no access to the origin repo, and this file is that claim's command:
 # a public name over the checker in `_verify-helpers.nu`, and nothing more. No
 # other entry point answers it — `verify` takes an edge CID and looks in this
 # repo's signer directories, certs/ and imported/; `import` needs an initialized

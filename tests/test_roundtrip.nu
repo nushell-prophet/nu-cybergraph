@@ -268,8 +268,9 @@ def "a verify that fails deep still carries the real cause" [] {
     assert ($err | str contains "ssh-keygen is not on PATH") $"the cause did not survive the cleanup: ($err)"
 }
 
-# The README's portability claim, run as a stranger runs it: a bundle arrives,
-# and the recipient checks it with no repo, no registered key and no network.
+# README "Bundles, import, provenance" — anyone verifies it offline — run as a
+# stranger runs it: a bundle arrives, and the recipient checks it with no repo,
+# no registered key and no network.
 # Every other test here verifies from inside a repo that has been through
 # `init`, so none of them can tell a real portability property from a
 # dependency on local state that happens to be there.
