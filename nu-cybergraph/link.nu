@@ -126,7 +126,7 @@ def statement [index: record l: record]: nothing -> record {
 # by `verify` against its birth seal, and mixing it in here would silently turn
 # a reading of what THIS signer said into a reading of everyone — the exact
 # distinction aggregation rests on.
-@example "every update edge with the record that states it" { link list | where op == "update" | select link_cid src cid_to }
+@example "every edge update with the record that states it" { link list | where op == "update_edge" | select link_cid src cid_to }
 export def list [
     --repo: path # Repo root (default: git root of current directory)
 ]: nothing -> table {
@@ -170,9 +170,9 @@ export def imported [
 #
 # `role` is where it sits: `cid_from`, `cid_to` or `signer` for the record's
 # own fields, `cid_from.about` for an operand inside an instruction's source
-# record, `cid_to.cid_from` for a field of the edge a `confirm` speaks about.
-# The distinction is the whole answer: as `cid_to` of an update the particle is
-# the new version, as `cid_from.about` it is the replaced one. A link that names
+# record, `cid_to.cid_from` for a field of the edge a `confirm-edge` speaks about.
+# The distinction is the whole answer: as `cid_to` of an `update_particle` the
+# particle is the new version, as `cid_from.about` it is the replaced one. A link that names
 # the CID twice returns twice — one act stating the same address in two
 # positions is a fact about the act, not a duplicate to be swept up.
 #

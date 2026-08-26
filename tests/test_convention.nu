@@ -20,8 +20,10 @@ const S = "QmddrVz92VH3LqT2i7uXeK4AVh6LyU7zjDiLbSdChPsULr"
 # `printf '<record>\n' | ipfs add --only-hash --cid-version=0`. Changing the
 # serialization breaks every derived CID — this test is the pin, same role as
 # test_record.nu's GOLDEN_CID.
-const CONFIRM = "QmcLFo8UMWWuUP7ruztAW5C1zPwmF7GTZs8X6Lig4pXkBh" # {"op":"confirm"}
-const DENY = "QmU8kL28M7yecZ5iPGJZ3e89fytWFzLszU3QtKRj5hV2kK" # {"op":"deny"}
+const CONFIRM_EDGE = "QmcqM2jDzeLmPQYRVtMvJypmo8NS7xGh2HNgVLFepL5QKQ" # {"op":"confirm_edge"}
+const CONFIRM_LINK = "QmTJipuBLbsHCgRRe9BrGeGbZFFNoYFwzbiEQgGzDpaHNj" # {"op":"confirm_link"}
+const DENY_EDGE = "QmXegbm1GjDayyetHt87fvAicrE42SQqfd7G4Gwnr1SSr5" # {"op":"deny_edge"}
+const DENY_LINK = "QmZ27sgjKKC2HDS6o7Kk1L8PCANGxArGRxgNcay9ENC2jP" # {"op":"deny_link"}
 const AGREE = "QmTswdDR4inURY4GeWGvmL9S8xrDZjfiGEyeUUZzUNRNYk" # {"op":"agree"}
 const DISAGREE = "QmbQUXxqMrFA6zGYmgjvbFKyywS7Gcbb3afb3wqG6s7r6J" # {"op":"disagree"}
 const EDGE_AB = "QmawrHuBDdcSRCPumzsKfsMi5FJne8xai9WNPAdr3NmLBV" # {"cid_from":A,"cid_to":B} — the edge address
@@ -34,19 +36,21 @@ const CYBERLINK_ABS = "Qme4L2P7QwNoijw6HzYVrqrrtk99oj1XvJHvAb9yobHVLe" # {"cid_f
 def "a convention publishes nothing when the repo has no signer identity" [] {
     let tmp = $in.tmp
     assert error {|| convention agree "bostrom" --repo $tmp }
-    # `confirm` and `deny` reach the store before `edge` does — they publish
-    # their own target through `_publish.nu` — so they resolve the signer
-    # themselves, or a refused act leaves its target record behind. Both
-    # arities of one verb, since `deny` shares the same `subject`.
-    assert error {|| convention confirm $A $B --repo $tmp --allow-missing }
-    assert error {|| convention deny $A $B $S --repo $tmp --allow-missing }
+    # The confirm and deny verbs reach the store before `edge` does — they
+    # publish their own target through `_publish.nu` — so they resolve the
+    # signer themselves, or a refused act leaves its target record behind. One
+    # verb of each shape, since all four publish the same way.
+    assert error {|| convention confirm-edge $A $B --repo $tmp --allow-missing }
+    assert error {|| convention deny-link $A $B $S --repo $tmp --allow-missing }
     assert not ((particles-dir ($tmp | path join cybergraph)) | path exists)
 }
 
 @test
 def "derive golden CIDs pin the record canon" [] {
-    assert equal (derive {op: "confirm"}) $CONFIRM
-    assert equal (derive {op: "deny"}) $DENY
+    assert equal (derive {op: "confirm_edge"}) $CONFIRM_EDGE
+    assert equal (derive {op: "confirm_link"}) $CONFIRM_LINK
+    assert equal (derive {op: "deny_edge"}) $DENY_EDGE
+    assert equal (derive {op: "deny_link"}) $DENY_LINK
     assert equal (derive {op: "agree"}) $AGREE
     assert equal (derive {op: "disagree"}) $DISAGREE
     assert equal (derive {cid_from: $A cid_to: $B}) $EDGE_AB
@@ -55,7 +59,7 @@ def "derive golden CIDs pin the record canon" [] {
 
 @test
 def "record-bytes emits alphabetical keys, compact JSON, one trailing newline" [] {
-    assert equal (record-bytes {op: "deny"} | decode) "{\"op\":\"deny\"}\n"
+    assert equal (record-bytes {op: "deny_edge"} | decode) "{\"op\":\"deny_edge\"}\n"
     # Keys given out of canonical order come out alphabetical.
     assert equal (record-bytes {op: "quote" about: $A} | decode) $"{\"about\":\"($A)\",\"op\":\"quote\"}\n"
 }
@@ -80,7 +84,7 @@ def cleanup [] {
     rm --recursive --force $in.tmp
 }
 
-# The subject signer of `confirm A B S` is an identity, not a stored particle.
+# The subject signer of `confirm-link A B S` is an identity, not a stored particle.
 # It used to be resolved as an ordinary operand, so confirming anyone's
 # cyberlink was refused with "no local file" unless the caller passed
 # --allow-missing — which also drops the check on A and B — or published a
@@ -90,13 +94,13 @@ def cleanup [] {
 @test
 def "confirming a cyberlink does not demand the subject signer in the store" [] {
     let tmp = $in.tmp
-    let r = convention confirm $A $B $S --repo $tmp --signer $S --allow-missing
+    let r = convention confirm-link $A $B $S --repo $tmp --signer $S --allow-missing
     assert equal $r.record.cid_to $CYBERLINK_ABS
     # And with both endpoints local, no flag at all is needed — the signer is
     # not what the check is about.
     let a = particle add "cyber" --repo $tmp
     let b = particle add "prophet" --repo $tmp
-    let r2 = convention confirm $a $b $S --repo $tmp --signer $S
+    let r2 = convention confirm-link $a $b $S --repo $tmp --signer $S
     assert equal $r2.record.cid_to (derive {cid_from: $a cid_to: $b signer: $S})
 }
 
@@ -107,9 +111,9 @@ def "the convention target and the public publisher agree" [] {
     let tmp = $in.tmp
     let a = particle add "cyber" --repo $tmp
     let b = particle add "prophet" --repo $tmp
-    let confirmed = convention confirm $a $b $S --repo $tmp --signer $S
+    let confirmed = convention confirm-link $a $b $S --repo $tmp --signer $S
     assert equal $confirmed.record.cid_to (particle add-link $a $b $S --repo $tmp)
-    let plain = convention confirm $a $b --repo $tmp --signer $S
+    let plain = convention confirm-edge $a $b --repo $tmp --signer $S
     assert equal $plain.record.cid_to (particle add-edge $a $b --repo $tmp)
 }
 
@@ -129,51 +133,57 @@ def "repeat is idempotent — replaying the same act returns the same record" []
 }
 
 @test
-def "confirm targets the edge address, or the cyberlink CID with a signer" [] {
+def "confirm-edge targets the edge address and confirm-link the cyberlink CID" [] {
     let tmp = $in.tmp
-    let edge = convention confirm $A $B --repo $tmp --signer $S --allow-missing | get record
-    assert equal $edge.cid_from $CONFIRM
+    let edge = convention confirm-edge $A $B --repo $tmp --signer $S --allow-missing | get record
+    assert equal $edge.cid_from $CONFIRM_EDGE
     assert equal $edge.cid_to $EDGE_AB
 
-    let link = convention confirm $A $B $S --repo $tmp --signer $S --allow-missing | get record
-    assert equal $link.cid_from $CONFIRM
+    let link = convention confirm-link $A $B $S --repo $tmp --signer $S --allow-missing | get record
+    assert equal $link.cid_from $CONFIRM_LINK
     assert equal $link.cid_to $CYBERLINK_ABS
+
+    # Two subjects, two fixed sources: the op word alone tells a reader which
+    # act it is holding, without parsing the target record.
+    assert not equal $edge.cid_from $link.cid_from
 }
 
 @test
-def "deny targets the edge address, or the cyberlink CID with a signer" [] {
+def "deny-edge targets the edge address and deny-link the cyberlink CID" [] {
     let tmp = $in.tmp
-    let edge = convention deny $A $B --repo $tmp --signer $S --allow-missing | get record
-    assert equal $edge.cid_from $DENY
+    let edge = convention deny-edge $A $B --repo $tmp --signer $S --allow-missing | get record
+    assert equal $edge.cid_from $DENY_EDGE
     assert equal $edge.cid_to $EDGE_AB
 
-    let link = convention deny $A $B $S --repo $tmp --signer $S --allow-missing | get record
-    assert equal $link.cid_from $DENY
+    let link = convention deny-link $A $B $S --repo $tmp --signer $S --allow-missing | get record
+    assert equal $link.cid_from $DENY_LINK
     assert equal $link.cid_to $CYBERLINK_ABS
+
+    assert not equal $edge.cid_from $link.cid_from
 }
 
 @test
-def "update reissues from the record embedding the fields of the edge" [] {
-    let r = convention update $A $B $C --repo $in.tmp --signer $S --allow-missing | get record
-    assert equal $r.cid_from (derive {cid_from: $A cid_to: $B op: "update"})
+def "update-edge reissues from the record embedding the fields of the edge" [] {
+    let r = convention update-edge $A $B $C --repo $in.tmp --signer $S --allow-missing | get record
+    assert equal $r.cid_from (derive {cid_from: $A cid_to: $B op: "update_edge"})
     assert equal $r.cid_to $C
 }
 
 @test
-def "update-file states the same act about a file, at a distinct address" [] {
+def "update-particle states the same act about a particle, at a distinct address" [] {
     let tmp = $in.tmp
-    let r = convention update-file $B $C --repo $tmp --signer $S --allow-missing | get record
-    assert equal $r.cid_from (derive {about: $B op: "update"})
+    let r = convention update-particle $B $C --repo $tmp --signer $S --allow-missing | get record
+    assert equal $r.cid_from (derive {about: $B op: "update_particle"})
     assert equal $r.cid_to $C
 
-    # Same op word, different arity — the record shape keeps the two addresses
-    # apart, which is what lets one verb family cover edges and files.
-    assert not equal $r.cid_from (derive {cid_from: $A cid_to: $B op: "update"})
+    # Its own op word, so the two acts are apart in the op column and not only
+    # in the record shape a reader would have to parse.
+    assert not equal $r.cid_from (derive {cid_from: $A cid_to: $B op: "update_edge"})
 
     # The source is the version being replaced, so a reader who holds B can
     # compute one hash and ask what replaced it. A chain is updates of updates.
-    let next = convention update-file $C $A --repo $tmp --signer $S --allow-missing | get record
-    assert equal $next.cid_from (derive {about: $C op: "update"})
+    let next = convention update-particle $C $A --repo $tmp --signer $S --allow-missing | get record
+    assert equal $next.cid_from (derive {about: $C op: "update_particle"})
 }
 
 @test
@@ -265,7 +275,7 @@ def "claimed-at refuses a non-RFC-3339 or impossible time" [] {
 @test
 def "every convention publishes its records as self-addressed files" [] {
     let tmp = $in.tmp
-    convention deny $A $B --repo $tmp --signer $S --allow-missing | ignore
+    convention deny-edge $A $B --repo $tmp --signer $S --allow-missing | ignore
     convention answer $A $B $C --repo $tmp --signer $S --allow-missing | ignore
 
     let particles = ls (particles-dir ($tmp | path join cybergraph))
@@ -276,8 +286,8 @@ def "every convention publishes its records as self-addressed files" [] {
 
     # The record is its own preimage: dereferencing the source of a deny edge
     # yields the canonical record bytes.
-    assert equal (open --raw (particle-path ($tmp | path join cybergraph) $DENY)) "{\"op\":\"deny\"}\n"
-    # deny publishes the address record it targets.
+    assert equal (open --raw (particle-path ($tmp | path join cybergraph) $DENY_EDGE)) "{\"op\":\"deny_edge\"}\n"
+    # deny-edge publishes the address record it targets.
     assert ((particle-path ($tmp | path join cybergraph) $EDGE_AB) | path exists) $"missing address record ($EDGE_AB)"
     # answer publishes the whole chain: the question record and the answer record.
     let q_src = derive {about: $A op: "question"}

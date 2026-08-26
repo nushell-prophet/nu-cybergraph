@@ -30,10 +30,10 @@
 # whole layer, as expressions:
 #
 #   repeat              A                                             → B
-#   confirm (edge)      {op: confirm}                                 → {cid_from: A, cid_to: B}
-#   confirm (cyberlink) {op: confirm}                                 → {cid_from: A, cid_to: B, signer: S}
-#   deny (edge)         {op: deny}                                    → {cid_from: A, cid_to: B}
-#   deny (cyberlink)    {op: deny}                                    → {cid_from: A, cid_to: B, signer: S}
+#   confirm-edge        {op: confirm_edge}                            → {cid_from: A, cid_to: B}
+#   confirm-link        {op: confirm_link}                            → {cid_from: A, cid_to: B, signer: S}
+#   deny-edge           {op: deny_edge}                               → {cid_from: A, cid_to: B}
+#   deny-link           {op: deny_link}                               → {cid_from: A, cid_to: B, signer: S}
 #   agree / disagree    {op: agree}                                   → B
 #   quote               {about: A, op: quote}                         → B
 #   translation         {about: A, op: translation}                   → B
@@ -41,20 +41,33 @@
 #   question            {about: B, op: question}                      → Q
 #   author              {about: B, op: author}                        → P
 #   same                {about: P1, op: same}                         → P2
-#   update              {cid_from: A, cid_to: B, op: update}          → C
-#   update-file         {about: B, op: update}                        → C
+#   update-edge         {cid_from: A, cid_to: B, op: update_edge}     → C
+#   update-particle     {about: B, op: update_particle}               → C
 #   answer              {cid_from: {about: B, op: question}, cid_to: Q, op: answer} → A
 #   claimed-at          {about: X, op: claimed_at}                    → T
 #
-# Sixteen verbs, twelve conventions: repeat is bj002's edge repetition, which
-# is not one of them (no CID in the source), and claimed-at, update-file and
-# translation are this repo's extensions — claimed-at makes a time claim an
-# ordinary optional edge instead of a fixture of every record; update-file is
-# bj002's update act
+# Eighteen verbs for twelve conventions — confirm and deny are one convention
+# each and two verbs each, one per subject. Four answer to no convention:
+# repeat is bj002's edge repetition, which
+# is not one of them (no CID in the source), and claimed-at, update-particle
+# and translation are this repo's extensions — claimed-at makes a time claim an
+# ordinary optional edge instead of a fixture of every record; update-particle
+# is bj002's update act
 # stated about a particle instead of an edge, which is what a version chain of
 # particles needs; translation names the one relation a multilingual corpus lives on, and
 # neither `same` nor `quote` says it. bj002's set of conventions is open, which
 # is what permits all three.
+#
+# An op word says what the act is about wherever a verb has two possible
+# subjects: confirm_edge / confirm_link, deny_edge / deny_link, update_edge /
+# update_particle. The record shape carries the same distinction, but only for
+# a reader that parses it — `link list | where op == "update"` could not tell
+# an edge update from a particle one, and now the op column alone answers.
+# Where a verb has one possible subject the bare word stays: repeat only ever
+# repeats an edge, agree only ever agrees with a particle, so a suffix there
+# would name nothing. This diverges from bj002's vocabulary and costs nothing:
+# bj002 hashes a comma-join where this repo derives from a record, so no
+# address here has ever matched one there.
 #
 # Reading these edges back is `link list` / `touching` / `tally` (link.nu,
 # _read.nu): the published preimage is what makes a derived CID readable, so
@@ -63,7 +76,7 @@
 # reader reports two numbers and never their sum — bj002's formula keeps them
 # apart as f(repeats, confirms, denies, signer_weights, time_decay).
 # Instructions force the distinction: several signers can propose an update
-# from the one source {cid_from: A, cid_to: B, op: update}, and repetitions
+# from the one source {cid_from: A, cid_to: B, op: update_edge}, and repetitions
 # cannot pick between their versions, because repeating someone else's update
 # claims you derived it yourself. Confirmations are what tell the proposals
 # apart.
@@ -132,43 +145,6 @@ def edge [
     link add (address $root $index $src $allow_missing $literal) (address $root $index $tgt $allow_missing $literal) --signer $signer_cid --repo $repo --allow-missing
 }
 
-# What `confirm` and `deny` speak about, published and handed back as its
-# address: the edge itself, or a specific signer's cyberlink when the third
-# argument is given. The two verbs take the same three arguments and differ
-# only in the op word, so this is built once.
-#
-# Through `_publish.nu` — the bodies behind `particle add-edge` / `add-link` —
-# and not by building the record here and letting `address` publish it.
-# Those verbs mint exactly these two records, and a second construction site is
-# how the two drifted: `address`
-# resolves every value as an ordinary operand, so `confirm A B S` demanded the
-# SIGNER's bytes in particles/ — but a signer CID names a pubkey file, which
-# lives in multiproofs/pubkeys/, and `_signer.nu` says plainly that a signer
-# CID is never checked against the store because `own-signer`'s own answer
-# would fail that check. One publisher, and the question cannot be answered
-# two ways.
-#
-# The result is a CID that is local by construction, so `address` passes it
-# through as a leaf and the caller below needs no special case.
-#
-# Takes the graph root already resolved, and never the signer of the act: this
-# call PUBLISHES, so its caller must have resolved its signer first — see the
-# verbs below.
-def subject [
-    root: path
-    cid_from: string
-    cid_to: string
-    about_signer: any
-    allow_missing: bool
-    literal: bool
-]: nothing -> string {
-    if $about_signer == null {
-        publish-edge $root $cid_from $cid_to $allow_missing $literal
-    } else {
-        publish-link $root $cid_from $cid_to $about_signer $allow_missing $literal
-    }
-}
-
 # Repeat an edge: state the same thing yourself. Both endpoints are leaves —
 # a plain edge is not an instruction, and repetition writes no source record,
 # so it is not a convention. What separates it from `confirm` is work: you
@@ -187,64 +163,105 @@ export def repeat [
     edge $cid_from $cid_to $signer $repo $allow_missing $literal
 }
 
-# Confirm an edge (`confirm A B`) or a specific cyberlink (`confirm A B S`).
-# Source is the fixed record {op: confirm}; the target is what is supported —
-# an address record carrying the real fields of the edge, plus its signer when
-# a specific record is called valid (say, not spam), with no opinion about the
-# statement. The mirror of `deny` in both targets; unlike `repeat`, it claims
-# no work of one's own (bj002 "Confirming an edge and a cyberlink").
-@example "confirm the edge A → B" { convention confirm QmA… QmB… }
-@example "confirm signer S's cyberlink A → B" { convention confirm QmA… QmB… QmS… }
-export def confirm [
+# What the four verbs below speak about — the edge, or one signer's cyberlink —
+# is published through `_publish.nu`, the bodies behind `particle add-edge` /
+# `add-link`, and not by building the record here and letting `address`
+# publish it. Those verbs mint exactly these two records, and a second
+# construction site is how the two drifted: `address` resolves every value as
+# an ordinary operand, so a cyberlink target demanded the SIGNER's bytes in
+# particles/ — but a signer CID names a pubkey file, which lives in
+# multiproofs/pubkeys/, and `_signer.nu` says plainly that a signer CID is
+# never checked against the store because `own-signer`'s own answer would fail
+# that check. One publisher, and the question cannot be answered two ways.
+#
+# The result is a CID that is local by construction, so `address` passes it
+# through as a leaf and no verb needs a special case.
+#
+# Each resolves its own signer before publishing, rather than leaving it to
+# `edge`: the publish call writes a file, and a signer resolved after it would
+# leave that file behind when the repo cannot name one — `link add` states the
+# same order for the same reason. `edge` re-resolves the CID it gets, which
+# passes it through unchanged (resolve-signer).
+
+# Confirm an edge: {op: confirm_edge} → {cid_from: A, cid_to: B} supports the
+# statement A → B itself — it is true no matter who published it. The mirror
+# of `deny-edge`; unlike `repeat`, it claims no work of one's own
+# (bj002 "Confirming an edge and a cyberlink").
+@example "confirm the edge A → B" { convention confirm-edge QmA… QmB… }
+export def "confirm-edge" [
     cid_from: string # source of the edge being confirmed
     cid_to: string # target of the edge being confirmed
-    confirmed_signer?: string # signer of the cyberlink being confirmed; omit to confirm the edge itself
     --signer: string
     --repo: path
     --allow-missing # skip the local-file check on a CID operand (see resolve-particle)
     --literal # treat a content operand as literal even if it names a path (see resolve-arg-bytes)
 ]: nothing -> record {
     let root = graph-root $repo
-    # Why the signer is resolved here rather than left to `edge`: `subject`
-    # below PUBLISHES the target record, and a signer resolved after it would
-    # leave that file behind when the repo cannot name one — `link add` states
-    # the same order for the same reason. `edge` re-resolves the CID it gets,
-    # which passes it through unchanged (resolve-signer).
     let signer_cid = resolve-signer $root $signer
-    edge {op: "confirm"} (subject $root $cid_from $cid_to $confirmed_signer $allow_missing $literal) $signer_cid $repo $allow_missing $literal
+    edge {op: "confirm_edge"} (publish-edge $root $cid_from $cid_to $allow_missing $literal) $signer_cid $repo $allow_missing $literal
 }
 
-# Deny an edge (`deny A B`) or a specific cyberlink (`deny A B S`). Source is
-# the fixed record {op: deny}; the target is what is disputed — an address
-# record carrying the real fields of the disputed edge, plus its signer when a
-# cyberlink is disputed (bj002 "Denying an edge and a cyberlink").
-@example "deny the edge A → B" { convention deny QmA… QmB… }
-@example "deny signer S's cyberlink A → B" { convention deny QmA… QmB… QmS… }
-export def deny [
+# Confirm a cyberlink: {op: confirm_link} → {cid_from: A, cid_to: B, signer: S}
+# calls S's record valid — say, not spam — with no opinion about the statement
+# it makes. The mirror of `deny-link` (bj002 "Confirming an edge and a
+# cyberlink").
+@example "confirm signer S's cyberlink A → B" { convention confirm-link QmA… QmB… QmS… }
+export def "confirm-link" [
+    cid_from: string # source of the edge the cyberlink asserts
+    cid_to: string # target of the edge the cyberlink asserts
+    confirmed_signer: string # signer of the cyberlink being confirmed
+    --signer: string
+    --repo: path
+    --allow-missing # skip the local-file check on a CID operand (see resolve-particle)
+    --literal # treat a content operand as literal even if it names a path (see resolve-arg-bytes)
+]: nothing -> record {
+    let root = graph-root $repo
+    let signer_cid = resolve-signer $root $signer
+    edge {op: "confirm_link"} (publish-link $root $cid_from $cid_to $confirmed_signer $allow_missing $literal) $signer_cid $repo $allow_missing $literal
+}
+
+# Deny an edge: {op: deny_edge} → {cid_from: A, cid_to: B} disputes the
+# statement A → B itself. The mirror of `confirm-edge`
+# (bj002 "Denying an edge and a cyberlink").
+@example "deny the edge A → B" { convention deny-edge QmA… QmB… }
+export def "deny-edge" [
     cid_from: string # source of the disputed edge
     cid_to: string # target of the disputed edge
-    disputed_signer?: string # signer of the disputed cyberlink; omit to deny the edge itself
     --signer: string
     --repo: path
     --allow-missing # skip the local-file check on a CID operand (see resolve-particle)
     --literal # treat a content operand as literal even if it names a path (see resolve-arg-bytes)
 ]: nothing -> record {
     let root = graph-root $repo
-    # Why the signer is resolved here rather than left to `edge`: `subject`
-    # below PUBLISHES the target record, and a signer resolved after it would
-    # leave that file behind when the repo cannot name one — `link add` states
-    # the same order for the same reason. `edge` re-resolves the CID it gets,
-    # which passes it through unchanged (resolve-signer).
     let signer_cid = resolve-signer $root $signer
-    edge {op: "deny"} (subject $root $cid_from $cid_to $disputed_signer $allow_missing $literal) $signer_cid $repo $allow_missing $literal
+    edge {op: "deny_edge"} (publish-edge $root $cid_from $cid_to $allow_missing $literal) $signer_cid $repo $allow_missing $literal
 }
 
-# Update an edge: {cid_from: A, cid_to: B, op: update} → C marks C as the new
-# target of the edge A → B. The record embeds the edge's own fields; updates
-# reissue from the same source, so the latest is the current version
+# Deny a cyberlink: {op: deny_link} → {cid_from: A, cid_to: B, signer: S}
+# calls S's record invalid — say, spam — with no opinion about the statement
+# it makes. The mirror of `confirm-link`
+# (bj002 "Denying an edge and a cyberlink").
+@example "deny signer S's cyberlink A → B" { convention deny-link QmA… QmB… QmS… }
+export def "deny-link" [
+    cid_from: string # source of the edge the disputed cyberlink asserts
+    cid_to: string # target of the edge the disputed cyberlink asserts
+    disputed_signer: string # signer of the disputed cyberlink
+    --signer: string
+    --repo: path
+    --allow-missing # skip the local-file check on a CID operand (see resolve-particle)
+    --literal # treat a content operand as literal even if it names a path (see resolve-arg-bytes)
+]: nothing -> record {
+    let root = graph-root $repo
+    let signer_cid = resolve-signer $root $signer
+    edge {op: "deny_link"} (publish-link $root $cid_from $cid_to $disputed_signer $allow_missing $literal) $signer_cid $repo $allow_missing $literal
+}
+
+# Update an edge: {cid_from: A, cid_to: B, op: update_edge} → C marks C as the
+# new target of the edge A → B. The record embeds the edge's own fields;
+# updates reissue from the same source, so the latest is the current version
 # (bj002 "Updating a previously published edge").
-@example "update edge A → B to point at C" { convention update QmA… QmB… QmC… }
-export def update [
+@example "update edge A → B to point at C" { convention update-edge QmA… QmB… QmC… }
+export def "update-edge" [
     cid_from: string # source of the original edge
     cid_to: string # original target being replaced
     cid_new: string # the new target
@@ -253,26 +270,30 @@ export def update [
     --allow-missing # skip the local-file check on a CID operand (see resolve-particle)
     --literal # treat a content operand as literal even if it names a path (see resolve-arg-bytes)
 ]: nothing -> record {
-    edge {cid_from: $cid_from cid_to: $cid_to op: "update"} $cid_new $signer $repo $allow_missing $literal
+    edge {cid_from: $cid_from cid_to: $cid_to op: "update_edge"} $cid_new $signer $repo $allow_missing $literal
 }
 
-# Update a file: {about: B, op: update} → C — "C is the version that replaces B".
+# Update a particle: {about: B, op: update_particle} → C — "C is the version
+# that replaces B".
 # bj002's `update` states the same act, "C replaces B", with A supplying the
-# context of an edge; this is that act about the file alone, so a version chain
-# of files gets an address of its own instead of being a plain edge no reader can
+# context of an edge; this is that act about the particle alone, so a version chain
+# of particles gets an address of its own instead of being a plain edge no reader can
 # tell from any other. The operand sits in the source, like quote/pro/con/
 # question/author: reading B a reader computes one hash and reads outgoing edges,
 # competing replacements share one address, and a replacement is itself
-# replaceable — which is what makes the chain. Same op word as `update` because it
-# is the same act; the record shape carries the arity, so the two addresses cannot
-# collide. Not among bj002's twelve — an extension like `claimed-at`, which the
-# open set of conventions permits (bj002 "Updating a previously published edge").
+# replaceable — which is what makes the chain. Not among bj002's twelve — an
+# extension like `claimed-at`, which the open set of conventions permits
+# (bj002 "Updating a previously published edge").
+#
+# Its own op word, not `update_edge`: the record shape already keeps the two
+# addresses apart, but only for a reader that parses it, and a reader filtering
+# `link list` on the op column would have seen one word for two subjects.
 #
 # Direction: source is the version being replaced, not the newest one. A chain
 # written the other way round would need the reader to know the newest CID before
 # it could ask what came before — the opposite of the query this exists for.
-@example "C is the version that replaces B" { convention update-file QmB… QmC… }
-export def "update-file" [
+@example "C is the version that replaces B" { convention update-particle QmB… QmC… }
+export def "update-particle" [
     superseded: string # the version being replaced
     replacement: string # the version replacing it
     --signer: string
@@ -280,7 +301,7 @@ export def "update-file" [
     --allow-missing # skip the local-file check on a CID operand (see resolve-particle)
     --literal # treat a content operand as literal even if it names a path (see resolve-arg-bytes)
 ]: nothing -> record {
-    edge {about: $superseded op: "update"} $replacement $signer $repo $allow_missing $literal
+    edge {about: $superseded op: "update_particle"} $replacement $signer $repo $allow_missing $literal
 }
 
 # Quote: {about: A, op: quote} → B states that B is a faithful excerpt of A
@@ -307,7 +328,7 @@ export def quote [
 # are two particles, each with its own author and its own CID. Not `quote` either —
 # a quote is checkable byte-for-byte, a translation is a judgement, and the
 # signature is what puts the signer behind it. An extension like `claimed-at`
-# and `update-file`, which bj002's open set of conventions permits.
+# and `update-particle`, which bj002's open set of conventions permits.
 @example "B is a translation of A" { convention translation QmA… QmB… }
 export def translation [
     original: string # the text translated from

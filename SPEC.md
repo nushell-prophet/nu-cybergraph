@@ -348,8 +348,8 @@ So `link add` publishes what its endpoints resolve to, and no more.
 A derived address becomes dereferenceable when an act names it,
 and publishing the preimage is part of making that act
 — the same rule section 4 puts on every record a convention mints.
-`confirm A B` / `deny A B` mint the pair as their target and publish it;
-`confirm A B S` does the same for the triple;
+`confirm-edge A B` / `deny-edge A B` mint the pair as their target and publish it;
+`confirm-link A B S` / `deny-link A B S` do the same for the triple;
 naming either in a plain link means publishing it first (`particle add-edge` / `particle add-link`, 3.2).
 Publishing is idempotent,
 so a second signer of the same edge and a convention minting the same pair write nothing new.
@@ -518,18 +518,30 @@ The grammar has one atom and one constructor:
 Every record passed through MUST be published as a file under `particles/`
 — that is what lets a reader dereference an opaque source CID and get named fields back.
 
-Sixteen verbs.
-Twelve are bj002 conventions;
+Eighteen verbs for twelve conventions
+— `confirm` and `deny` are one convention each and two verbs each, one per subject.
+Four verbs answer to no bj002 convention:
 `repeat` is edge repetition (bj002 names it beside the conventions, not among them — it puts no special CID in the source);
-`claimed-at`, `update-file` and `translation` are this format's extensions, which bj002's open set permits.
+`claimed-at`, `update-particle` and `translation` are this format's extensions, which bj002's open set permits.
+
+An `op` word names the subject wherever a verb has two of them
+— `confirm_edge` / `confirm_link`, `deny_edge` / `deny_link`, `update_edge` / `update_particle`.
+The record shape keeps those addresses apart on its own,
+but only for a reader that parses the record,
+so the word carries it too and a reader filtering on `op` alone is answered.
+Where a verb has one possible subject the bare word stands
+— `repeat` only repeats an edge, `agree` only agrees with a particle.
+These words are not bj002's, which writes `hash("confirm")`;
+nothing is lost by that, because bj002 hashes a comma-join where this format derives from a record (2.2),
+so no address here has ever matched one there.
 
 | verb | edge written |
 |---|---|
 | `repeat A B` | `A → B` |
-| `confirm A B` | `{"op":"confirm"} → {"cid_from":A,"cid_to":B}` |
-| `confirm A B S` | `{"op":"confirm"} → {"cid_from":A,"cid_to":B,"signer":S}` |
-| `deny A B` | `{"op":"deny"} → {"cid_from":A,"cid_to":B}` |
-| `deny A B S` | `{"op":"deny"} → {"cid_from":A,"cid_to":B,"signer":S}` |
+| `confirm-edge A B` | `{"op":"confirm_edge"} → {"cid_from":A,"cid_to":B}` |
+| `confirm-link A B S` | `{"op":"confirm_link"} → {"cid_from":A,"cid_to":B,"signer":S}` |
+| `deny-edge A B` | `{"op":"deny_edge"} → {"cid_from":A,"cid_to":B}` |
+| `deny-link A B S` | `{"op":"deny_link"} → {"cid_from":A,"cid_to":B,"signer":S}` |
 | `agree B` / `disagree B` | `{"op":"agree"}` / `{"op":"disagree"} → B` |
 | `quote A B` | `{"about":A,"op":"quote"} → B` |
 | `translation A B` | `{"about":A,"op":"translation"} → B` |
@@ -538,8 +550,8 @@ Twelve are bj002 conventions;
 | `answer B Q A` | `{"cid_from":{"about":B,"op":"question"},"cid_to":Q,"op":"answer"} → A` |
 | `author B P` | `{"about":B,"op":"author"} → P` |
 | `same P1 P2` | `{"about":P1,"op":"same"} → P2` |
-| `update A B C` | `{"cid_from":A,"cid_to":B,"op":"update"} → C` |
-| `update-file B C` | `{"about":B,"op":"update"} → C` |
+| `update-edge A B C` | `{"cid_from":A,"cid_to":B,"op":"update_edge"} → C` |
+| `update-particle B C` | `{"about":B,"op":"update_particle"} → C` |
 | `claimed-at X T` | `{"about":X,"op":"claimed_at"} → T`, T an RFC 3339 timestamp published as a file |
 
 A record shown in source or target position means the CID of its canonical bytes.
@@ -552,8 +564,8 @@ The edge address is `derive {cid_from: A, cid_to: B}` and the cyberlink's derive
 The first is byte-identical to the link file itself (3.1),
 which does not make it a store file:
 the link writer publishes neither address (3.1),
-and `confirm A B` / `deny A B` publish the pair because they mint it as their target.
-So the CID a `confirm` or `deny` targets, in either arity, is always a published preimage
+and `confirm-edge A B` / `deny-edge A B` publish the pair because they mint it as their target.
+So the CID any of the four confirm and deny verbs targets is always a published preimage
 — published by the act that names it.
 
 Reading these edges back means dereferencing the source CID in `particles/`.
@@ -794,7 +806,7 @@ a cryptographic or content mismatch returns `valid: false` with the first failin
 
 ## 9. Conformance vectors
 
-Verified against the reference implementation on 2026-08-18 (`nu toolkit.nu test` — 156 passed).
+Verified against the reference implementation on 2026-08-26 (`nu toolkit.nu test` — 192 passed).
 
 **Link record and derived CIDs** (`tests/test_record.nu`, `tests/test_convention.nu`):
 
@@ -808,8 +820,10 @@ S = QmddrVz92VH3LqT2i7uXeK4AVh6LyU7zjDiLbSdChPsULr
 |---|---|
 | `{"cid_from":"QmUQUHEmv651XCBhiWUQpx2zf4PDts1aXL324ZFyV4QZPF","cid_to":"QmW9519sfmW2MvDb4TU4dKtiFAXm1UPDvE7JrMaBjprVHp"}` | `QmUiARbMPT9WNXqvgb2BB9gWFXRiCEqD96AF5xebwNTCTT` |
 | `{"cid_from":"QmUQUHEmv651XCBhiWUQpx2zf4PDts1aXL324ZFyV4QZPF","cid_to":"QmW9519sfmW2MvDb4TU4dKtiFAXm1UPDvE7JrMaBjprVHp","signer":"QmddrVz92VH3LqT2i7uXeK4AVh6LyU7zjDiLbSdChPsULr"}` | `QmRyRXXRM7ztFTPiyXjDtra9ND2oU64iE2jcydwubW17Ze` |
-| `{"op":"confirm"}` | `QmcLFo8UMWWuUP7ruztAW5C1zPwmF7GTZs8X6Lig4pXkBh` |
-| `{"op":"deny"}` | `QmU8kL28M7yecZ5iPGJZ3e89fytWFzLszU3QtKRj5hV2kK` |
+| `{"op":"confirm_edge"}` | `QmcqM2jDzeLmPQYRVtMvJypmo8NS7xGh2HNgVLFepL5QKQ` |
+| `{"op":"confirm_link"}` | `QmTJipuBLbsHCgRRe9BrGeGbZFFNoYFwzbiEQgGzDpaHNj` |
+| `{"op":"deny_edge"}` | `QmXegbm1GjDayyetHt87fvAicrE42SQqfd7G4Gwnr1SSr5` |
+| `{"op":"deny_link"}` | `QmZ27sgjKKC2HDS6o7Kk1L8PCANGxArGRxgNcay9ENC2jP` |
 | `{"op":"agree"}` | `QmTswdDR4inURY4GeWGvmL9S8xrDZjfiGEyeUUZzUNRNYk` |
 | `{"op":"disagree"}` | `QmbQUXxqMrFA6zGYmgjvbFKyywS7Gcbb3afb3wqG6s7r6J` |
 | `{"cid_from":A,"cid_to":B}` (the edge address) | `QmawrHuBDdcSRCPumzsKfsMi5FJne8xai9WNPAdr3NmLBV` |

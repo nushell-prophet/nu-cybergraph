@@ -70,7 +70,7 @@ export def add [
 # The operands go through `resolve-particle`, the same rule every other write
 # command applies: a CID must resolve to bytes this repo holds (--allow-missing
 # is the escape hatch), and anything else is content, published first and
-# replaced by its CID. `convention confirm A B` mints this very record, so a
+# replaced by its CID. `convention confirm-edge A B` mints this very record, so a
 # second policy here would mean one record with two admission rules depending
 # on which command wrote it.
 @example "publish an edge address so a later act can name it" { particle add-edge QmA… QmB… }
@@ -84,7 +84,7 @@ export def "add-edge" [
     publish-edge (graph-root $repo) $cid_from $cid_to $allow_missing $literal
 }
 
-# The same for a cyberlink address — the triple, the one `confirm A B S`
+# The same for a cyberlink address — the triple, the one `confirm-link A B S`
 # targets. Its bytes exist nowhere else: the link file holds the pair and the
 # signer lives in the path, so nothing on disk is this record until this
 # command writes it.

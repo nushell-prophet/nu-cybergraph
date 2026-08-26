@@ -13,7 +13,7 @@
 # The cyberlink — `derive {cid_from, cid_to, signer}`, bj002's triple — is
 # still defined and still computed: pair from the file, signer from the path.
 # It is not the file's name, and the writer publishes no preimage for it: the
-# store holds bytes something points at. `confirm A B S` targets that address
+# store holds bytes something points at. `confirm-link A B S` targets that address
 # and publishes the record as it mints it; anything else naming it publishes
 # it first (`particle add-link`).
 #
@@ -35,7 +35,7 @@ use _validate.nu [ assert-keys assert-cids CID_V0_RE ]
 export const EDGE_KEYS = [cid_from cid_to]
 
 # The triple — the cyberlink record. Its derived CID is the act's address,
-# the one `confirm A B S` computes; `particle add-link` is what puts the
+# the one `confirm-link A B S` computes; `particle add-link` is what puts the
 # preimage in the store, and no writer does it on the caller's behalf.
 export const LINK_KEYS = [cid_from cid_to signer]
 

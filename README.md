@@ -116,7 +116,7 @@ so an independent implementation reproduces the same CIDs.
   which addresses nothing until someone publishes its preimage
   — `particle add-link A B S` does that,
   `particle add-edge A B` does it for the pair,
-  and `confirm A B` / `deny A B` / `confirm A B S` publish it themselves because they mint it as their target.
+  and the four confirm and deny verbs publish it themselves because they mint it as their target.
   Publishing the pair writes bytes byte-identical to the link file;
   that duplication is accepted rather than desired,
   and is the price of one rule about the store.
@@ -304,15 +304,28 @@ Four further verbs are not among the twelve.
 bj002 names edge repetition beside the conventions but not among them,
 because it puts no special CID in the source
 — there is no string that would go into `hash()`.
-`claimed-at`, `update-file` and `translation` are this repo's extensions:
+`claimed-at`, `update-particle` and `translation` are this repo's extensions:
 `claimed-at` states a time as an edge, the only place this format holds one outside a seal (see time semantics),
-`update-file` states bj002's `update` act — "C replaces B" — about a particle instead of an edge,
+`update-particle` states bj002's `update` act — "C replaces B" — about a particle instead of an edge,
 which is what a version chain of particles needs and what bj002's edge form cannot express,
 and `translation` states that one particle says in another language what another says,
 the relation a multilingual corpus is built on and the one neither `same` (two names, one entity) nor `quote` (checkable byte-for-byte) covers.
 bj002's set of conventions is open,
 which is what permits all three.
-Sixteen verbs, twelve conventions.
+Eighteen verbs, twelve conventions:
+`confirm` and `deny` are one convention each and two verbs each,
+because a name that hides its subject behind an optional argument is what this split removes.
+
+A verb's name and its `op` word say what the act is about wherever there are two subjects to tell apart
+— `confirm-edge`/`confirm-link`, `deny-edge`/`deny-link`, `update-edge`/`update-particle`.
+The record shape keeps those addresses apart on its own,
+but only for a reader that parses the record,
+so a reader filtering `link list` on the `op` column alone is answered too.
+Where a verb has one possible subject the bare word stands:
+`repeat` only repeats an edge, `agree` only agrees with a particle.
+The words are not bj002's, which writes `hash("confirm")`;
+nothing is lost by that, because bj002 hashes a comma-join where this repo derives from a record,
+so no address here has ever matched one there.
 
 Every convention stands on one primitive, the canonical record:
 **`convention derive`** takes a flat record,
@@ -342,7 +355,7 @@ because a hand-built record with a wrong key set serializes fine and yields an a
 — and nothing reports it, since the file is self-addressed either way.
 
 An instruction lives in the *source* of its edge
-— a derived CID such as the CID of `{"op":"deny"}` —
+— a derived CID such as the CID of `{"op":"deny_edge"}` —
 so the source is opaque.
 To make it readable, every convention publishes each record it mints
 — the instruction and the address records it references —
@@ -355,11 +368,10 @@ a sealed convention edge names its source CID,
 and showing bytes that hash to a sealed CID time-anchors them
 — the same rule that anchors any file named by a sealed link.
 
-This table is the spec of the sixteen verbs;
+This table is the spec of the eighteen verbs;
 a record in source or target position means the CID of its canonical bytes.
-Fourteen rows,
-because `agree`/`disagree` and `pro`/`con` are mirror pairs that share a row;
-`confirm` and `deny` each keep one row carrying both of their targets.
+Sixteen rows,
+because `agree`/`disagree` and `pro`/`con` are mirror pairs that share a row.
 The header of `nu-cybergraph/convention.nu` restates it in the implementation's address-expression notation
 — same facts, second notation;
 if a shape ever changes, both move together.
@@ -367,10 +379,12 @@ if a shape ever changes, both move together.
 | verb | edge written |
 |---|---|
 | `repeat A B` | `A → B` (the plain edge published again — no instruction record, and not a convention) |
-| `confirm A B` / `confirm A B S` | `{"op":"confirm"} → {"cid_from":A,"cid_to":B}` (edge) / `→ {"cid_from":A,"cid_to":B,"signer":S}` (a signer's cyberlink) |
-| `deny A B` / `deny A B S` | `{"op":"deny"} → {"cid_from":A,"cid_to":B}` (edge) / `→ {"cid_from":A,"cid_to":B,"signer":S}` (a signer's cyberlink) |
-| `update A B C` | `{"cid_from":A,"cid_to":B,"op":"update"} → C` |
-| `update-file B C` | `{"about":B,"op":"update"} → C` (extension, not in bj002; the same act about a particle instead of an edge — a version chain) |
+| `confirm-edge A B` | `{"op":"confirm_edge"} → {"cid_from":A,"cid_to":B}` |
+| `confirm-link A B S` | `{"op":"confirm_link"} → {"cid_from":A,"cid_to":B,"signer":S}` (a signer's cyberlink) |
+| `deny-edge A B` | `{"op":"deny_edge"} → {"cid_from":A,"cid_to":B}` |
+| `deny-link A B S` | `{"op":"deny_link"} → {"cid_from":A,"cid_to":B,"signer":S}` (a signer's cyberlink) |
+| `update-edge A B C` | `{"cid_from":A,"cid_to":B,"op":"update_edge"} → C` |
+| `update-particle B C` | `{"about":B,"op":"update_particle"} → C` (extension, not in bj002; the same act about a particle instead of an edge — a version chain) |
 | `quote A B` | `{"about":A,"op":"quote"} → B` |
 | `translation A B` | `{"about":A,"op":"translation"} → B` (extension, not in bj002; B says in another language what A says, and the direction records which came first) |
 | `agree B` / `disagree B` | `{"op":"agree"\|"disagree"} → B` |
@@ -381,7 +395,7 @@ if a shape ever changes, both move together.
 | `same P1 P2` | `{"about":P1,"op":"same"} → P2` |
 | `claimed-at X T` | `{"about":X,"op":"claimed_at"} → T` (extension, not in bj002; T is an RFC 3339 timestamp published as a file) |
 
-The cyberlink target of `confirm A B S` / `deny A B S` is the triple record,
+The cyberlink target of `confirm-link` / `deny-link` is the triple record,
 and the verb publishes it as it mints it
 — so the preimage of the address being confirmed is on disk,
 and a reader who has the CID can open it.
@@ -406,7 +420,7 @@ three over this signer's own graph, and one over what imported bundles carry.
 | `link imported` | the same rows as `link list`, but for every link a landed bundle under `imported/` carries — one bundle at a time, each decoded against its own `particles/` and never this repo's |
 
 `role` is the part a CID alone cannot carry.
-As `cid_to` of an `update` a particle is the new version;
+As `cid_to` of an `update_particle` a particle is the new version;
 as `cid_from.about` it is the one being replaced;
 as `cid_to.cid_from` it is an endpoint of an edge somebody confirmed;
 as `signer` it is the identity that signed the link
@@ -437,7 +451,7 @@ Repeats and confirms are two signals
 so a reader reports two numbers,
 and bj002's formula keeps them apart as `f(repeats, confirms, denies, signer_weights, time_decay)`.
 Instructions force the distinction:
-several signers can propose an update from the one source `{"cid_from":A,"cid_to":B,"op":"update"}`,
+several signers can propose an update from the one source `{"cid_from":A,"cid_to":B,"op":"update_edge"}`,
 and repetitions cannot pick between their versions,
 because repeating someone else's update claims you derived it yourself.
 Confirmations are what tell the proposals apart.

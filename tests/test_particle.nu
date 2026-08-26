@@ -342,7 +342,7 @@ def "an edge is linked to by publishing its preimage first" [] {
     assert equal $row.tgt {cid_from: $born.record.cid_from cid_to: $born.record.cid_to}
 }
 
-# One record, one admission rule. `convention confirm A B` mints the same pair
+# One record, one admission rule. `convention confirm-edge A B` mints the same pair
 # record through `resolve-particle`, so publishing it directly has to refuse
 # the same operands — otherwise which command wrote it decides what got in.
 @test
@@ -361,7 +361,7 @@ def "the publishers apply the same operand rule as every other write command" []
 }
 
 # The signer is in the path, so `link add` never sees the triple as bytes —
-# but its address still has to have a publishable preimage, or `confirm A B S`
+# but its address still has to have a publishable preimage, or `confirm-link A B S`
 # names something no reader can resolve.
 @test
 def "a cyberlink preimage is published the same way, signer included" [] {
@@ -403,8 +403,8 @@ def "convention verbs refuse a CID operand this repo holds no file for" [] {
 @test
 def "allow-missing reaches an operand nested inside the address expression" [] {
     let tmp = $in.tmp
-    assert error {|| convention confirm $A $B $N --repo $tmp --signer $N }
-    convention confirm $A $B $N --repo $tmp --signer $N --allow-missing | ignore
+    assert error {|| convention confirm-link $A $B $N --repo $tmp --signer $N }
+    convention confirm-link $A $B $N --repo $tmp --signer $N --allow-missing | ignore
 
     assert error {|| convention answer $A "q" "a" --repo $tmp --signer $N }
     convention answer $A "q" "a" --repo $tmp --signer $N --allow-missing | ignore
