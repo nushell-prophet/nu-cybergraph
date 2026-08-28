@@ -24,7 +24,7 @@ use _validate.nu [ assert-keys assert-cids assert-timestamp assert-hash-or-null 
 # into the allowed_signers line beside the principal, where a crafted one
 # injects `cert-authority` and renders every registered key trusted for
 # anything. So the bytes must say what they are. Same shape as nu-multiproof's
-# `root-statement` ("multiproof-merkle-v2 <hex> <seq> <prev>"), in this repo's JSON idiom: a
+# `root-statement` ("multiproof-merkle-v3 <hex> <seq> <prev>"), in this repo's JSON idiom: a
 # leading schema token, so a handoff signature cannot be replayed as any other
 # artifact this key signs, and vice versa. The token carries the format version
 # too, so two handoff shapes can never be read as one.

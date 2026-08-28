@@ -247,7 +247,7 @@ because the value is interpolated into the rendered trust list,
 where a crafted namespace injects `cert-authority` and makes every registered key trusted for anything.
 
 Domain separation therefore has to live in the signed bytes.
-That is why the root statement is a single line opening with the token `multiproof-merkle-v2` (7) rather than a bare hash.
+That is why the root statement is a single line opening with the token `multiproof-merkle-v3` (7) rather than a bare hash.
 
 A signature sits beside the file it signs,
 named `<file>.<fingerprint>.sig`.
@@ -446,11 +446,12 @@ JSON, 2-space indent (the bytes are not addressed, so formatting is free):
 
 ```json
 {
-  "schema": "multiproof-merkle-v2",
+  "schema": "multiproof-merkle-v3",
   "leaf": {
     "filepath": "<signer-cid>/<edge-cid>.json",
     "content_sha256": "<64 hex>",
-    "content_git": "<40 or 64 hex>",
+    "content_git_sha1": "<40 hex>",
+    "content_git_sha256": "<64 hex>",
     "content_cid": "<Qm…>"
   },
   "path": [ {"side": "left|right", "hash": "<64 hex>"} ],
@@ -699,14 +700,14 @@ A reimplementation needs, from that project's `README.md`:
 
 - **"Content manifest"** — `multiproofs/tree-hashes.csv`:
   one row per git-tracked file, per parent directory, and one `.` row;
-  columns `filepath`, `content_sha256`, `content_git`, `content_cid`;
+  columns `filepath`, `content_sha256`, `content_git_sha1`, `content_git_sha256`, `content_cid`;
   rows under `multiproofs/` excluded.
 - **"Tree specification"** — leaf ordering and charsets,
-  leaf bytes (the four parsed field values joined with `\n`),
+  leaf bytes (the five parsed field values joined with `\n`),
   RFC 6962 domain separation (`sha256(0x00 ++ leaf)`, `sha256(0x01 ++ left ++ right)`),
   the MTH split shape,
   proof-step encoding,
-  and the root statement: exactly `multiproof-merkle-v2 <64 lowercase hex> <seq> <prev>` plus one trailing `\n`,
+  and the root statement: exactly `multiproof-merkle-v3 <64 lowercase hex> <seq> <prev>` plus one trailing `\n`,
   where `seq` is a decimal count with no leading zeros starting at 0
   and `prev` is the root that seal supersedes
   — or the literal `genesis`, which pairs with `seq 0` and with nothing else.

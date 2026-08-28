@@ -509,7 +509,7 @@ A fixpoint would need a snapshot directory named after a root computed from a tr
 — a hash self-reference, so it is not reachable in practice.
 
 **Which seal is which.** A root says what the tree held, never which seal it was,
-so the root statement carries a counter: `multiproof-merkle-v2 <root> <seq> <prev>`,
+so the root statement carries a counter: `multiproof-merkle-v3 <root> <seq> <prev>`,
 where `seq` starts at 0 and `prev` is the root that seal superseded (the literal `genesis` for the first, which pairs with `seq 0` and nothing else).
 `seal chain` reads every `seals/<root12>/tree-root.txt` in order and requires `seq` to run 0..N with no gap and each `prev` to be the root before it;
 a break raises rather than returning a short table,
