@@ -247,7 +247,7 @@ because the value is interpolated into the rendered trust list,
 where a crafted namespace injects `cert-authority` and makes every registered key trusted for anything.
 
 Domain separation therefore has to live in the signed bytes.
-That is why the root statement is a single line opening with the token `multiproof-merkle-v3` (7) rather than a bare hash.
+That is why the root statement is a single line opening with the token `multiproof-merkle-v4` (7) rather than a bare hash.
 
 A signature sits beside the file it signs,
 named `<file>.<fingerprint>.sig`.
@@ -446,7 +446,7 @@ JSON, 2-space indent (the bytes are not addressed, so formatting is free):
 
 ```json
 {
-  "schema": "multiproof-merkle-v3",
+  "schema": "multiproof-merkle-v4",
   "leaf": {
     "filepath": "<signer-cid>/<edge-cid>.json",
     "content_sha256": "<64 hex>",
@@ -707,10 +707,12 @@ A reimplementation needs, from that project's `README.md`:
   RFC 6962 domain separation (`sha256(0x00 ++ leaf)`, `sha256(0x01 ++ left ++ right)`),
   the MTH split shape,
   proof-step encoding,
-  and the root statement: exactly `multiproof-merkle-v3 <64 lowercase hex> <seq> <prev>` plus one trailing `\n`,
-  where `seq` is a decimal count with no leading zeros starting at 0
-  and `prev` is the root that seal supersedes
-  — or the literal `genesis`, which pairs with `seq 0` and with nothing else.
+  and the root statement: exactly `multiproof-merkle-v4 <64 lowercase hex> <seq> <prev> <beacon>` plus one trailing `\n`,
+  where `seq` is a decimal count with no leading zeros starting at 0,
+  `prev` is the root that seal supersedes
+  — or the literal `genesis`, which pairs with `seq 0` and with nothing else —
+  and `beacon` is the seal's lower time bound:
+  the literal `none`, or `bitcoin:<height>:<64 lowercase hex block hash>` naming a Bitcoin block nobody could have named earlier.
 - **"Bundle contract"** — the OTS bundle grammar `<stem>.<HASH8>/`,
   including `<stem>.<ext>.<fingerprint>.ots`,
   the anchor over a signature that this format's time claim rests on.
