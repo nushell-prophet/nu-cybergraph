@@ -133,11 +133,16 @@ def "a name that is no address is a stray in every directory that addresses its 
     mkdir ($g.root | path join certs "not-a-cid")
     mkdir ($g.root | path join seals "NOTHEX")
     mkdir ($g.root | path join receipts "not-a-cid")
+    mkdir ($g.root | path join order "not-a-cid")
+    # The run is addressed the same way the links are, so a name that is no
+    # address is a stray there too — `link add` has already made the signer's
+    # own order directory, and this file sits beside its position.
+    "x" | save --raw ($g.root | path join order ($signer_dir | path basename) "notes.order.json")
 
     let rows = _layout strays $g.root
 
     assert equal ($rows | get path | each { path basename } | sort) (
-        ["NOTHEX" "not-a-cid" "not-a-cid" "notes.json" "notes.txt"]
+        ["NOTHEX" "not-a-cid" "not-a-cid" "not-a-cid" "notes.json" "notes.order.json" "notes.txt"]
     )
 }
 

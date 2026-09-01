@@ -20,6 +20,17 @@ export const CID_V0_RE = '^Qm[1-9A-HJ-NP-Za-km-z]{44}$'
 # published as a file stays escape-free.
 export const RFC3339_RE = '^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?(Z|[+-]\d{2}:\d{2})$'
 
+# The same timestamp, pinned to UTC — the discipline a link position lives by
+# (SPEC 3.5). A time nobody signs is only worth anything if two files stating
+# one instant state it one way, and an offset is the one part of RFC 3339 that
+# lets them differ. `Z` and `+00:00` are the two spellings of no offset at all;
+# every other offset is refused at the write and at the read.
+#
+# Not folded into RFC3339_RE above: a receipt and a handoff state when their
+# holder acted, in the offset that holder kept, and narrowing those is a
+# different decision from this one.
+export const RFC3339_UTC_RE = '^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?(Z|\+00:00)$'
+
 # Lowercase hex sha256 — how one artifact commits to another's exact bytes.
 export const SHA256_RE = '^[0-9a-f]{64}$'
 
@@ -45,6 +56,13 @@ export def assert-cids [rec: record keys: list<string> what: string]: nothing ->
 export def assert-timestamp [rec: record key: string what: string]: nothing -> nothing {
     if ($rec | get $key) !~ $RFC3339_RE {
         error make {msg: $"($what) ($key) is not an RFC 3339 timestamp: (($rec | get $key) | to json)"}
+    }
+}
+
+# An RFC 3339 timestamp field that must be in UTC (RFC3339_UTC_RE).
+export def assert-utc-timestamp [rec: record key: string what: string]: nothing -> nothing {
+    if ($rec | get $key) !~ $RFC3339_UTC_RE {
+        error make {msg: $"($what) ($key) is not an RFC 3339 timestamp in UTC \(Z or +00:00): (($rec | get $key) | to json)"}
     }
 }
 

@@ -9,7 +9,8 @@ use _fs.nu list-files
 use _record.nu [read-link LINK_KEYS]
 use _receipt.nu [read-receipt bundle-manifest custody-layers]
 use _handoff.nu [read-handoff]
-use _layout.nu [receipt-relpath custody-layer-dirname handoff-filename]
+use _layout.nu [receipt-relpath custody-layer-dirname handoff-filename order-path order-relpath order-cert-path snapshot-dir]
+use _order.nu [read-position]
 
 # Signer identity is the CID of the pubkey file bytes, so the spec pins one
 # encoding: `pubkey canonical` form. A non-canonical file is a malformed
@@ -221,6 +222,99 @@ def check-handoff [dir: path edge_cid: string record: record holder: string expe
     }
 }
 
+# The number a position record states, as an int — null while it states a time
+# instead. The one place `seq`'s string form is turned into a number on the
+# read side, so the two branches below cannot disagree about it.
+def state-seq [state: record]: nothing -> any {
+    let seq = $state | get --optional seq
+    if $seq == null { null } else { $seq | into int }
+}
+
+# The link's position in its signer's run, folded to the seal that froze it —
+# the same machinery as the record, over a different leaf.
+#
+# Reported as its own verdict and never folded into `valid`: SPEC 10 already
+# names that mistake for the handoff, where a check with no step in section 8
+# quietly moved the verdict. What the number states is a fact about the
+# signer's run, not about whether this act is proven, and a reader weighing
+# completeness has to see the two apart.
+#
+# The two columns mirror the file's two states, exactly one of them filled:
+# `seq` once a seal has numbered the position, `added_at` while it is still the
+# time `link add` wrote.
+#
+# Three answers that are not failures. No position at all is null — a graph
+# whose links predate the run, or a bundle built before it. A position with no
+# frozen proof beside it is unproven and reported so, whichever state it is in:
+# a bare `added_at` is the ordinary state between `link add` and the next seal.
+# Only a proof that folds is a verdict.
+# A proof for ANOTHER leaf throws, like the custody layer's own wrong-leaf
+# check: a proof under the wrong name certifies the wrong record.
+#
+# The seal is looked up at `seals/<root12>/` in the dir itself, which is where
+# the graph home keeps its snapshots and where `bundle` writes the position's
+# own. One rule, both cases — and it must be that root, never the dir's
+# current `multiproofs/`: a backfilled position freezes under a later seal than
+# its link, so a bundle legitimately carries two.
+def check-position [dir: path signer: string edge_cid: string pubs: table]: nothing -> any {
+    let file = order-path $dir $signer $edge_cid
+    let cert = order-cert-path $dir $signer $edge_cid
+    if not (($file | path exists) or ($cert | path exists)) {
+        return null
+    }
+    if not ($cert | path exists) {
+        let state = read-position $file
+        return {
+            seq: (state-seq $state)
+            added_at: ($state | get --optional added_at)
+            root: null
+            bound: false
+            endorsed: null
+            valid: false
+            error: "the position carries no frozen proof — unproven until a seal catalogues it"
+        }
+    }
+    let proof = open --raw $cert | from json
+    if ($proof | get --optional leaf.filepath) != (order-relpath $signer $edge_cid) {
+        error make {msg: $"($cert) proves ($proof | get --optional leaf.filepath), not this link's position — a proof under the wrong name certifies the wrong number"}
+    }
+    let snapshot = snapshot-dir $dir $proof.root
+    if not ($snapshot | path exists) {
+        error make {msg: $"seal snapshot missing for the position of ($edge_cid): root ($proof.root | str substring 0..11) — the number was frozen under a seal this ($dir) does not carry"}
+    }
+    let v = merkle verify $cert --repo $dir --multiproofs-dir $snapshot
+    # The same binding the record gets, and for the same reason: the leaf path
+    # carries the signer, so a position refiled under another signer names a
+    # signer who never signed that root. Without it anyone could re-seal
+    # somebody else's number under their own key.
+    let signer_bound = bound $v.signatures $pubs $signer
+    # Read only when the content leg says the file is there and matches —
+    # `merkle verify` has already decided otherwise, and reading a file it
+    # called missing would throw over a verdict that is already formed.
+    let state = if $v.content_verified == true { read-position $file } else { {} }
+    # Why: this can only ever fire on a FOREIGN bundle. Nothing in this
+    # toolchain can make a signed position that still states a time — the seal
+    # numbers before it stages, so own bytes never reach the shape — and that
+    # is the point of the check rather than an argument for dropping it: a
+    # verifier reads what somebody else sealed. What such a bundle attests is
+    # exactly what this format says it never does — the graph carries no times,
+    # because a claimed one is provable to nobody.
+    let attests_a_time = ($v.content_verified == true) and (($state | get --optional seq) == null)
+    {
+        seq: (state-seq $state)
+        added_at: ($state | get --optional added_at)
+        root: $v.root
+        bound: $signer_bound
+        endorsed: (endorsed-by $v.endorsements $pubs $signer)
+        valid: ($v.valid and $signer_bound and (not $attests_a_time))
+        error: (if $v.error != null { $v.error } else if not $signer_bound {
+            "the position's signer directory matches no validly-signing pubkey"
+        } else if $attests_a_time {
+            "a seal froze this position while it still stated `added_at` — the graph attests no times, so a signed claimed time is not a position in any state"
+        } else { null })
+    }
+}
+
 # Verify the custody chain of a bundle: one row per layer, in chain order.
 # On top of each layer's multiproof result (structure, signature, content,
 # OTS), the chain checks:
@@ -318,6 +412,7 @@ def verify-custody [bundle: path edge_cid: string record: record root_handoff: a
 const UNREAD_COLUMNS = {
     record: null
     signer: {cid: null bound: false endorsed: null}
+    position: null
     handoff: null
     custody: []
     handed_to: null
@@ -396,6 +491,18 @@ export def verify-bundle [bundle: path --cert: path --multiproofs-dir: path]: no
     # the path, never from a filename. No derived CID is computed here at all;
     # that was the point of spelling the components out.
     let edge_cid = $v.leaf.filepath | path parse | get stem
+    let position = check-position $bundle $rec.signer $edge_cid $birth.pubs
+    if $position != null {
+        # The state is read off which column is filled, the way the file itself
+        # says it: a number belongs to the run, a time is only a claim about
+        # arrival.
+        let stated = if $position.seq != null {
+            $"number ($position.seq) in this signer's run"
+        } else if $position.added_at != null {
+            $"not numbered yet, added at ($position.added_at)"
+        } else { "unreadable" }
+        print $"position:  ($stated), (if $position.valid { 'proven' } else { $"NOT PROVEN \(($position.error))" })"
+    }
     let root_handoff = check-handoff $bundle $edge_cid $rec $rec.signer null $birth.pubs
     let custody = verify-custody $bundle $edge_cid $rec $root_handoff
     let custody_ok = $custody | all { $in.valid }
@@ -434,6 +541,7 @@ export def verify-bundle [bundle: path --cert: path --multiproofs-dir: path]: no
     add-columns ($v | reject ots) ($UNREAD_COLUMNS | merge {
         record: $rec
         signer: {cid: $rec.signer bound: $signer_bound endorsed: $signer_endorsed}
+        position: $position
         handoff: $root_handoff
         custody: $custody
         handed_to: $handed_to

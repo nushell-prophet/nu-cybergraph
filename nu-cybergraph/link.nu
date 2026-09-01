@@ -2,7 +2,8 @@
 
 use _repo.nu graph-root
 use _record.nu [ link-cid edge-bytes edge-cid read-link ]
-use _layout.nu [ signer-dir link-path imported-dir ]
+use _layout.nu [ signer-dir link-path imported-dir order-dir order-path ]
+use _order.nu [ write-added-at ]
 use _particle.nu [ resolve-particle store-index ]
 use _signer.nu [ resolve-signer ]
 use _read.nu [ read-links deref touches ]
@@ -88,7 +89,32 @@ export def add [
         read-link $out | ignore
     } else {
         edge-bytes $pair | save --raw $out
+        # The position is written on the SAME branch that writes the record, so
+        # the two exist together or not at all: a link with no position is what
+        # `seal` refuses on, and a position with no link is the same refusal
+        # read the other way. The repeat above writes neither — the triple
+        # guard already says the act is on disk, and a second position for one
+        # act would be a second act.
+        #
+        # A TIME and not a number, and no walk over `order/` to find the
+        # highest one: numbering needs a moment that sees the whole run at
+        # once, and this is not it — the seal is (_order.nu says why). What
+        # this branch records is arrival, which is the whole reason to write
+        # anything here, and a clock answers that without reading a run.
+        #
+        # After the record, not before: the position counts an act, so a
+        # failure between the two leaves a record with no position — visible,
+        # refused by the next seal, and repaired by removing the record and
+        # adding it again — rather than a position counting nothing.
+        mkdir (order-dir $root | path join $signer_cid)
+        write-added-at (order-path $root $signer_cid $edge) (date now)
     }
+    # No position here either, in any shape. There is no number to report —
+    # none exists until a seal numbers the run — and the claimed time is
+    # scaffolding the seal deletes, so a column for it reports something the
+    # graph never keeps: null on a repeat of an already-sealed act, a time on
+    # a fresh one. `nu-cybergraph order list` is the reading of the run.
+    #
     # No link_cid: `edge_cid` addresses the file just written, but the
     # cyberlink's derived CID addresses nothing until someone publishes its
     # preimage (`particle add-link`) — and reporting a non-address beside an

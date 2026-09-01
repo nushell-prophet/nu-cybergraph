@@ -7,7 +7,9 @@
 # without them an importer has the record but not the preimage of the
 # instruction it names (bj002 "Reading instructions"), and can only decode
 # the edge's meaning by scanning particles/ across every repo it can reach.
-# --links-only drops the bundle to the record + certificate alone.
+# --links-only drops the bundle to the record and the proofs alone. The act's
+# number and its own proof ride either way: they are proof material about the
+# act, not content the ends address.
 # An IMPORTED link re-exports: the foreign bundle copied unchanged — it stays
 # the authority for authorship and birth time, particles included if the
 # sender attached them — plus this repo's custody layer appended under
@@ -31,6 +33,10 @@ use _layout.nu [
     receipt-relpath
     receipt-cert-path
     receipt-cert-filename
+    order-path
+    order-relpath
+    order-cert-path
+    order-cert-filename
     custody-dir
     custody-layer-dirname
     handoff-filename
@@ -84,9 +90,17 @@ def assemble-seal-artifacts [root: path out: path root_hex: string]: nothing -> 
         error make {msg: "no signer pubkey found for the snapshot's signatures — the bundle could never verify"}
     }
 
-    # OTS bundles committing to this root, matched by their frozen root
-    # statement. Plain content match — discovery only; verify re-checks the
-    # commitment cryptographically.
+    assemble-ots $root $out $root_hex
+}
+
+# OTS bundles committing to one root, matched by their frozen root statement.
+# Plain content match — discovery only; verify re-checks the commitment
+# cryptographically.
+#
+# One directory per seal, named after the root it stamped, so a bundle carrying
+# two roots (a birth certificate and a position frozen under a later seal)
+# keeps both here without a collision.
+def assemble-ots [root: path out: path root_hex: string]: nothing -> nothing {
     let ots_bundles = list-dirs ($root | path join multiproofs ots-timestamps)
         | where ($it | path basename | str starts-with "tree-root.")
         | where {|d|
@@ -95,16 +109,56 @@ def assemble-seal-artifacts [root: path out: path root_hex: string]: nothing -> 
         }
     if ($ots_bundles | is-empty) {
         print "note: no OTS bundle for this root (sealed with --no-stamp?) — the bundle's timestamp will report absent"
-    } else {
-        mkdir ($out | path join multiproofs ots-timestamps)
-        # `for`, not `each`, for the reason the two copies above give: a raise
-        # inside an `each` closure comes back as "Eval block failed with
-        # pipeline input". Measured here with one OTS file unreadable —
-        # copy-tree caught the short copy, and those five words were the whole
-        # message the operator got.
-        for d in $ots_bundles {
-            copy-tree $d ($out | path join multiproofs ots-timestamps ($d | path basename))
-        }
+        return
+    }
+    mkdir ($out | path join multiproofs ots-timestamps)
+    # `for`, not `each`, for the reason the two copies above give: a raise
+    # inside an `each` closure comes back as "Eval block failed with
+    # pipeline input". Measured here with one OTS file unreadable —
+    # copy-tree caught the short copy, and those five words were the whole
+    # message the operator got.
+    for d in $ots_bundles {
+        copy-tree $d ($out | path join multiproofs ots-timestamps ($d | path basename))
+    }
+}
+
+# The link's position, its frozen proof, and the seal that proves it — at the
+# same relative paths the graph home files them under, so one rule finds them
+# in a bundle and in the repo.
+#
+# The seal artifacts go to `seals/<root12>/` and not into `multiproofs/`, ALWAYS,
+# even when the position froze under the same root as the birth certificate.
+# A backfilled position freezes under a later seal than the link it counts, so
+# a bundle can carry two roots and `multiproofs/` holds one statement; keeping
+# the position's own snapshot where the graph home keeps its snapshots is what
+# lets verification look it up by one rule instead of branching on whether the
+# two roots happen to coincide. What it costs when they do is a second copy of
+# two small files.
+def assemble-position [root: path out: path signer: string edge_cid: string birth_root: string]: nothing -> nothing {
+    let cert = order-cert-path $root $signer $edge_cid
+    if not ($cert | path exists) {
+        error make {msg: $"no frozen position proof for ($signer)'s ($edge_cid) — run `nu-cybergraph seal` first, then export: a number no seal has catalogued is provable to nobody"}
+    }
+    let relpath = order-relpath $signer $edge_cid
+    mkdir ($out | path join ($relpath | path dirname))
+    copy-file (order-path $root $signer $edge_cid) ($out | path join $relpath)
+    copy-file $cert ($out | path join ($relpath | path dirname) (order-cert-filename $edge_cid))
+
+    let proof = open --raw $cert | from json
+    let snap = snapshot-dir $root $proof.root
+    if not ($snap | path exists) {
+        error make {msg: $"seal snapshot missing for root ($proof.root) — the position proof predates the seals/ convention?"}
+    }
+    let dest = snapshot-dir $out $proof.root
+    mkdir $dest
+    for f in (list-files $snap) {
+        copy-file $f $dest
+    }
+    # Only when the two roots differ: the birth assembly has already copied
+    # this root's stamp archive, and it is keyed by root, so a second pass
+    # would land on a directory that is already there.
+    if $proof.root != $birth_root {
+        assemble-ots $root $out $proof.root
     }
 }
 
@@ -207,6 +261,7 @@ def assemble-bundle [root: path out: path edge_cid: string resolved: record act:
         copy-file $record_file ($out | path join $proof.leaf.filepath)
         copy-file $cert ($out | path join (cert-filename $edge_cid))
         assemble-seal-artifacts $root $out $proof.root
+        assemble-position $root $out $resolved.signer $edge_cid $proof.root
         if not $links_only {
             assemble-particles $root $out (read-link $record_file)
         }
@@ -254,7 +309,7 @@ export def main [
     --to: string # Recipient signer CID — adds a signed handoff (default: none, an open export)
     --signer: string # Whose act to export, when more than one signer holds this edge
     --key: path # SSH private key for the handoff signature (default: from git config user.signingKey)
-    --links-only # own act only: without particles, record + certificate alone (no-op re-exporting an imported act — its particles, if any, are the sender's foreign bytes, copied unchanged either way)
+    --links-only # own act only: without particles — the record, its certificate and its position with their proofs (no-op re-exporting an imported act — its particles, if any, are the sender's foreign bytes, copied unchanged either way)
 ]: nothing -> path {
     let root = graph-root $repo
     if $to != null and $to !~ $CID_V0_RE {

@@ -2,6 +2,7 @@ export use init.nu
 export use particle.nu
 export use strays.nu
 export use link.nu
+export use order.nu
 export use convention.nu
 export use seal.nu
 export use bundle.nu

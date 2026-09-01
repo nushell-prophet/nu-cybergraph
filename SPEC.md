@@ -265,6 +265,7 @@ cybergraph/
   <signer-cid>/<edge-cid>.json              # link records: pair in the file, signer in the path  3.1
   particles/<cid>[.ext]                     # the particle store, self-addressed                  3.2
   certs/<signer-cid>/<edge-cid>.cert.json   # frozen birth certificates, mirroring the layout     3.3
+  order/<signer-cid>/<edge-cid>.order.json  # the act's place in the signer's run (+ .order.cert.json)   3.5
   seals/<root-hex-12>/                      # per-seal root statement + signatures                3.4
   exports/<signer-cid>/<edge-cid>/          # bundles this repo built                             6
   imported/<signer-cid>/<edge-cid>/         # bundles landed from others, read-only               10
@@ -301,7 +302,7 @@ A seal MUST refuse on the **whole** closed set (5), because it is the moment tho
 The pubkey filename is the reference implementation's choice and carries no authority
 — see 2.4.
 
-The signer directories, `certs/` and `seals/` are what a seal stages into git;
+The signer directories, `certs/`, `order/` and `seals/` are what a seal stages into git;
 `particles/` and `exports/` are not staged by the seal (see 5)
 — but a store file the graph reaches has to be in the index before the seal,
 and the seal refuses while it is not.
@@ -475,6 +476,13 @@ The reference implementation runs this check at seal time only
 — `verify` and `bundle` still branch on bare existence,
 so junk at a certificate path reaches them as a crash rather than a verdict.
 
+The same freeze rule governs a second proof, and the check above covers both.
+A link's position (3.5) freezes at `order/<signer-cid>/<edge-cid>.order.cert.json`,
+under the first seal that catalogues the number
+— never regenerated, for the same reason:
+what makes a number provable is the root it entered,
+and a later seal would move that root while the run reads unchanged.
+
 ### 3.4 Seal snapshot — `seals/<root-hex-12>/`
 
 The directory name is the first 12 characters of the seal's merkle root hex.
@@ -497,6 +505,75 @@ An implementation MUST read them in order and refuse a gap
 — `seq` running 0..N, each `prev` the root before it —
 instead of reporting a shorter chain,
 because a missing snapshot is every certificate born under that root verifying against nothing.
+
+### 3.5 Link position — `order/<signer-cid>/<edge-cid>.order.json`
+
+The act's place in its signer's run, filed mirroring the link layout.
+JSON, exactly one key, and the key *is* the state (the bytes are not addressed, so formatting is free):
+
+```json
+{"added_at": "2026-08-31T09:41:12+00:00"}
+```
+
+```json
+{"seq": "42"}
+```
+
+`added_at` while the position is provisional, `seq` once a seal has numbered it
+— never both keys, and never one key holding the other's value.
+An implementation validates by exact key set and refuses everything else,
+so nothing has to infer the state from whether a proof lies beside the file.
+
+`added_at` is the `timestamp` type of 2.3, narrowed to UTC
+— the zone offset MUST be `Z` or `+00:00`, and a time in any other offset MUST be refused,
+both when the position is written and when it is read.
+Nothing signs a claimed time, so it is only worth reading if two files stating one instant state it one way.
+`seq` is a decimal count with no leading zeros starting at 0
+— the root statement's own rule for its own counter (7), not a second convention.
+The file states **only** its one key:
+a certificate names the root it folds to, so it cannot sit inside the tree that produces that root,
+and a position must,
+so which seal minted the number is answered by the proof it verifies against, exactly as for a link record.
+
+What the number is for is not indexing.
+A run with no gaps makes a signer's record provably complete,
+so a replica cannot be silently thinned
+— the property a per-feed counter gives an append-only log.
+Everything below follows from that one purpose.
+
+- **The run is per signer directory.** A graph home holding several signer directories holds several runs, each numbered from 0.
+- **A writer writes the time, never a number**, on the same branch that writes the record.
+  Numbering needs a moment that sees the whole run at once, and a writer is not one:
+  the seal is (5).
+  A repeat of the same act (3.1's triple guard) writes neither file.
+- **The seal turns the time into a number** (5), and that is the only place a `seq` comes from.
+  The provisional value is a time and not a counter because two runs have to be mergeable:
+  two checkouts counting 42, 43, 44 each could be joined only by putting one run wholly before the other,
+  which is not the order the acts happened in,
+  while times interleave and recover the order that actually held.
+  What that costs is clock skew between machines instead of colliding counters
+  — the better failure of the two, because it degrades the order without duplicating anything.
+- **Provisional until numbered.** A position stating `added_at` MAY be rewritten by the next seal;
+  one stating `seq` MUST NOT move.
+  That is the rule the record itself lives by — a file on disk until a seal signs it —
+  and it is what lets two checkouts be merged at all (5).
+  A claimed time enters the graph home but never a root:
+  the seal replaces it before staging, so no signature covers it and the graph attests no times.
+  A proof folding to a root over a position that still states `added_at` is therefore not a position in any state, and MUST be refused.
+- **A link that never reaches a seal keeps its time and never gets a number.**
+  That is honest rather than a gap: nothing about an unsealed link is provable, its record included.
+- **The bijection is a seal-time refusal** (5): every link record has exactly one position, and every position names a link record.
+  Without both halves the number does nothing it exists for:
+  a signer could seal a link and simply not number it,
+  and a reader holding the entire graph would see a contiguous run beside an unnumbered link.
+- A position is verified by folding its own proof, the same machinery as a record's,
+  and the leaf path is what binds the number to the signer whose run it is.
+  The verdict is reported **beside** section 8's, never folded into `valid`:
+  what the number states is a fact about the run, not about whether the act is proven,
+  and a reader weighing completeness has to see the two apart.
+- A backfilled position — one written for a link that predates the run — freezes under a LATER root than its link's birth certificate.
+  A bundle carries that seal beside the birth one (6),
+  so such a bundle rests on two seals rather than one.
 
 ## 4. Conventions — instructions as ordinary edges
 
@@ -599,8 +676,22 @@ Normative order:
 2. Read and validate **every** link record (3.1)
    — walking the signer directories, CID-v0-named directories at the root —
    and check that whatever stands at each certificate path is the frozen proof for that exact leaf.
+   The same check covers each position's proof path (3.3):
+   what stands at a proof path has to *be* the proof for that exact leaf,
+   or step 7 would leave a signed proof beside bytes it never covered.
    Refuse before anything is staged or mutated:
    a seal is where a file crosses from junk on disk to a statement signed by this signer.
+2a. Refuse unless every link record has exactly one position and every position names a link record (3.5),
+   and refuse unless each signer's **numbered** run — the positions stating `seq` — is 0..N with no gap and no repeat.
+   The first is what makes a withheld link visible at all.
+   The second is not repairable here and so is reported rather than fixed:
+   a hole at 3 cannot be numbered away, because the numbers around it are already signed,
+   so this seal would cement it instead of naming it
+   — the refusal 3.4 makes about a missing snapshot, for the same reason.
+   Read over what states a `seq` and not over what a proof covers:
+   `seq` is what "already assigned" means,
+   so a seal that died between step 3a and step 7 left numbers no proof covers,
+   and handing those out a second time is how one number ends up counting two acts.
 3. Refuse if any store file the graph *reaches* (3.2) is outside the git index.
    The manifest is git-tracked files,
    so such a file enters no root while the link naming it is signed and frozen
@@ -611,7 +702,21 @@ Normative order:
    which no override touches.
    Publishing is the operator's act,
    so this step refuses rather than staging on their behalf.
-4. `git add` the non-empty ones of the signer directories, `certs/` and `seals/`
+3a. Number the **provisional** positions — those stating `added_at` (3.5):
+   sort them by that time, break ties byte-wise by edge CID (the manifest's own ordering rule, so nothing new decides it),
+   assign consecutive numbers after the last one already assigned,
+   and rewrite each file to state `seq` instead.
+   Times are compared as times and not as strings:
+   every claimed time is UTC (3.5), but `Z`, `+00:00` and fractional seconds still put one instant in several byte orders,
+   and only the parse compares those correctly.
+   This MUST happen before step 4, so the numbered file is what enters the manifest,
+   and therefore before step 5, so a position enters the same root as the link record it counts:
+   one seal, one snapshot, one bundle.
+   This is also the only moment a merge of two checkouts has to pass through
+   — two adds under different edges conflict on nothing, so git merges both silently and neither writer saw the other's run.
+   The sort is deterministic and needs no human:
+   a writer loses nothing, because a writer was never told a number.
+4. `git add` the non-empty ones of the signer directories, `certs/`, `order/` and `seals/`
    — plus `imported/` and `receipts/` in a graph that has imported something, which section 10 covers.
    This list only ever *adds*;
    it does not bound the manifest.
@@ -623,7 +728,8 @@ Normative order:
    — a re-seal does not repair it,
    because the retry mints a different root.
 7. For every link with no certificate,
-   extract its inclusion proof and freeze it at `certs/<signer-cid>/<edge-cid>.cert.json`.
+   extract its inclusion proof and freeze it at `certs/<signer-cid>/<edge-cid>.cert.json`,
+   and for every position with no proof, the same at `order/<signer-cid>/<edge-cid>.order.cert.json` (3.3).
 
 **A repeated seal is not a no-op.** `seals/` is staged,
 so each seal catalogues the snapshots of every seal before it
@@ -665,6 +771,8 @@ Birth bundle for an authored link:
 <bundle>/
   <signer-cid>/<edge-cid>.json               # the record, at the leaf's filepath
   <edge-cid>.cert.json                       # exactly one *.cert.json at the root
+  order/<signer-cid>/<edge-cid>.order.json   # the act's number, at ITS leaf's filepath (+ .order.cert.json beside it)
+  seals/<root-hex-12>/                       # the seal the number was frozen under
   particles/<cid>[.ext]                      # the record's two ends, where held (default)
   multiproofs/tree-root.txt                  # + tree-root.txt.<fingerprint>.sig
   multiproofs/pubkeys/*.pub                  # named <fingerprint>.pub by the reference; the name carries no authority (2.4)
@@ -686,6 +794,16 @@ The OTS bundle belongs to the **birth** root, not to the current one.
 each with a frozen copy of the root statement it stamped:
 select the bundle whose frozen `tree-root.txt` carries the certificate's `root`.
 Copying whatever `multiproofs/` holds at export time instead would ship a bundle claiming a time bound the certificate never earned.
+
+The position and its proof travel at the paths the graph home files them under (3.5),
+which is what lets one rule find them in a bundle and in a repo;
+the proof is under `order/` and not at the root, so the "exactly one `*.cert.json` at the root" rule above still names the birth certificate alone.
+Its seal goes to `seals/<root12>/` rather than into `multiproofs/`, always
+— a backfilled position freezes under a later seal than its link,
+so a bundle can carry two roots while `multiproofs/` holds one statement.
+Where the two roots coincide that is a second copy of two small files,
+and it is taken deliberately:
+a verifier then looks the seal up by one rule instead of branching on whether they happen to agree.
 
 Attaching the ends' particle files is the default:
 without them a recipient has the *address* of the instruction a link states but not its preimage,
@@ -804,12 +922,17 @@ Order matters — an implementation MUST NOT reach a later check with data an ea
 
 The verdict is a record, not a boolean.
 `valid` is the conjunction of the merkle verdict and the signer binding.
+A position (3.5) is folded by this same checker and reported as its own verdict beside it,
+never inside `valid`
+— and a bundle carrying none is an ordinary answer, not a failure.
+That verdict is `false` when the position's proof folds but the position still states `added_at`:
+the graph attests no times, so a signed claimed time is not a position in either state (3.5).
 Malformed input (no certificate, a non-canonical pubkey) raises;
 a cryptographic or content mismatch returns `valid: false` with the first failing reason.
 
 ## 9. Conformance vectors
 
-Verified against the reference implementation on 2026-08-26 (`nu toolkit.nu test` — 192 passed).
+Verified against the reference implementation on 2026-09-01 (`nu toolkit.nu test` — 216 passed).
 
 **Link record and derived CIDs** (`tests/test_record.nu`, `tests/test_convention.nu`):
 
@@ -907,4 +1030,9 @@ except a file DAG deeper than two levels (~7.9 GB), which nothing outside that r
   (`ots verify` in the proof layer, which cross-checks independent block explorers and so needs a network).
   Everything else section 8 checks is offline and structural,
   which is why this one field is the exception worth naming.
+- **A number is provable, a complete run is not shippable.**
+  A stranger can be shown "this act is number 42, signed, dated no later than block N" (3.5).
+  That 42 belongs to a run with no gaps is checkable only by someone holding the run:
+  completeness is a property of the whole sequence, so a proof of it is the sequence.
+  The limit is inherent, and it is why the bijection is enforced at the seal (5) rather than at verification.
 - The reference implementation is a proof of concept, agent-written and never reviewed by an outside cryptographer.

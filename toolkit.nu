@@ -16,7 +16,10 @@ export def main [] { }
 # upstream. Pass --threads 0 for the old behaviour (0 means one per core).
 # The investigation is not on any live branch — it lives in an archived tag of
 # the cozy repo: git show archive/debug-freeze:todo/20260830-debug-freeze.md
-export def 'main test' [--fail --threads: int = 1] {
+export def 'main test' [
+    --fail
+    --threads: int = 1 # nutest worker threads; 1 by default for the reason above, 0 means one per core
+] {
     use ../nutest/nutest
 
     nutest run-tests --path tests/ --strategy {threads: $threads} --fail=$fail

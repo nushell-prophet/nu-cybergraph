@@ -7,12 +7,13 @@
 
 use _repo.nu graph-root
 use _fs.nu [ list-files copy-file move-file cwd-relative ]
-use _layout.nu [ signer-dirs link-files certs-dir cert-path snapshot-dir seals-dir receipts-dir receipt-files receipt-cert-path receipt-relpath strays CERTS_DIR SEALS_DIR IMPORTED_DIR RECEIPTS_DIR ]
+use _layout.nu [ signer-dirs link-files certs-dir cert-path snapshot-dir seals-dir receipts-dir receipt-files receipt-cert-path receipt-relpath order-files order-cert-path order-relpath strays CERTS_DIR SEALS_DIR IMPORTED_DIR RECEIPTS_DIR ORDER_DIR ]
 use _record.nu [ read-link ]
 use _validate.nu [ CID_V0_RE ]
 use _signer.nu [ own-signer ]
 use _commit-proposal.nu [ seal-commit-line ]
 use _uncommitted.nu [ uncommitted-files stageable ]
+use _order.nu [ assert-bijection assert-numbered-run number-provisional ]
 use _deps/seal.nu [ seal ]
 use _deps/merkle.nu [ merkle ]
 
@@ -129,6 +130,24 @@ export def main [
         assert-frozen-proof (receipt-cert-path $root $r.author $r.edge) (receipt-relpath $r.author $r.edge)
     }
 
+    # Positions, same rule again, and the same leaf path the layout owns: what
+    # stands at a proof path has to BE the proof for that position, or the
+    # freeze loop below would leave a signed proof beside bytes it never
+    # covered.
+    for p in (order-files $root) {
+        assert-frozen-proof (order-cert-path $root $p.signer $p.edge) (order-relpath $p.signer $p.edge)
+    }
+
+    # The position a link carries in its signer's run is the seal's business
+    # twice over. Once as a bijection — every record positioned, every position
+    # a record — because a signer who seals a link and does not number it
+    # leaves a contiguous run beside an uncounted link, which is the silent
+    # thinning the run exists to expose. And once as contiguity of what is
+    # already numbered, which cannot be repaired here and so is reported
+    # instead (_order.nu says why each is refused where it is).
+    assert-bijection $root
+    assert-numbered-run $root
+
     # `$stage` below git-adds the graph home's directories WHOLESALE, so
     # anything sitting in them that the layout does not describe enters this
     # seal's signed manifest unvalidated: attested by the signer while none of
@@ -224,8 +243,19 @@ export def main [
         error make --unspanned {msg: $"the graph names bytes git does not track: ($loose | each {|r| $r.file | cwd-relative } | str join ', ') — the seal manifest walks `git ls-files`, so these would enter no root and the links naming them would be frozen pointing at nothing attested. Run `nu-cybergraph particle uncommitted --propose-commit` first, or seal with --allow-untracked-particles"}
     }
 
+    # Number the provisional positions BEFORE the merkle run, so a position
+    # enters the same root as the link record it counts: one seal, one
+    # snapshot, one bundle. After it, the file staged below would still state
+    # the claimed time, and the frozen proof would certify a time the graph
+    # attests nothing about.
+    #
+    # This is the moment a claimed time becomes a number: the seal is the only
+    # one that sees the whole run at once, and the only one a merge of two
+    # checkouts has to pass through (_order.nu).
+    let numbered = number-provisional $root
+
     let stage = (
-        (signer-dirs $root) ++ ([$CERTS_DIR $SEALS_DIR $IMPORTED_DIR $RECEIPTS_DIR] | each {|d| $root | path join $d })
+        (signer-dirs $root) ++ ([$CERTS_DIR $SEALS_DIR $IMPORTED_DIR $RECEIPTS_DIR $ORDER_DIR] | each {|d| $root | path join $d })
     )
         | where (($it | path exists) and (ls $it | is-not-empty))
     if ($stage | is-not-empty) {
@@ -357,7 +387,27 @@ export def main [
         move-file $proof (receipt-cert-path $root $r.author $r.edge)
     }
 
-    let out = {sealed: $sealed newborn: ($newborn | length) receipts: ($new_receipts | length) snapshot: ($snap | cwd-relative)}
+    # And the positions, third time the same rule: the first seal that
+    # catalogues a number is what makes it provable, so its proof freezes
+    # beside it and the number stops moving. (*.order.cert.json does not end
+    # with .order.json — the suffix skips already-frozen proofs.)
+    let new_positions = order-files $root
+        | where (not ((order-cert-path $root $it.signer $it.edge) | path exists))
+    for p in $new_positions {
+        let proof = merkle prove ($p.file | path relative-to $root) --repo $root | path expand
+        # The frozen proof lands beside its position, in the same signer
+        # directory — the parent already exists.
+        move-file $proof (order-cert-path $root $p.signer $p.edge)
+    }
+
+    let out = {
+        sealed: $sealed
+        newborn: ($newborn | length)
+        receipts: ($new_receipts | length)
+        positions: ($new_positions | length)
+        numbered: $numbered
+        snapshot: ($snap | cwd-relative)
+    }
 
     # Last, so the buffer holds a proposal for a seal that finished — and so the
     # counts it states are the ones the freeze loops actually reached. Outside a

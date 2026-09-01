@@ -15,7 +15,7 @@ use ../nu-cybergraph/link.nu
 use ../nu-cybergraph/verify.nu
 use ../nu-cybergraph/_record.nu [ edge-bytes ]
 use ../nu-cybergraph/_fs.nu [ copy-file copy-tree list-files list-dirs move-file ]
-use ../nu-cybergraph/_layout.nu [ certs-dir ]
+use ../nu-cybergraph/_layout.nu [ certs-dir order-path order-cert-path ]
 use ../nu-cybergraph/_deps/pubkey.nu [ pubkey ]
 use ../nu-cybergraph/_deps/cid-v0.nu [ cid-v0 ]
 
@@ -738,10 +738,20 @@ def "a sealed edge file moved to another signer directory earns no credit" [] {
     seal --repo $r.repo --no-stamp --allow-untracked-particles | ignore
     assert equal (verify $own.edge_cid --repo $r.repo | length) 2
 
-    # Relocate the ad-hoc copy into a fresh directory named by a valid CID.
+    # Relocate the ad-hoc copy into a fresh directory named by a valid CID —
+    # its position with it, and the position's frozen proof dropped.
+    #
+    # That extra care is what keeps this test about the relocation. Moving the
+    # record alone leaves it counted by no run, so the position bijection
+    # refuses first and the refusal below is never reached; moving the position
+    # too satisfies the bijection (the new run is [0], the vacated one empty)
+    # and leaves the tamper exactly as it was before positions existed.
     let home = $r.repo | path join cybergraph
     mkdir ($home | path join $P3)
     mv ($home | path join $adhoc.record.signer $"($adhoc.edge_cid).json") ($home | path join $P3 $"($adhoc.edge_cid).json")
+    mkdir ($home | path join order $P3)
+    mv (order-path $home $adhoc.record.signer $adhoc.edge_cid) (order-path $home $P3 $adhoc.edge_cid)
+    rm (order-cert-path $home $adhoc.record.signer $adhoc.edge_cid)
 
     # The old certificate points at an absent file, the new path has none:
     # the moved copy drops out of the full query instead of riding either.

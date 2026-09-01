@@ -52,6 +52,8 @@ def stamped-result []: nothing -> record {
         }
         newborn: 2
         receipts: 1
+        positions: 2
+        numbered: 0
         snapshot: "cybergraph/seals/ee947cd6a1f3"
     }
 }
@@ -116,26 +118,39 @@ def "a seal with no stamp reports no anchor and names no bundle" [] {
 def "the certificates this seal froze are counted by kind" [] {
     let line = seal-commit-line (stamped-result) "/graph" "QmSigner"
 
-    assert str contains $line "Froze: 2 birth certificates, 1 receipt certificate"
+    assert str contains $line "Froze: 2 birth certificates, 1 receipt certificate, 2 position proofs"
 }
 
 # A repeated seal certifies nothing new — it only re-attests what earlier roots
 # already carried. Stated, not omitted: a missing line reads as a forgotten field.
 @test
 def "a seal that froze nothing says so instead of dropping the line" [] {
-    let nothing_new = stamped-result | update newborn 0 | update receipts 0
+    let nothing_new = stamped-result | update newborn 0 | update receipts 0 | update positions 0
 
     assert str contains (seal-commit-line $nothing_new "/graph" "QmSigner") "Froze: nothing new"
 }
 
 @test
 def "a link with no receipt names only the birth certificate" [] {
-    let one = stamped-result | update newborn 1 | update receipts 0
+    let one = stamped-result | update newborn 1 | update receipts 0 | update positions 0
 
     let line = seal-commit-line $one "/graph" "QmSigner"
 
     assert str contains $line "Froze: 1 birth certificate\n"
     assert not ($line | str contains "receipt certificate")
+}
+
+# Numbering is an EDIT to files the operator wrote — the claimed time is
+# replaced by the number the run gives it — so the commit carrying it has to say
+# so. A re-seal numbers nothing, and a line stating that on every seal would be
+# a constant, so it appears only when something was numbered.
+@test
+def "a numbered position is named in the body and silence is the ordinary case" [] {
+    assert not ((seal-commit-line (stamped-result) "/graph" "QmSigner") | str contains "Numbered")
+
+    let minted = stamped-result | update numbered 2
+
+    assert str contains (seal-commit-line $minted "/graph" "QmSigner") "Numbered: 2 provisional positions"
 }
 
 # The snapshot is where every certificate frozen under this root verifies against,

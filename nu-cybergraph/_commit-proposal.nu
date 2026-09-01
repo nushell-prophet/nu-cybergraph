@@ -15,7 +15,7 @@
 # would also take a compatibility promise nobody made, the same line `_signer.nu`
 # drew for `resolve-key`.
 
-use _layout.nu [ snapshot-dir signer-dirs CERTS_DIR SEALS_DIR IMPORTED_DIR RECEIPTS_DIR ]
+use _layout.nu [ snapshot-dir signer-dirs CERTS_DIR SEALS_DIR IMPORTED_DIR RECEIPTS_DIR ORDER_DIR ]
 
 # Quote a value for the Nushell block the caller is handed.
 #
@@ -90,12 +90,25 @@ export def seal-commit-line [
     let froze = [
         (if $result.newborn > 0 { count-of $result.newborn "birth certificate" })
         (if $result.receipts > 0 { count-of $result.receipts "receipt certificate" })
+        (if $result.positions > 0 { count-of $result.positions "position proof" })
     ] | compact
     let froze_line = if ($froze | is-empty) {
-        "Froze: nothing new — every link and receipt already had its certificate"
+        "Froze: nothing new — every link, position and receipt already had its certificate"
     } else {
         $"Froze: ($froze | str join ', ')"
     }
+
+    # Why: the seal REWRITES position files — the claimed time the operator's
+    # `link add` wrote is replaced by the number the run gives it — and the
+    # commit this proposal writes is what carries those files. A body that did
+    # not name the rewrite would offer the operator a commit whose diff it
+    # never explained.
+    #
+    # Stated only when it happened, unlike the freeze line above: "numbered
+    # nothing" is the ordinary re-seal and would be a constant.
+    let numbered_line = if $result.numbered > 0 {
+        [$"Numbered: (count-of $result.numbered "provisional position") — each stated the time it arrived, and this seal is where the run turns that into a number"]
+    } else { [] }
 
     # Recomputed from the layout rather than taken from `$result.snapshot`: that
     # field is relative to wherever the seal was RUN from, and a commit body is
@@ -115,6 +128,7 @@ export def seal-commit-line [
         $"Merkle root: ($sealed.merkle_root)"
         $"Signed by: ($signer)"
         $froze_line
+        ...$numbered_line
         $"Snapshot: ($snapshot)"
         ...$bundle_line
         $anchor_line
@@ -134,7 +148,7 @@ export def seal-commit-line [
     # commit — `particle uncommitted --propose-commit`, which has to run BEFORE the
     # seal for the manifest to cover them. Seal refuses when it has not.
     let staged = (
-        (signer-dirs $root | each { path basename }) ++ [$CERTS_DIR $SEALS_DIR $IMPORTED_DIR $RECEIPTS_DIR "multiproofs"]
+        (signer-dirs $root | each { path basename }) ++ [$CERTS_DIR $SEALS_DIR $IMPORTED_DIR $RECEIPTS_DIR $ORDER_DIR "multiproofs"]
     )
         | where {|d|
             let dir = $root | path join $d

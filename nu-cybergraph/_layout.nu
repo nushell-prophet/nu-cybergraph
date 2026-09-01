@@ -14,6 +14,7 @@ export const EXPORTS_DIR = "exports"
 export const IMPORTED_DIR = "imported"
 export const RECEIPTS_DIR = "receipts"
 export const CUSTODY_DIR = "custody"
+export const ORDER_DIR = "order"
 
 # nu-multiproof's directory inside the graph home. Named so the closed-set
 # check can recognise it; every path INTO it stays inline at its call site,
@@ -170,6 +171,68 @@ export def receipt-cert-path [root: path author: string edge_cid: string]: nothi
     receipts-dir $root | path join $author (receipt-cert-filename $edge_cid)
 }
 
+# <root>/order — the signer's run of positions, one file per link
+export def order-dir [root: path]: nothing -> path {
+    $root | path join $ORDER_DIR
+}
+
+# What marks a file in order/ as a position rather than its frozen proof.
+# `<cid>.order.cert.json` deliberately does not end with it — the same
+# distinction, and the same trick, as RECEIPT_SUFFIX.
+export const ORDER_SUFFIX = ".order.json"
+
+# order/<signer-cid>/<edge-cid>.order.json — the position's path relative to
+# the graph root. Mirrors the link layout for the reason the receipt does: the
+# signer directory plus the edge filename address the act, and the run belongs
+# to a signer rather than to the graph. Relative because it doubles as the
+# proof's leaf.filepath — the path enters the signed root, which is what binds
+# a number to the signer whose run it is.
+export def order-relpath [signer: string edge_cid: string]: nothing -> string {
+    [$ORDER_DIR $signer $"($edge_cid)($ORDER_SUFFIX)"] | path join
+}
+
+# <root>/order/<signer-cid>/<edge-cid>.order.json
+export def order-path [root: path signer: string edge_cid: string]: nothing -> path {
+    order-dir $root | path join $signer $"($edge_cid)($ORDER_SUFFIX)"
+}
+
+# The edge CID a position file is named after — order-relpath's inverse read
+# off the filename, the author half being the parent directory. Refuses rather
+# than truncating a name that is not a position, for the reason `receipt-cid`
+# spells out.
+export def order-cid [file: path]: nothing -> string {
+    let base = $file | path basename
+    if not ($base | str ends-with $ORDER_SUFFIX) {
+        error make {msg: $"not a position filename: ($base) — expected <cid>($ORDER_SUFFIX)"}
+    }
+    $base | str substring ..<(-1 * ($ORDER_SUFFIX | str length))
+}
+
+# Every position in the graph home, with the two halves of its address read
+# off the path — the signer whose run it belongs to (directory name) and the
+# edge CID (filename). `link-files`' twin over order/, exactly as
+# `receipt-files` is over receipts/.
+export def order-files [root: path]: nothing -> table {
+    list-dirs (order-dir $root)
+    | where ($it | path basename) =~ $CID_V0_RE
+    | each {|d|
+        list-files $d --suffix $ORDER_SUFFIX
+        | each {|f| {file: $f signer: ($d | path basename) edge: (order-cid $f)} }
+    }
+    | flatten
+}
+
+# <edge-cid>.order.cert.json — the frozen position proof.
+export def order-cert-filename [edge_cid: string]: nothing -> string {
+    $"($edge_cid).order.cert.json"
+}
+
+# <root>/order/<signer-cid>/<edge-cid>.order.cert.json — frozen beside the
+# position it proves, in the same signer directory.
+export def order-cert-path [root: path signer: string edge_cid: string]: nothing -> path {
+    order-dir $root | path join $signer (order-cert-filename $edge_cid)
+}
+
 # <bundle>/custody — the appended custody layers of a re-exported bundle
 export def custody-dir [bundle: path]: nothing -> path {
     $bundle | path join $CUSTODY_DIR
@@ -267,7 +330,7 @@ export def snapshot-dir [root: path root_hex: string]: nothing -> path {
 # distinction `signer-dirs` makes, written once as a list so the walk and the
 # refusal cannot drift apart.
 export const RESERVED_DIRS = [
-    $PARTICLES_DIR $CERTS_DIR $SEALS_DIR $EXPORTS_DIR $IMPORTED_DIR $RECEIPTS_DIR $MULTIPROOFS_DIR
+    $PARTICLES_DIR $CERTS_DIR $SEALS_DIR $EXPORTS_DIR $IMPORTED_DIR $RECEIPTS_DIR $ORDER_DIR $MULTIPROOFS_DIR
 ]
 
 # A seal snapshot directory: the 12-char truncation `snapshot-dir` writes.
@@ -281,7 +344,7 @@ const CERT_SUFFIX = ".cert.json"
 # above: the operator reading the row needs the rule, not the name of the check
 # that produced it.
 const ALLOWS = {
-    root: "the reserved directories (particles, certs, seals, exports, imported, receipts, multiproofs) and <signer-cid>/ directories"
+    root: "the reserved directories (particles, certs, seals, exports, imported, receipts, order, multiproofs) and <signer-cid>/ directories"
     signer: "<edge-cid>.json link records"
     particles: "<cid> and <cid>.<ext> files"
     certs: "<signer-cid>/ directories"
@@ -289,6 +352,8 @@ const ALLOWS = {
     seals: "<root-hex-12>/ snapshot directories"
     receipts: "<author-cid>/ directories"
     receipts_author: "<edge-cid>.receipt.json receipts and their .receipt.cert.json proofs"
+    order: "<signer-cid>/ directories"
+    order_signer: "<edge-cid>.order.json positions and their .order.cert.json proofs"
     bundles: "<signer-cid>/ directories"
     bundles_signer: "<edge-cid>/ bundle directories"
 }
@@ -306,6 +371,14 @@ def cert-name [file: path]: nothing -> any {
 def receipt-name [file: path]: nothing -> any {
     let receipt = named-after $file $RECEIPT_SUFFIX
     if $receipt != null { $receipt } else { named-after $file (receipt-cert-filename "") }
+}
+
+# The edge CID a name in `order/<signer>/` claims — a position or the frozen
+# proof beside it — or null when it is neither. `receipt-name`'s twin, and the
+# same two suffixes read the same way.
+def order-name [file: path]: nothing -> any {
+    let position = named-after $file $ORDER_SUFFIX
+    if $position != null { $position } else { named-after $file (order-cert-filename "") }
 }
 
 # `<cid><suffix>` -> the CID, or null. The shape every proof filename under the
@@ -378,6 +451,10 @@ export def strays [root: path]: nothing -> table {
         unexpected $d $ALLOWS.receipts_author {|e| $e.type != "dir" and (receipt-name $e.name) != null }
     } | flatten
 
+    let order = list-dirs (order-dir $root) | each {|d|
+        unexpected $d $ALLOWS.order_signer {|e| $e.type != "dir" and (order-name $e.name) != null }
+    } | flatten
+
     let bundles = [(exports-dir $root) (imported-dir $root)] | each {|top|
         list-dirs $top | each {|d| cid-dirs-only $d $ALLOWS.bundles_signer } | flatten
     } | flatten
@@ -393,6 +470,8 @@ export def strays [root: path]: nothing -> table {
         })
         (cid-dirs-only (receipts-dir $root) $ALLOWS.receipts)
         $receipts
+        (cid-dirs-only (order-dir $root) $ALLOWS.order)
+        $order
         (cid-dirs-only (exports-dir $root) $ALLOWS.bundles)
         (cid-dirs-only (imported-dir $root) $ALLOWS.bundles)
         $bundles
