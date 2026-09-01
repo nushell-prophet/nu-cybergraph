@@ -129,6 +129,26 @@ or park a note in `todo/`.
 ## Running tests
 
 ```sh
-nu toolkit.nu test          # all tests under tests/
-nu toolkit.nu test --fail   # non-zero exit on failure (CI)
+nu toolkit.nu test              # all tests under tests/
+nu toolkit.nu test --fail       # non-zero exit on failure (CI)
+nu toolkit.nu test --threads 0  # nutest's own parallelism back (0 means one per core) — see the warning below
 ```
+
+The suite runs on one thread by default
+and takes about 50 seconds.
+That is not a preference:
+nutest's own default runs every suite in parallel,
+and every test inside a suite in parallel too.
+Under Apple `container` that spawn density wedges the terminal of the whole VM
+— the guest keeps working,
+but nothing it prints reaches the screen until the machine is restarted.
+Measured on nu-multiproof, whose suite has the same shape:
+thirty single-threaded runs never wedged it,
+the parallel form went down on the fourth or fifth.
+So `--threads 0` is the escape hatch,
+not the faster setting to reach for.
+The fault is in the runtime rather than here,
+so this default should go once it is fixed upstream.
+The investigation is on no live branch
+— it lives in an archived tag of the cozy repo:
+`git show archive/debug-freeze:todo/20260830-debug-freeze.md`.
