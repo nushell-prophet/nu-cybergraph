@@ -95,13 +95,13 @@ def "a particle no link names is an orphan" [] {
 }
 
 # The reading has to follow the operand step, or every convention's real subject
-# reads as an orphan: the record `quote` mints is the link's endpoint, and the
+# reads as an orphan: the record `quote-particle` mints is the link's endpoint, and the
 # quoted source is named only inside that record.
 @test
 def "an operand named inside an instruction record is reachable" [] {
     let g = empty-graph $in.tmp_dir
     let source = particle add "the source being quoted" --repo $g.repo
-    convention quote $source "the excerpt" --repo $g.repo
+    convention quote-particle $source "the excerpt" --repo $g.repo
 
     let rows = uncommitted-files $g.root
 

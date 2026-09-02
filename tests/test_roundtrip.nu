@@ -131,7 +131,7 @@ def "birth, seal, bundle, import, verify — the full link journey" [] {
 # bj002's own point about instructions: the record names cid_from/cid_to, but
 # without their bytes an importer holds an address and not the preimage —
 # gm-vote's connector had to fall back to scanning particles/ across every
-# local repo it could reach to decode a verb like {"op":"agree"}. So a bundle
+# local repo it could reach to decode a verb like {"op":"agree_particle"}. So a bundle
 # now carries the ends it holds a file for, by default; --links-only is the
 # escape hatch back to the old, particle-free shape.
 @test

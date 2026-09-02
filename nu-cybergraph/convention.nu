@@ -34,40 +34,47 @@
 #   confirm-link        {op: confirm_link}                            → {cid_from: A, cid_to: B, signer: S}
 #   deny-edge           {op: deny_edge}                               → {cid_from: A, cid_to: B}
 #   deny-link           {op: deny_link}                               → {cid_from: A, cid_to: B, signer: S}
-#   agree / disagree    {op: agree}                                   → B
-#   quote               {about: A, op: quote}                         → B
-#   translation         {about: A, op: translation}                   → B
+#   agree-particle      {op: agree_particle}                          → B
+#   disagree-particle   {op: disagree_particle}                       → B
+#   quote-particle      {about: A, op: quote_particle}                → B
+#   translation-particle {about: A, op: translation_particle}         → B
 #   pro / con           {about: C, op: pro}                           → B
 #   question            {about: B, op: question}                      → Q
-#   author              {about: B, op: author}                        → P
+#   author-particle     {about: B, op: author_particle}               → P
 #   same                {about: P1, op: same}                         → P2
 #   update-edge         {cid_from: A, cid_to: B, op: update_edge}     → C
 #   update-particle     {about: B, op: update_particle}               → C
-#   answer              {cid_from: {about: B, op: question}, cid_to: Q, op: answer} → A
+#   answer-edge         {cid_from: {about: B, op: question}, cid_to: Q, op: answer_edge} → A
 #   claimed-at          {about: X, op: claimed_at}                    → T
 #
 # Eighteen verbs for twelve conventions — confirm and deny are one convention
 # each and two verbs each, one per subject. Four answer to no convention:
 # repeat is bj002's edge repetition, which
 # is not one of them (no CID in the source), and claimed-at, update-particle
-# and translation are this repo's extensions — claimed-at makes a time claim an
+# and translation-particle are this repo's extensions — claimed-at makes a time claim an
 # ordinary optional edge instead of a fixture of every record; update-particle
 # is bj002's update act
 # stated about a particle instead of an edge, which is what a version chain of
-# particles needs; translation names the one relation a multilingual corpus lives on, and
-# neither `same` nor `quote` says it. bj002's set of conventions is open, which
+# particles needs; translation-particle names the one relation a multilingual corpus lives on, and
+# neither `same` nor `quote-particle` says it. bj002's set of conventions is open, which
 # is what permits all three.
 #
-# An op word says what the act is about wherever a verb has two possible
-# subjects: confirm_edge / confirm_link, deny_edge / deny_link, update_edge /
-# update_particle. The record shape carries the same distinction, but only for
-# a reader that parses it — `link list | where op == "update"` could not tell
-# an edge update from a particle one, and now the op column alone answers.
-# Where a verb has one possible subject the bare word stays: repeat only ever
-# repeats an edge, agree only ever agrees with a particle, so a suffix there
-# would name nothing. This diverges from bj002's vocabulary and costs nothing:
-# bj002 hashes a comma-join where this repo derives from a record, so no
-# address here has ever matched one there.
+# An op word names its subject wherever the verb has one: confirm_edge /
+# confirm_link, deny_edge / deny_link, update_edge / update_particle, and —
+# with a single possible subject — agree_particle, disagree_particle,
+# quote_particle, author_particle, translation_particle, answer_edge. The
+# record shape carries the same fact, but only for a reader that parses it,
+# and a CID is opaque: no tool can tell a particle CID from an edge address
+# at write time unless the preimage already sits in the store. So the word is
+# the one check that always works — `agree_particle → {cid_from, cid_to}` is
+# visibly wrong the way a gender ending that disagrees with its noun is,
+# without parsing the sentence; the redundancy is what carries the intent.
+# Where a verb takes any CID on purpose the word stays bare — pro, con,
+# question, same, claimed_at — so bare is the signal "any CID". Only repeat
+# has no word at all, because it writes no source record. bj002 spells the
+# same words since 2026-09-02; the addresses still differ, because bj002
+# hashes a comma-join where this repo derives from a record, so no address
+# here has ever matched one there.
 #
 # Reading these edges back is `link list` / `touching` / `tally` (link.nu,
 # _read.nu): the published preimage is what makes a derived CID readable, so
@@ -104,7 +111,7 @@ export use _derive.nu [ derive ]
 # place the grammar is interpreted.
 #
 # `index` is built once by `edge` and threaded through the recursion — a
-# convention can nest several operands (`answer` embeds a whole question
+# convention can nest several operands (`answer-edge` embeds a whole question
 # record), and rebuilding it per operand is the scan-per-lookup cost
 # `resolve-particle`'s own doc comment measures against.
 def address [root: path index: record expr: any allow_missing: bool literal: bool]: nothing -> string {
@@ -275,7 +282,7 @@ export def "update-edge" [
 
 # Update a particle: {about: B, op: update_particle} → C — "C is the version
 # that replaces B".
-# bj002's `update` states the same act, "C replaces B", with A supplying the
+# bj002's `update_edge` states the same act, "C replaces B", with A supplying the
 # context of an edge; this is that act about the particle alone, so a version chain
 # of particles gets an address of its own instead of being a plain edge no reader can
 # tell from any other. The operand sits in the source, like quote/pro/con/
@@ -304,11 +311,11 @@ export def "update-particle" [
     edge {about: $superseded op: "update_particle"} $replacement $signer $repo $allow_missing $literal
 }
 
-# Quote: {about: A, op: quote} → B states that B is a faithful excerpt of A
+# Quote: {about: A, op: quote_particle} → B states that B is a faithful excerpt of A
 # (content(B) is a substring of content(A), independently verifiable — this
 # layer does not check it) (bj002 "Quotes").
-@example "B is an excerpt of A" { convention quote QmA… QmB… }
-export def quote [
+@example "B is an excerpt of A" { convention quote-particle QmA… QmB… }
+export def "quote-particle" [
     about: string # the quoted source
     excerpt: string # the excerpt
     --signer: string
@@ -316,21 +323,21 @@ export def quote [
     --allow-missing # skip the local-file check on a CID operand (see resolve-particle)
     --literal # treat a content operand as literal even if it names a path (see resolve-arg-bytes)
 ]: nothing -> record {
-    edge {about: $about op: "quote"} $excerpt $signer $repo $allow_missing $literal
+    edge {about: $about op: "quote_particle"} $excerpt $signer $repo $allow_missing $literal
 }
 
-# Translation: {about: A, op: translation} → B states that B says in another
+# Translation: {about: A, op: translation_particle} → B states that B says in another
 # language what A says. The source is the original, so a reader holding it
 # computes one hash and asks which translations exist; the direction also
 # records which text came first, which a symmetric relation would lose.
 #
 # Not `same`: that says two names denote one entity, and two language versions
-# are two particles, each with its own author and its own CID. Not `quote` either —
+# are two particles, each with its own author and its own CID. Not `quote-particle` either —
 # a quote is checkable byte-for-byte, a translation is a judgement, and the
 # signature is what puts the signer behind it. An extension like `claimed-at`
 # and `update-particle`, which bj002's open set of conventions permits.
-@example "B is a translation of A" { convention translation QmA… QmB… }
-export def translation [
+@example "B is a translation of A" { convention translation-particle QmA… QmB… }
+export def "translation-particle" [
     original: string # the text translated from
     translated: string # the text translated into another language
     --signer: string
@@ -338,35 +345,35 @@ export def translation [
     --allow-missing # skip the local-file check on a CID operand (see resolve-particle)
     --literal # treat a content operand as literal even if it names a path (see resolve-arg-bytes)
 ]: nothing -> record {
-    edge {about: $original op: "translation"} $translated $signer $repo $allow_missing $literal
+    edge {about: $original op: "translation_particle"} $translated $signer $repo $allow_missing $literal
 }
 
-# Agree: {op: agree} → B — "claim B is true". Gives an opinion about a
+# Agree: {op: agree_particle} → B — "claim B is true". Gives an opinion about a
 # standalone particle an edge of its own, so it aggregates like any other
 # (bj002 "Agreement and disagreement with content").
-@example "agree with claim B" { convention agree QmB… }
-export def agree [
+@example "agree with claim B" { convention agree-particle QmB… }
+export def "agree-particle" [
     cid: string # the particle being agreed with
     --signer: string
     --repo: path
     --allow-missing # skip the local-file check on a CID operand (see resolve-particle)
     --literal # treat a content operand as literal even if it names a path (see resolve-arg-bytes)
 ]: nothing -> record {
-    edge {op: "agree"} $cid $signer $repo $allow_missing $literal
+    edge {op: "agree_particle"} $cid $signer $repo $allow_missing $literal
 }
 
-# Disagree: {op: disagree} → B — "claim B is false". The other axis from
+# Disagree: {op: disagree_particle} → B — "claim B is false". The other axis from
 # deny: this speaks about the particle's content, deny about the statement or the record
 # (bj002 "Agreement and disagreement with content").
-@example "disagree with claim B" { convention disagree QmB… }
-export def disagree [
+@example "disagree with claim B" { convention disagree-particle QmB… }
+export def "disagree-particle" [
     cid: string # the particle being disagreed with
     --signer: string
     --repo: path
     --allow-missing # skip the local-file check on a CID operand (see resolve-particle)
     --literal # treat a content operand as literal even if it names a path (see resolve-arg-bytes)
 ]: nothing -> record {
-    edge {op: "disagree"} $cid $signer $repo $allow_missing $literal
+    edge {op: "disagree_particle"} $cid $signer $repo $allow_missing $literal
 }
 
 # Argument for: {about: C, op: pro} → B — "B is an argument for C". C is any
@@ -413,13 +420,13 @@ export def question [
     edge {about: $about op: "question"} $question $signer $repo $allow_missing $literal
 }
 
-# Answer: {cid_from: {about: B, op: question}, cid_to: Q, op: answer} → A —
+# Answer: {cid_from: {about: B, op: question}, cid_to: Q, op: answer_edge} → A —
 # "A answers the question Q about B". The record embeds the question edge's
 # fields (the same move as update), so the answer attaches to the
 # question-in-context, not the bare Q — one Q asked about different Bs does
 # not glue answers together (bj002 "Question and answer").
-@example "A answers question Q about B" { convention answer QmB… QmQ… QmA… }
-export def answer [
+@example "A answers question Q about B" { convention answer-edge QmB… QmQ… QmA… }
+export def "answer-edge" [
     about: string # what the question is about
     question: string # the question content
     answer: string # the answer content
@@ -428,15 +435,15 @@ export def answer [
     --allow-missing # skip the local-file check on a CID operand (see resolve-particle)
     --literal # treat a content operand as literal even if it names a path (see resolve-arg-bytes)
 ]: nothing -> record {
-    edge {cid_from: {about: $about op: "question"} cid_to: $question op: "answer"} $answer $signer $repo $allow_missing $literal
+    edge {cid_from: {about: $about op: "question"} cid_to: $question op: "answer_edge"} $answer $signer $repo $allow_missing $literal
 }
 
-# Authorship: {about: B, op: author} → P — "the author of particle B is P". The
+# Authorship: {about: B, op: author_particle} → P — "the author of particle B is P". The
 # signer of the edge is the one who ports it (the archivist), which need not be
 # the author P; the signature certifies the porting, not the authorship
 # (bj002 "Authorship: porting from other mediums").
-@example "the author of B is P" { convention author QmB… QmP… }
-export def author [
+@example "the author of B is P" { convention author-particle QmB… QmP… }
+export def "author-particle" [
     content: string # the ported particle
     author_id: string # CID of the author's identifier
     --signer: string
@@ -444,7 +451,7 @@ export def author [
     --allow-missing # skip the local-file check on a CID operand (see resolve-particle)
     --literal # treat a content operand as literal even if it names a path (see resolve-arg-bytes)
 ]: nothing -> record {
-    edge {about: $content op: "author"} $author_id $signer $repo $allow_missing $literal
+    edge {about: $content op: "author_particle"} $author_id $signer $repo $allow_missing $literal
 }
 
 # Identity: {about: P1, op: same} → P2 — "P1 and P2 name one entity" (the

@@ -600,17 +600,22 @@ Eighteen verbs for twelve conventions
 — `confirm` and `deny` are one convention each and two verbs each, one per subject.
 Four verbs answer to no bj002 convention:
 `repeat` is edge repetition (bj002 names it beside the conventions, not among them — it puts no special CID in the source);
-`claimed-at`, `update-particle` and `translation` are this format's extensions, which bj002's open set permits.
+`claimed-at`, `update-particle` and `translation-particle` are this format's extensions, which bj002's open set permits.
 
-An `op` word names the subject wherever a verb has two of them
-— `confirm_edge` / `confirm_link`, `deny_edge` / `deny_link`, `update_edge` / `update_particle`.
-The record shape keeps those addresses apart on its own,
+An `op` word names its subject wherever the verb has one
+— `confirm_edge` / `confirm_link`, `deny_edge` / `deny_link`, `update_edge` / `update_particle`,
+and, with a single possible subject, `agree_particle`, `disagree_particle`, `quote_particle`, `author_particle`, `translation_particle`, `answer_edge`.
+The record shape carries the same fact,
 but only for a reader that parses the record,
-so the word carries it too and a reader filtering on `op` alone is answered.
-Where a verb has one possible subject the bare word stands
-— `repeat` only repeats an edge, `agree` only agrees with a particle.
-These words are not bj002's, which writes `hash("confirm")`;
-nothing is lost by that, because bj002 hashes a comma-join where this format derives from a record (2.2),
+and a CID is opaque:
+no tool can tell a particle CID from an edge address at write time unless the preimage already sits in the store.
+So the word is the one check that always works
+— a writer cannot put a particle verb on an edge address without the mismatch showing in the word itself.
+Where a verb takes any CID on purpose the word stays bare
+— `pro`, `con`, `question`, `same`, `claimed_at` —
+so a bare word is the signal "any CID".
+bj002 spells the same words since 2026-09-02;
+the addresses still differ, because bj002 hashes a comma-join where this format derives from a record (2.2),
 so no address here has ever matched one there.
 
 | verb | edge written |
@@ -620,20 +625,20 @@ so no address here has ever matched one there.
 | `confirm-link A B S` | `{"op":"confirm_link"} → {"cid_from":A,"cid_to":B,"signer":S}` |
 | `deny-edge A B` | `{"op":"deny_edge"} → {"cid_from":A,"cid_to":B}` |
 | `deny-link A B S` | `{"op":"deny_link"} → {"cid_from":A,"cid_to":B,"signer":S}` |
-| `agree B` / `disagree B` | `{"op":"agree"}` / `{"op":"disagree"} → B` |
-| `quote A B` | `{"about":A,"op":"quote"} → B` |
-| `translation A B` | `{"about":A,"op":"translation"} → B` |
+| `agree-particle B` / `disagree-particle B` | `{"op":"agree_particle"}` / `{"op":"disagree_particle"} → B` |
+| `quote-particle A B` | `{"about":A,"op":"quote_particle"} → B` |
+| `translation-particle A B` | `{"about":A,"op":"translation_particle"} → B` |
 | `pro C B` / `con C B` | `{"about":C,"op":"pro"}` / `{"about":C,"op":"con"} → B` |
 | `question B Q` | `{"about":B,"op":"question"} → Q` |
-| `answer B Q A` | `{"cid_from":{"about":B,"op":"question"},"cid_to":Q,"op":"answer"} → A` |
-| `author B P` | `{"about":B,"op":"author"} → P` |
+| `answer-edge B Q A` | `{"cid_from":{"about":B,"op":"question"},"cid_to":Q,"op":"answer_edge"} → A` |
+| `author-particle B P` | `{"about":B,"op":"author_particle"} → P` |
 | `same P1 P2` | `{"about":P1,"op":"same"} → P2` |
 | `update-edge A B C` | `{"cid_from":A,"cid_to":B,"op":"update_edge"} → C` |
 | `update-particle B C` | `{"about":B,"op":"update_particle"} → C` |
 | `claimed-at X T` | `{"about":X,"op":"claimed_at"} → T`, T an RFC 3339 timestamp published as a file |
 
 A record shown in source or target position means the CID of its canonical bytes.
-`answer`'s source nests:
+`answer-edge`'s source nests:
 the inner question record resolves to its own CID first,
 then the outer record is serialized.
 
@@ -950,8 +955,8 @@ S = QmddrVz92VH3LqT2i7uXeK4AVh6LyU7zjDiLbSdChPsULr
 | `{"op":"confirm_link"}` | `QmTJipuBLbsHCgRRe9BrGeGbZFFNoYFwzbiEQgGzDpaHNj` |
 | `{"op":"deny_edge"}` | `QmXegbm1GjDayyetHt87fvAicrE42SQqfd7G4Gwnr1SSr5` |
 | `{"op":"deny_link"}` | `QmZ27sgjKKC2HDS6o7Kk1L8PCANGxArGRxgNcay9ENC2jP` |
-| `{"op":"agree"}` | `QmTswdDR4inURY4GeWGvmL9S8xrDZjfiGEyeUUZzUNRNYk` |
-| `{"op":"disagree"}` | `QmbQUXxqMrFA6zGYmgjvbFKyywS7Gcbb3afb3wqG6s7r6J` |
+| `{"op":"agree_particle"}` | `QmUjmrKj4nYsbKg27ZSepjWFEyt54B5rMD6V4Mp4pUH3sA` |
+| `{"op":"disagree_particle"}` | `QmQjBGThDKWcsBHZsCDtUL2GwB5FWoKXJM6Sfsgo3EtshK` |
 | `{"cid_from":A,"cid_to":B}` (the edge address) | `QmawrHuBDdcSRCPumzsKfsMi5FJne8xai9WNPAdr3NmLBV` |
 | `{"cid_from":A,"cid_to":B,"signer":S}` (the cyberlink) | `Qme4L2P7QwNoijw6HzYVrqrrtk99oj1XvJHvAb9yobHVLe` |
 

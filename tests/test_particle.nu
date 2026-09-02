@@ -271,7 +271,7 @@ def "link add publishes a bare-string signer as a particle" [] {
 @test
 def "convention verbs publish a bare-string signer as a particle" [] {
     let tmp = $in.tmp
-    let r = convention agree "cyber" --repo $tmp --signer "alice" | get record
+    let r = convention agree-particle "cyber" --repo $tmp --signer "alice" | get record
     assert equal $r.signer ("alice" | into binary | cid-v0)
 }
 
@@ -391,8 +391,8 @@ def "link add refuses a CID endpoint this repo holds no file for" [] {
 @test
 def "convention verbs refuse a CID operand this repo holds no file for" [] {
     let tmp = $in.tmp
-    assert error {|| convention agree $A --repo $tmp --signer $N }
-    convention agree $A --repo $tmp --signer $N --allow-missing | ignore
+    assert error {|| convention agree-particle $A --repo $tmp --signer $N }
+    convention agree-particle $A --repo $tmp --signer $N --allow-missing | ignore
 }
 
 # The check and its escape hatch both walk the whole address expression, not
@@ -406,8 +406,8 @@ def "allow-missing reaches an operand nested inside the address expression" [] {
     assert error {|| convention confirm-link $A $B $N --repo $tmp --signer $N }
     convention confirm-link $A $B $N --repo $tmp --signer $N --allow-missing | ignore
 
-    assert error {|| convention answer $A "q" "a" --repo $tmp --signer $N }
-    convention answer $A "q" "a" --repo $tmp --signer $N --allow-missing | ignore
+    assert error {|| convention answer-edge $A "q" "a" --repo $tmp --signer $N }
+    convention answer-edge $A "q" "a" --repo $tmp --signer $N --allow-missing | ignore
 }
 
 @test
@@ -420,8 +420,8 @@ def "convention verbs resolve text arguments before hashing" [] {
 
 @test
 def "convention verbs resolve args embedded in derived sources" [] {
-    let q = convention quote "source text" "text" --repo $in.tmp --signer $N | get record
+    let q = convention quote-particle "source text" "text" --repo $in.tmp --signer $N | get record
     let src_cid = "source text" | into binary | cid-v0
-    assert equal $q.cid_from (derive {about: $src_cid op: "quote"})
+    assert equal $q.cid_from (derive {about: $src_cid op: "quote_particle"})
     assert equal (open --raw (particle-path $in.root $src_cid)) "source text"
 }

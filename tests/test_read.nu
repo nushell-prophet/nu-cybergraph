@@ -57,12 +57,12 @@ def "touching names the position, which is what tells the two ends apart" [] {
 @test
 def "touching reaches an operand two records deep" [] {
     let tmp = $in.tmp
-    # answer: {cid_from: {about: B, op: question}, cid_to: Q, op: answer} → A
-    convention answer $B "why?" "because" --signer $S --repo $tmp --allow-missing
+    # answer-edge: {cid_from: {about: B, op: question}, cid_to: Q, op: answer_edge} → A
+    convention answer-edge $B "why?" "because" --signer $S --repo $tmp --allow-missing
     let hit = link touching $B --repo $tmp
     assert equal ($hit | length) 1
     assert equal ($hit | first | get role) "cid_from.cid_from.about"
-    assert equal ($hit | first | get op) "answer"
+    assert equal ($hit | first | get op) "answer_edge"
 }
 
 @test
@@ -97,7 +97,7 @@ def "the rg-narrowed reading and the full scan return the same rows" [] {
     link add $A $B --signer $S --repo $tmp --allow-missing
     convention update-particle $B $C --signer $S --repo $tmp --allow-missing
     convention confirm-edge $A $B --signer $S2 --repo $tmp --allow-missing
-    convention answer $B "why?" "because" --signer $S --repo $tmp --allow-missing
+    convention answer-edge $B "why?" "because" --signer $S --repo $tmp --allow-missing
     # rg only drops files that cannot contain the CID, so the two must agree.
     # This is what keeps the fast path from becoming a second implementation.
     assert equal (link touching $B --repo $tmp) (link touching $B --repo $tmp --scan)

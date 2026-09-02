@@ -235,7 +235,7 @@ export def touching [
 # Why counts per row and never a total: bj002 keeps repetition and confirmation
 # apart — repeating an edge claims you did the work yourself, confirming leans
 # on whoever did — so a reader reports two numbers, never their sum. The same
-# holds across positions: `deny` of an edge and `deny` of one signer's
+# holds across positions: `deny-edge` of an edge and `deny-link` of one signer's
 # cyberlink are different statements. Summing is a reading policy, and a
 # reading policy belongs to the reader, not to the command that counts.
 #

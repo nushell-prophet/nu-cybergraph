@@ -107,7 +107,7 @@ export def candidates [root: path cid: string --scan]: nothing -> list<path> {
 # `cid_from` or `cid_to`. Indirectly: an instruction preimage names it as an
 # operand, and the link names that record; then the role is the endpoint's
 # key, a dot, and the field inside — `cid_from.about`. The record may itself
-# be an operand of a bigger record (`answer` is that shape), so the step
+# be an operand of a bigger record (`answer-edge` is that shape), so the step
 # repeats, and the role grows one field per level.
 #
 # A candidate is kept only if it is a file of the graph by the graph's own

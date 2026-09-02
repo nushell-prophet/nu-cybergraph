@@ -213,7 +213,7 @@ and any other string is published under `particles/` as its own bytes, whose CID
 Omitted, it stays this repo's own identity.
 This is what gives one repo several signers
 — `init` registers exactly one key,
-so ad-hoc named identities are the only way to exercise a multi-signer reading (`tally`'s `signers` column, a `confirm` from someone other than the author) without minting keypairs.
+so ad-hoc named identities are the only way to exercise a multi-signer reading (`tally`'s `signers` column, a `confirm-edge` from someone other than the author) without minting keypairs.
 Two rules an endpoint has that the signer deliberately does not.
 A signer string is **never** opened as a path:
 `--signer other.pub` publishes those eight characters, not the key file,
@@ -293,7 +293,7 @@ and the pre-1.0 rule is that old artifacts are refused rather than converted.
 ## Conventions (bj002)
 
 The twelve conventions of `bostrom-journal` bj002
-— confirm, deny, update, quote, agree, disagree, pro, con, question, answer, author, same —
+— `confirm_edge`/`confirm_link`, `deny_edge`/`deny_link`, `update_edge`, `quote_particle`, `agree_particle`, `disagree_particle`, `pro`, `con`, `question`, `answer_edge`, `author_particle`, `same` —
 *encode* an instruction for processing the graph as an ordinary edge.
 Concept and rationale live in bj002;
 this section is the mechanics.
@@ -304,27 +304,34 @@ Four further verbs are not among the twelve.
 bj002 names edge repetition beside the conventions but not among them,
 because it puts no special CID in the source
 — there is no string that would go into `hash()`.
-`claimed-at`, `update-particle` and `translation` are this repo's extensions:
+`claimed-at`, `update-particle` and `translation-particle` are this repo's extensions:
 `claimed-at` states a time as an edge, the only place this format holds one outside a seal (see time semantics),
-`update-particle` states bj002's `update` act — "C replaces B" — about a particle instead of an edge,
+`update-particle` states bj002's `update_edge` act — "C replaces B" — about a particle instead of an edge,
 which is what a version chain of particles needs and what bj002's edge form cannot express,
-and `translation` states that one particle says in another language what another says,
-the relation a multilingual corpus is built on and the one neither `same` (two names, one entity) nor `quote` (checkable byte-for-byte) covers.
+and `translation-particle` states that one particle says in another language what another says,
+the relation a multilingual corpus is built on and the one neither `same` (two names, one entity) nor `quote-particle` (checkable byte-for-byte) covers.
 bj002's set of conventions is open,
 which is what permits all three.
 Eighteen verbs, twelve conventions:
 `confirm` and `deny` are one convention each and two verbs each,
 because a name that hides its subject behind an optional argument is what this split removes.
 
-A verb's name and its `op` word say what the act is about wherever there are two subjects to tell apart
-— `confirm-edge`/`confirm-link`, `deny-edge`/`deny-link`, `update-edge`/`update-particle`.
-The record shape keeps those addresses apart on its own,
+A verb's name and its `op` word name the subject wherever the verb has one
+— `confirm-edge`/`confirm-link`, `deny-edge`/`deny-link`, `update-edge`/`update-particle`,
+and, with a single possible subject, `agree-particle`, `disagree-particle`, `quote-particle`, `author-particle`, `translation-particle`, `answer-edge`.
+The record shape carries the same fact,
 but only for a reader that parses the record,
-so a reader filtering `link list` on the `op` column alone is answered too.
-Where a verb has one possible subject the bare word stands:
-`repeat` only repeats an edge, `agree` only agrees with a particle.
-The words are not bj002's, which writes `hash("confirm")`;
-nothing is lost by that, because bj002 hashes a comma-join where this repo derives from a record,
+and a CID is opaque:
+no tool can tell a particle CID from an edge address at write time unless the preimage already sits in the store.
+So the word is the one check that always works.
+A verb that names its subject is a gender ending:
+redundant against the noun, and exactly what makes a mismatch visible without parsing the sentence
+— a writer cannot put a particle verb on an edge address and have it read right.
+Where a verb takes any CID on purpose the word stays bare
+— `pro`, `con`, `question`, `same`, `claimed-at` —
+so a bare word is the signal "any CID".
+bj002 spells the same words since 2026-09-02;
+the addresses still differ, because bj002 hashes a comma-join where this repo derives from a record,
 so no address here has ever matched one there.
 
 Every convention stands on one primitive, the canonical record:
@@ -371,7 +378,7 @@ and showing bytes that hash to a sealed CID time-anchors them
 This table is the spec of the eighteen verbs;
 a record in source or target position means the CID of its canonical bytes.
 Sixteen rows,
-because `agree`/`disagree` and `pro`/`con` are mirror pairs that share a row.
+because `agree-particle`/`disagree-particle` and `pro`/`con` are mirror pairs that share a row.
 The header of `nu-cybergraph/convention.nu` restates it in the implementation's address-expression notation
 — same facts, second notation;
 if a shape ever changes, both move together.
@@ -385,13 +392,13 @@ if a shape ever changes, both move together.
 | `deny-link A B S` | `{"op":"deny_link"} → {"cid_from":A,"cid_to":B,"signer":S}` (a signer's cyberlink) |
 | `update-edge A B C` | `{"cid_from":A,"cid_to":B,"op":"update_edge"} → C` |
 | `update-particle B C` | `{"about":B,"op":"update_particle"} → C` (extension, not in bj002; the same act about a particle instead of an edge — a version chain) |
-| `quote A B` | `{"about":A,"op":"quote"} → B` |
-| `translation A B` | `{"about":A,"op":"translation"} → B` (extension, not in bj002; B says in another language what A says, and the direction records which came first) |
-| `agree B` / `disagree B` | `{"op":"agree"\|"disagree"} → B` |
+| `quote-particle A B` | `{"about":A,"op":"quote_particle"} → B` |
+| `translation-particle A B` | `{"about":A,"op":"translation_particle"} → B` (extension, not in bj002; B says in another language what A says, and the direction records which came first) |
+| `agree-particle B` / `disagree-particle B` | `{"op":"agree_particle"\|"disagree_particle"} → B` |
 | `pro C B` / `con C B` | `{"about":C,"op":"pro"\|"con"} → B` |
 | `question B Q` | `{"about":B,"op":"question"} → Q` |
-| `answer B Q A` | `{"cid_from":{"about":B,"op":"question"},"cid_to":Q,"op":"answer"} → A` |
-| `author B P` | `{"about":B,"op":"author"} → P` |
+| `answer-edge B Q A` | `{"cid_from":{"about":B,"op":"question"},"cid_to":Q,"op":"answer_edge"} → A` |
+| `author-particle B P` | `{"about":B,"op":"author_particle"} → P` |
 | `same P1 P2` | `{"about":P1,"op":"same"} → P2` |
 | `claimed-at X T` | `{"about":X,"op":"claimed_at"} → T` (extension, not in bj002; T is an RFC 3339 timestamp published as a file) |
 
@@ -675,7 +682,7 @@ the record at its `<signer>/<edge>.json` path, the certificate, the birth seal's
 and — by default — a copy under `particles/` of whichever of the record's two ends this repo holds a file for.
 When more than one signer holds the edge, `--signer` names whose act leaves
 — several candidates without it are refused, never guessed.
-Without those bytes an importer has the address of the instruction a link states (e.g. `{"op":"agree"}`) but not its preimage,
+Without those bytes an importer has the address of the instruction a link states (e.g. `{"op":"agree_particle"}`) but not its preimage,
 and can only decode the edge's meaning by scanning `particles/` across every repo it can reach;
 `--links-only` drops the birth bundle to the record + certificate alone.
 (`--links-only` is a no-op re-exporting an imported link: that bundle is copied unchanged, particles included, per the read-only-foreign-authority rule below.)

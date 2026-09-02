@@ -24,8 +24,8 @@ const CONFIRM_EDGE = "QmcqM2jDzeLmPQYRVtMvJypmo8NS7xGh2HNgVLFepL5QKQ" # {"op":"c
 const CONFIRM_LINK = "QmTJipuBLbsHCgRRe9BrGeGbZFFNoYFwzbiEQgGzDpaHNj" # {"op":"confirm_link"}
 const DENY_EDGE = "QmXegbm1GjDayyetHt87fvAicrE42SQqfd7G4Gwnr1SSr5" # {"op":"deny_edge"}
 const DENY_LINK = "QmZ27sgjKKC2HDS6o7Kk1L8PCANGxArGRxgNcay9ENC2jP" # {"op":"deny_link"}
-const AGREE = "QmTswdDR4inURY4GeWGvmL9S8xrDZjfiGEyeUUZzUNRNYk" # {"op":"agree"}
-const DISAGREE = "QmbQUXxqMrFA6zGYmgjvbFKyywS7Gcbb3afb3wqG6s7r6J" # {"op":"disagree"}
+const AGREE_PARTICLE = "QmUjmrKj4nYsbKg27ZSepjWFEyt54B5rMD6V4Mp4pUH3sA" # {"op":"agree_particle"}
+const DISAGREE_PARTICLE = "QmQjBGThDKWcsBHZsCDtUL2GwB5FWoKXJM6Sfsgo3EtshK" # {"op":"disagree_particle"}
 const EDGE_AB = "QmawrHuBDdcSRCPumzsKfsMi5FJne8xai9WNPAdr3NmLBV" # {"cid_from":A,"cid_to":B} — the edge address
 const CYBERLINK_ABS = "Qme4L2P7QwNoijw6HzYVrqrrtk99oj1XvJHvAb9yobHVLe" # {"cid_from":A,"cid_to":B,"signer":S}
 
@@ -35,7 +35,7 @@ const CYBERLINK_ABS = "Qme4L2P7QwNoijw6HzYVrqrrtk99oj1XvJHvAb9yobHVLe" # {"cid_f
 @test
 def "a convention publishes nothing when the repo has no signer identity" [] {
     let tmp = $in.tmp
-    assert error {|| convention agree "bostrom" --repo $tmp }
+    assert error {|| convention agree-particle "bostrom" --repo $tmp }
     # The confirm and deny verbs reach the store before `edge` does — they
     # publish their own target through `_publish.nu` — so they resolve the
     # signer themselves, or a refused act leaves its target record behind. One
@@ -51,8 +51,8 @@ def "derive golden CIDs pin the record canon" [] {
     assert equal (derive {op: "confirm_link"}) $CONFIRM_LINK
     assert equal (derive {op: "deny_edge"}) $DENY_EDGE
     assert equal (derive {op: "deny_link"}) $DENY_LINK
-    assert equal (derive {op: "agree"}) $AGREE
-    assert equal (derive {op: "disagree"}) $DISAGREE
+    assert equal (derive {op: "agree_particle"}) $AGREE_PARTICLE
+    assert equal (derive {op: "disagree_particle"}) $DISAGREE_PARTICLE
     assert equal (derive {cid_from: $A cid_to: $B}) $EDGE_AB
     assert equal (derive {cid_from: $A cid_to: $B signer: $S}) $CYBERLINK_ABS
 }
@@ -61,12 +61,12 @@ def "derive golden CIDs pin the record canon" [] {
 def "record-bytes emits alphabetical keys, compact JSON, one trailing newline" [] {
     assert equal (record-bytes {op: "deny_edge"} | decode) "{\"op\":\"deny_edge\"}\n"
     # Keys given out of canonical order come out alphabetical.
-    assert equal (record-bytes {op: "quote" about: $A} | decode) $"{\"about\":\"($A)\",\"op\":\"quote\"}\n"
+    assert equal (record-bytes {op: "quote_particle" about: $A} | decode) $"{\"about\":\"($A)\",\"op\":\"quote_particle\"}\n"
 }
 
 @test
 def "record-bytes refuses non-string values" [] {
-    assert error { record-bytes {cid_to: $B cid_from: {about: $A op: "question"} op: "answer"} }
+    assert error { record-bytes {cid_to: $B cid_from: {about: $A op: "question"} op: "answer_edge"} }
 }
 
 # --- Each convention shapes the right edge -----------------------------------
@@ -189,8 +189,8 @@ def "update-particle states the same act about a particle, at a distinct address
 @test
 def "operand-embedding conventions put the operand in the source" [] {
     let tmp = $in.tmp
-    let q = convention quote $A $B --repo $tmp --signer $S --allow-missing | get record
-    assert equal $q.cid_from (derive {about: $A op: "quote"})
+    let q = convention quote-particle $A $B --repo $tmp --signer $S --allow-missing | get record
+    assert equal $q.cid_from (derive {about: $A op: "quote_particle"})
     assert equal $q.cid_to $B
 
     let pro = convention pro $C $B --repo $tmp --signer $S --allow-missing | get record
@@ -203,8 +203,8 @@ def "operand-embedding conventions put the operand in the source" [] {
     let qn = convention question $A $B --repo $tmp --signer $S --allow-missing | get record
     assert equal $qn.cid_from (derive {about: $A op: "question"})
 
-    let au = convention author $A $B --repo $tmp --signer $S --allow-missing | get record
-    assert equal $au.cid_from (derive {about: $A op: "author"})
+    let au = convention author-particle $A $B --repo $tmp --signer $S --allow-missing | get record
+    assert equal $au.cid_from (derive {about: $A op: "author_particle"})
 
     let sm = convention same $A $B --repo $tmp --signer $S --allow-missing | get record
     assert equal $sm.cid_from (derive {about: $A op: "same"})
@@ -212,10 +212,10 @@ def "operand-embedding conventions put the operand in the source" [] {
 
     # Directed, and the source is the original: a reader holding the text asks
     # which translations exist, and the pair records which language came first.
-    let tr = convention translation $A $B --repo $tmp --signer $S --allow-missing | get record
-    assert equal $tr.cid_from (derive {about: $A op: "translation"})
+    let tr = convention translation-particle $A $B --repo $tmp --signer $S --allow-missing | get record
+    assert equal $tr.cid_from (derive {about: $A op: "translation_particle"})
     assert equal $tr.cid_to $B
-    assert not equal $tr.cid_from (derive {about: $B op: "translation"})
+    assert not equal $tr.cid_from (derive {about: $B op: "translation_particle"})
 }
 
 # --literal plumbing through address/edge to resolve-particle — checked once
@@ -236,19 +236,19 @@ def "a text operand opens a path argument, --literal forces literal" [] {
 @test
 def "agree and disagree use the fixed source, target is the file" [] {
     let tmp = $in.tmp
-    let a = convention agree $B --repo $tmp --signer $S --allow-missing | get record
-    assert equal $a.cid_from $AGREE
+    let a = convention agree-particle $B --repo $tmp --signer $S --allow-missing | get record
+    assert equal $a.cid_from $AGREE_PARTICLE
     assert equal $a.cid_to $B
-    let d = convention disagree $B --repo $tmp --signer $S --allow-missing | get record
-    assert equal $d.cid_from $DISAGREE
+    let d = convention disagree-particle $B --repo $tmp --signer $S --allow-missing | get record
+    assert equal $d.cid_from $DISAGREE_PARTICLE
     assert equal $d.cid_to $B
 }
 
 @test
 def "answer attaches to the question-in-context, not the bare question" [] {
-    let r = convention answer $A $B $C --repo $in.tmp --signer $S --allow-missing | get record
+    let r = convention answer-edge $A $B $C --repo $in.tmp --signer $S --allow-missing | get record
     let q_src = derive {about: $A op: "question"}
-    assert equal $r.cid_from (derive {cid_from: $q_src cid_to: $B op: "answer"})
+    assert equal $r.cid_from (derive {cid_from: $q_src cid_to: $B op: "answer_edge"})
     assert equal $r.cid_to $C
 }
 
@@ -276,7 +276,7 @@ def "claimed-at refuses a non-RFC-3339 or impossible time" [] {
 def "every convention publishes its records as self-addressed files" [] {
     let tmp = $in.tmp
     convention deny-edge $A $B --repo $tmp --signer $S --allow-missing | ignore
-    convention answer $A $B $C --repo $tmp --signer $S --allow-missing | ignore
+    convention answer-edge $A $B $C --repo $tmp --signer $S --allow-missing | ignore
 
     let particles = ls (particles-dir ($tmp | path join cybergraph))
     # Filename == CID v0 of the file's own bytes, for every file written.
@@ -291,7 +291,7 @@ def "every convention publishes its records as self-addressed files" [] {
     assert ((particle-path ($tmp | path join cybergraph) $EDGE_AB) | path exists) $"missing address record ($EDGE_AB)"
     # answer publishes the whole chain: the question record and the answer record.
     let q_src = derive {about: $A op: "question"}
-    for cid in [$q_src (derive {cid_from: $q_src cid_to: $B op: "answer"})] {
+    for cid in [$q_src (derive {cid_from: $q_src cid_to: $B op: "answer_edge"})] {
         assert ((particle-path ($tmp | path join cybergraph) $cid) | path exists) $"missing record ($cid)"
     }
 }
