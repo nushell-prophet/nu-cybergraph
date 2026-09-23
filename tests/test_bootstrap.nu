@@ -53,9 +53,8 @@ def make-bare-repo [tmp_dir: path]: nothing -> record {
 }
 
 # Idempotence is about the SAME key. Upstream registration is additive, so
-# another key under `user.signingKey` used to be written beside the first and
-# the run exited clean over a trust list holding two — the state every write
-# command refuses. `init` establishes identity, so establishing a second one
+# another key under `user.signingKey` is written beside the first.
+# `init` establishes identity, so establishing a second one
 # has to fail, and has to put back what it added.
 @test
 def "init refuses to register a second key and undoes what it added" [] {
@@ -128,8 +127,6 @@ def "pubkey and co-signer are alternatives" [] {
 # every device, which is the whole point of holding keys apart. The graph's own
 # identity is this checkout's `user.signingKey` — the key `seal` signs the root
 # with — so the key a record is authored under is the key that catalogues it.
-# Deriving it by counting registered pubkeys instead made the co-signer's
-# presence stop every write in the repo.
 @test
 def "a co-signer in the trust list does not become the identity of the graph" [] {
     let r = make-bare-repo $in.tmp_dir
@@ -195,9 +192,7 @@ def "init is idempotent: re-run reports, never duplicates" [] {
 }
 
 # `init` says its job is to establish the signer identity, so a run that
-# establishes none has not done it. It used to print `cybergraph layout ready`
-# over an empty trust list and exit clean; the first `link add` then said
-# `run nu-cybergraph init first`, naming the command that had just succeeded.
+# establishes none has not done it.
 @test
 def "init refuses when it registered no signer" [] {
     let tmp_dir = $in.tmp_dir
@@ -367,11 +362,9 @@ def "seal with an unregistered signing key names the fix" [] {
     assert ($err != null) "seal accepted a key that is not registered"
     assert ($err | str contains $"init --pubkey ($other | path expand).pub")
     # These two asserts pass BECAUSE upstream asks its registration question
-    # first: nu-multiproof 923daa1 moved the ask to the top of its `seal`, ahead
-    # of the manifest rewrite, so a refused seal leaves no manifest and no root
-    # statement behind. The comment here used to say the opposite — that the
-    # check fired only after the rewrite — which was true before that commit and
-    # was left behind when `d9a1d41` deleted this repo's own pre-check.
+    # first: nu-multiproof's `seal` asks it at the top, ahead of the manifest
+    # rewrite, so a refused seal leaves no manifest and no root statement
+    # behind.
     assert not (($r.repo | path join cybergraph multiproofs tree-hashes.csv) | path exists)
     assert not (($r.repo | path join cybergraph multiproofs tree-root.txt) | path exists)
 }
@@ -479,10 +472,7 @@ def "a node that is not this links frozen proof is refused before anything is st
     let e1 = try { seal --repo $r.repo --no-stamp --allow-untracked-particles; null } catch {|e| $e.msg }
     assert ($e1 != null) "seal reported success while the link went uncertified"
     assert ($e1 | str contains $born.edge_cid) $"the refusal should name the path in the way: ($e1)"
-    # Refused BEFORE staging, so the recovery is just removing the node. When
-    # the check ran later, certs/ was already in git's index and the operator
-    # who deleted the directory hit `tracked paths do not resolve to regular
-    # files` from upstream, naming the file they had just removed.
+    # Refused BEFORE staging, so the recovery is just removing the node.
     assert ((^git -C $r.repo diff --cached --name-only | str trim) | is-empty) "the failed seal left certs/ staged"
     rm --recursive --force $cert
 
@@ -606,8 +596,7 @@ def "copy-file refuses to overwrite a file that is already there" [] {
 #
 # All three occupied shapes, because `mv` destroys differently in each: over a
 # file it clobbers, over a directory it moves the file INSIDE, and over a
-# symlink it replaces the link node with a regular file. Only the first is what
-# the parked note described; the other two were found while writing the refusal.
+# symlink it replaces the link node with a regular file.
 @test
 def "move-file refuses every shape of an occupied destination" [] {
     let tmp_dir = $in.tmp_dir
@@ -687,11 +676,10 @@ def "copy-tree refuses a tree holding something that is not a regular file" [] {
 
 # The pre-seal sweep walks receipts/ by `receipt-files`' rule — CID-named
 # author directories only — while staging git-adds receipts/ wholesale. So a
-# stray at the top of receipts/ (a flat file at the pre-refactoring location,
-# a hand-named directory) used to be signed into every manifest unvalidated
-# and never frozen: seal reported success while the custody-freeze discipline
-# silently did not apply. Same recovery contract as the certs sweep: refused
-# before staging, removing the node is the whole fix.
+# stray at the top of receipts/ (a flat file, a hand-named directory) would be
+# signed into every manifest unvalidated and never frozen. Same recovery
+# contract as the certs sweep: refused before staging, removing the node is the
+# whole fix.
 @test
 def "a stray under receipts is refused before anything is staged" [] {
     let r = make-bare-repo $in.tmp_dir
@@ -699,7 +687,7 @@ def "a stray under receipts is refused before anything is staged" [] {
     link add $P1 $P2 --repo $r.repo --allow-missing | ignore
     let receipts = $r.repo | path join cybergraph receipts
 
-    # 1. a receipt at the old flat location — valid-looking bytes, wrong level
+    # 1. a flat receipt — valid-looking bytes, wrong level
     mkdir $receipts
     '{"link":"x"}' | save --raw ($receipts | path join $"($P1).receipt.json")
     let e1 = try { seal --repo $r.repo --no-stamp --allow-untracked-particles; null } catch {|e| $e.msg }
@@ -722,10 +710,9 @@ def "a stray under receipts is refused before anything is staged" [] {
     assert equal $ok.newborn 1
 }
 
-# The tamper class the edge-first layout created: the signer left the file's
-# bytes for its path, so a sealed <signerA>/<edge>.json moved into another
-# valid-CID directory keeps canonical bytes AND a matching filename — under
-# the old self-addressed-triple format that was impossible. The binding of
+# The tamper class this layout allows: the signer is in the file's path, not
+# its bytes, so a sealed <signerA>/<edge>.json moved into another
+# valid-CID directory keeps canonical bytes AND a matching filename. The binding of
 # pair to signer is the seal's (the path enters the signed root), so a
 # relocated file must earn no credit anywhere: not from its old certificate,
 # not at its new path, and not from the next seal.
@@ -744,8 +731,7 @@ def "a sealed edge file moved to another signer directory earns no credit" [] {
     # That extra care is what keeps this test about the relocation. Moving the
     # record alone leaves it counted by no run, so the position bijection
     # refuses first and the refusal below is never reached; moving the position
-    # too satisfies the bijection (the new run is [0], the vacated one empty)
-    # and leaves the tamper exactly as it was before positions existed.
+    # too satisfies the bijection (the new run is [0], the vacated one empty).
     let home = $r.repo | path join cybergraph
     mkdir ($home | path join $P3)
     mv ($home | path join $adhoc.record.signer $"($adhoc.edge_cid).json") ($home | path join $P3 $"($adhoc.edge_cid).json")

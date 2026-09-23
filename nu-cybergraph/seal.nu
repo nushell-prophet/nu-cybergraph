@@ -30,8 +30,7 @@ use _deps/merkle.nu [ merkle ]
 # No try/catch around `open`. A file that is not JSON raises upstream's own error
 # naming the file, and rebuilding it from `$e.msg` would drop the parse position,
 # help, labels and span — `$e.msg` alone is the four words "Error while parsing
-# as json" (measured). That rebuild is the defect 62c1c5b removed from verify.nu;
-# it is not reintroduced here.
+# as json" (measured).
 #
 # The optional cell path is what makes that possible: an EMPTY .json file does
 # not raise in `open`, it returns nothing (measured), and `get --optional`
@@ -156,12 +155,8 @@ export def main [
     # staging, and the recovery is the whole fix: remove the node and seal
     # again.
     #
-    # One rule at one point, and it replaces two near-copies of itself: the
-    # receipts-only version that used to stand here, and the refusal in
-    # `_uncommitted.nu` for a name under particles/ that is no address. Both
-    # were the same invariant stated where it happened to bite first. The
-    # tree it enforces is SPEC section 3, which this turns from prose into a
-    # check — see `_layout.nu strays`.
+    # One rule at one point. The tree it enforces is SPEC section 3, which this
+    # turns from prose into a check — see `_layout.nu strays`.
     let stray = strays $root
     if ($stray | is-not-empty) {
         let named = $stray | each {|r| $"($r.path | cwd-relative) \(($r.under | path basename) holds ($r.allowed))" } | str join ', '

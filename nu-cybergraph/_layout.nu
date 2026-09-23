@@ -311,8 +311,8 @@ export def snapshot-dir [root: path root_hex: string]: nothing -> path {
 
 # --- the closed set ---
 #
-# SPEC section 3 draws the whole tree the graph home may hold. Until now that
-# tree was prose; below it is a check. The rule the user chose is fully closed:
+# SPEC section 3 draws the whole tree the graph home may hold. Below, that
+# tree is a check. The rule the user chose is fully closed:
 # a `README.md` or a `.gitignore` at the graph root is refused too, because a
 # seal signs whatever is committed there, and anything written by hand belongs
 # beside the graph home rather than inside it.

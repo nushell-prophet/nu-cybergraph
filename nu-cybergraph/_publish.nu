@@ -3,15 +3,6 @@
 # `deny-link` mint the same records as their targets and come through here too,
 # so one record has one construction site and one admission rule for its
 # operands. That is what the module is for.
-#
-# It was also forced, until the conventions were renamed: `convention.nu` used
-# to define `export def update` — the name of a nushell builtin — and a module
-# that shadows a builtin breaks the parse of every module it imports whose body
-# uses that builtin. `particle.nu` uses `update`, so a direct import there
-# failed to parse, by wholesale or by named list, with an error pointing at
-# `particle.nu` and naming nothing about `update`. The verb is `update-edge`
-# now and shadows nothing, so that pressure is gone — the construction-site
-# argument above is the whole reason left, and it is enough.
 
 use _particle.nu [ particle-store resolve-particle store-index ]
 use _record.nu [ edge-bytes link-bytes ]

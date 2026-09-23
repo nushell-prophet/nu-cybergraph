@@ -246,8 +246,6 @@ def "link add refuses a path-shaped endpoint that names nothing" [] {
 
 # Validation before side effects: resolving a content endpoint publishes it, so
 # a repo that cannot name a signer has to fail before the first file lands.
-# It used to publish both endpoints and only then raise from `own-signer`,
-# leaving orphan files for a link that was never written.
 @test
 def "link add publishes nothing when the repo has no signer identity" [] {
     let tmp = $in.tmp

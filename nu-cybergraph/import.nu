@@ -40,13 +40,10 @@ export def main [
     # The receipt itself spells the act out in fields instead (_receipt.nu),
     # so nothing it asserts needs dereferencing.
     #
-    # The triple is DERIVED here, not published. It used to be minted into the
-    # custodian's store, and that comment said plainly the mint was intuitive
-    # and load-bearing on nothing — so it went with the same rule that took
-    # the mint out of `link add`: the store holds bytes something points at,
-    # and importing an act points at nothing. Until this custodian makes an
-    # act about the imported cyberlink, its CID dereferences to nothing here,
-    # which is the honest state: nobody has said anything about it yet.
+    # The triple is DERIVED here, not published: the store holds bytes something
+    # points at, and importing an act points at nothing. Until this custodian
+    # makes an act about the imported cyberlink, its CID dereferences to nothing
+    # here, which is the honest state: nobody has said anything about it yet.
     let edge_cid = $v.leaf.filepath | path parse | get stem
     let link_cid = link-cid $v.record
     let dest = imported-dir $root | path join $v.signer.cid $edge_cid

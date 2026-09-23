@@ -85,11 +85,8 @@ def cleanup [] {
 }
 
 # The subject signer of `confirm-link A B S` is an identity, not a stored particle.
-# It used to be resolved as an ordinary operand, so confirming anyone's
-# cyberlink was refused with "no local file" unless the caller passed
-# --allow-missing — which also drops the check on A and B — or published a
-# copy of the pubkey bytes into particles/. Both publishers come through
-# `_publish.nu` now, so the signer follows `resolve-signer` here exactly as it
+# `confirm-link` and `particle add-link` both come through
+# `_publish.nu`, so the signer follows `resolve-signer` here exactly as it
 # does everywhere else.
 @test
 def "confirming a cyberlink does not demand the subject signer in the store" [] {

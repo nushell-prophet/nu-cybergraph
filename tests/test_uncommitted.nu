@@ -108,12 +108,11 @@ def "an operand named inside an instruction record is reachable" [] {
     assert equal ($rows | where cid == $source | get 0.state) "reachable"
 }
 
-# A name under particles/ that is no address used to be refused right here.
-# It is refused by `strays` now — one rule over the whole graph home instead of
-# this one directory — and `seal` enforces it before staging anything, which is
-# the reason it ever mattered. What is pinned here is the other half of that
-# move: the READING keeps reading. A reading that raises cannot tell an
-# operator what is on disk, which is the one thing they need in order to fix it.
+# A name under particles/ that is no address is refused by `strays` — one rule
+# over the whole graph home — and `seal` enforces it before staging anything.
+# What is pinned here is the other half: the READING keeps reading. A reading
+# that raises cannot tell an operator what is on disk, which is the one thing
+# they need in order to fix it.
 @test
 def "a name under particles that is no address is reported and not refused" [] {
     let g = empty-graph $in.tmp_dir

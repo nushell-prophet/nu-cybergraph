@@ -132,8 +132,8 @@ def "birth, seal, bundle, import, verify — the full link journey" [] {
 # without their bytes an importer holds an address and not the preimage —
 # gm-vote's connector had to fall back to scanning particles/ across every
 # local repo it could reach to decode a verb like {"op":"agree_particle"}. So a bundle
-# now carries the ends it holds a file for, by default; --links-only is the
-# escape hatch back to the old, particle-free shape.
+# carries the ends it holds a file for, by default; --links-only is the
+# escape hatch to a particle-free bundle.
 @test
 def "bundle carries the ends particles by default, links-only drops them" [] {
     let tmp_dir = $in.tmp_dir
@@ -169,10 +169,9 @@ def "bundle carries the ends particles by default, links-only drops them" [] {
 
 # A bundle arriving without its record is refused either way — this is about
 # WHICH refusal. `merkle verify` resolves the leaf, finds nothing there, and
-# returns a row saying so; `verify-bundle` then opened the same absent path and
-# died with `nu::shell::io::not_found`, throwing away the verdict the layer
-# below had already computed. Through `verify` the operator saw two words,
-# `File not found`, with no path, no bundle and no link.
+# returns a row saying so; `verify-bundle` must not then open the same absent
+# path and die with `nu::shell::io::not_found`, throwing away the verdict the
+# layer below had already computed.
 @test
 def "a bundle whose record file is absent returns a verdict, not a crash" [] {
     let tmp_dir = $in.tmp_dir
@@ -209,8 +208,8 @@ def "a bundle whose record file is absent returns a verdict, not a crash" [] {
 # committed to the truncation, and every verification afterwards passed over
 # missing bytes. Nothing in the artifact recorded that anything was lost.
 #
-# Mode 000 and not a deleted file: a MISSING source does raise, which is why
-# this looked unreproducible at first. Unreadable is the case that is silent.
+# Mode 000 and not a deleted file: a MISSING source does raise.
+# Unreadable is the case that is silent.
 @test
 def "an import that could not copy every file is refused, not truncated" [] {
     let tmp_dir = $in.tmp_dir
@@ -239,15 +238,11 @@ def "an import that could not copy every file is refused, not truncated" [] {
     assert not (($b.home | path join imported $born.record.signer $born.edge_cid) | path exists)
 }
 
-# `verify` on an own link builds a bundle in a temp dir and cleans it up. The
-# cleanup used to re-raise a reconstruction of the error instead of the error,
-# so everything below the top frame was dropped: with ssh-keygen off PATH the
-# operator saw `Eval block failed with pipeline input` and nothing about
-# OpenSSH, and diagnosing it took a bypass around `verify`.
+# `verify` on an own link raises from several frames below itself.
 #
 # Asserted on `debug`, not on `msg`: `msg` is nushell's own wrapper text either
 # way, because the raise happens inside an `each` several frames down. The
-# chain is what the rewrap destroyed, and `debug` is where the chain is.
+# chain is what a rewrap would destroy, and `debug` is where the chain is.
 @test
 def "a verify that fails deep still carries the real cause" [] {
     let tmp_dir = $in.tmp_dir
@@ -257,7 +252,7 @@ def "a verify that fails deep still carries the real cause" [] {
 
     # A PATH holding git and nothing else. Reading the bundle's pubkeys needs
     # ssh-keygen, so the failure lands well below `verify` — which is the only
-    # kind of failure the old rewrap could destroy.
+    # kind of failure a rewrap could destroy.
     let bin = $tmp_dir | path join bin
     mkdir $bin
     ^ln -sf (which git | get 0.path) ($bin | path join git)
@@ -265,7 +260,7 @@ def "a verify that fails deep still carries the real cause" [] {
         try { verify $born.edge_cid --repo $a.repo; null } catch {|e| $e.debug }
     }
     assert ($err != null) "verify succeeded with no ssh-keygen on PATH"
-    assert ($err | str contains "ssh-keygen is not on PATH") $"the cause did not survive the cleanup: ($err)"
+    assert ($err | str contains "ssh-keygen is not on PATH") $"the cause did not survive to the caller: ($err)"
 }
 
 # README "Bundles, import, provenance" — anyone verifies it offline — run as a
@@ -312,8 +307,8 @@ def "a path that is not a bundle directory is refused as a bad argument" [] {
 
 # The copy helpers raise, but a raise inside an `each` closure is re-wrapped as
 # "Eval block failed with pipeline input" and the real message never reaches
-# the operator. Three sites were converted to `for` for that reason; the OTS
-# copy was missed, and this is the only caller a test can reach it through.
+# the operator. The copy loops are `for` for that reason,
+# and this is the only caller a test can reach the OTS copy through.
 #
 # The OTS directory is fabricated rather than stamped: `--no-stamp` everywhere
 # in this suite means no calendar server is touched, and `bundle` matches an
@@ -438,8 +433,7 @@ def generate-key-before [tmp_dir: path ceiling: string]: nothing -> record {
 # Why not through `verify-bundle`: `stamp-cell`'s result goes to `print`, so an
 # end-to-end test reaches the data (the test below does) but never the string.
 # And because this function is a deliberate COPY of upstream's `format-stamp`,
-# the version upstream pins by test is not the version this repo runs — which is
-# exactly how the anchored branch stayed unexecuted while the suite was green.
+# the version upstream pins by test is not the version this repo runs.
 #
 # The shapes are the ones upstream's `pick-stamp` actually emits — it always
 # sets `height`, null while unanchored (nu-multiproof `_stamps.nu`), so
@@ -637,8 +631,8 @@ def "two signature spellings by one key do not fork the endorsement" [] {
 # The receipt half of seal's frozen-proof sweep. A custody receipt freezes under
 # the same rule as a birth certificate — the first seal that catalogues it sets
 # the earliest provable custody bound — so the same silent break applies: a
-# wrong node at the receipt cert path used to read as "already frozen", and the
-# receipt then froze under a later root than the seal that first catalogued it.
+# wrong node at the receipt cert path read as "already frozen" would freeze the
+# receipt under a later root than the seal that first catalogued it.
 #
 # Lives here and not beside the link case in test_bootstrap.nu because a receipt
 # needs a real import to exist, and the import fixtures are here.
@@ -847,7 +841,7 @@ def "forged authorship is refused: signer CID of a key that never signed" [] {
 
 # A bundle chooses its own file names, and nothing else about it. The binding
 # must therefore ask key material both times: which key signed (the verdict
-# row's principal, a fingerprint since nu-multiproof b6d7b11) and which key the
+# row's principal, a fingerprint) and which key the
 # claimed signer CID addresses. Matching the principal against a pubkey file's
 # STEM put a name back in the trust path — this is that attack, end to end.
 #
@@ -889,10 +883,10 @@ def "a pubkey filed under the fingerprint of another key cannot borrow its autho
     assert error {|| import $out --repo $c.repo }
 }
 
-# A repo path is data, never a pattern. Every discovery site used to splice it
-# into a glob, so one `[` above the graph made the whole module silently see an
-# empty repo: `seal`'s pre-seal self-addressing sweep validated no record at
-# all, and verification found no pubkey, no certificate and no imported copy.
+# A repo path is data, never a pattern. Spliced into a glob, one `[` above the
+# graph makes the whole module silently see an empty repo: `seal`'s pre-seal
+# self-addressing sweep validates no record at all, and verification finds no
+# pubkey, no certificate and no imported copy.
 # Silence is what makes it dangerous — nothing errors, the answers just go
 # empty. The metacharacters here are the ones nushell's glob reads.
 @test
@@ -974,9 +968,9 @@ def "a pubkey file with a byte-order mark is not the canonical form" [] {
 }
 
 # `pubkey canonical` shells out to OpenSSH, so it throws for reasons that are
-# not about the key at all. The refusal must say which — a bare `try {}` turned
+# not about the key at all. The refusal must say which — a bare `try {}` turns
 # a missing ssh-keygen into "non-canonical pubkey file" over a good ed25519
-# key, the verdict-about-the-key mistake nu-multiproof 310c29b exists to avoid.
+# key, the verdict-about-the-key mistake upstream's "toolchain problem" refusal exists to avoid.
 @test
 def "a broken toolchain is refused as a toolchain problem, not as a bad key" [] {
     let tmp_dir = $in.tmp_dir
@@ -990,9 +984,9 @@ def "a broken toolchain is refused as a toolchain problem, not as a bad key" [] 
     }
     assert ($err != null) "a bundle verified with no ssh-keygen on PATH"
     assert ($err | str contains "toolchain problem") $"the refusal blamed the key: ($err)"
-    # Containing the right tail is not enough — the wrapper used to PREFIX it
-    # with a verdict of its own ("… is not an SSH public key: …"), so one
-    # sentence asserted what its own ending denied. Asserted as a property, not
+    # Containing the right tail is not enough — a wrapper that PREFIXES it
+    # with a verdict of its own ("… is not an SSH public key: …") makes one
+    # sentence assert what its own ending denies. Asserted as a property, not
     # as this repo's wording: the wrapper must supply the file name and no verb.
     assert ($err | str contains ($out | path join multiproofs pubkeys)) $"the refusal does not name the file: ($err)"
     assert not ($err | str contains "is not an SSH public key") $"the wrapper decided about the key before upstream did: ($err)"
@@ -1165,8 +1159,8 @@ def "custody layer names cannot lie — forged dirname, duplicated custodian, re
 }
 
 # The signing key resolves before the destination dir is created: a key error
-# after assembly used to leave a complete-looking bundle whose handoff was
-# unsigned, and the retry with --key was blocked by "destination already exists".
+# after assembly would leave a complete-looking bundle whose handoff is
+# unsigned, and block the retry with --key on "destination already exists".
 @test
 def "bundle --to without a signing key fails before writing anything" [] {
     let tmp_dir = $in.tmp_dir
@@ -1208,10 +1202,9 @@ def "a re-export that comes out without a root certificate is refused and remove
 }
 
 # The same rule one layer over: what makes a key usable is upstream's to
-# decide, and it narrowed (nu-multiproof b6d7b11 — `ssh-sign sign` now always
-# demands the key be registered). A local pre-check that only asked "does the
-# file exist" therefore let assembly finish, and the refusal landed after the
-# handoff was written: a complete-looking bundle with an unsigned handoff, and
+# decide (`ssh-sign sign` demands the key be registered). A local pre-check that only asks "does the
+# file exist" lets assembly finish, and the refusal lands after the
+# handoff is written: a complete-looking bundle with an unsigned handoff, and
 # a retry blocked by "bundle destination already exists".
 @test
 def "an export whose handoff key upstream refuses leaves nothing behind" [] {
@@ -1244,7 +1237,7 @@ def "an export whose handoff key upstream refuses leaves nothing behind" [] {
 # hand outside the module (consensus.nu: import every bundle, then decode
 # imported/ itself). Two signers, two different edge shapes: a plain edge
 # (no instruction source, `op` stays null) and a convention edge (`op`
-# decodes from the instruction record `bundle` now attaches by default).
+# decodes from the instruction record `bundle` attaches by default).
 @test
 def "link imported decodes every landed bundle, across signers" [] {
     let tmp_dir = $in.tmp_dir
@@ -1309,10 +1302,7 @@ def "link imported never reaches into this own repo particles" [] {
 
 # The routine two-holder state: B imported A's bundle of an edge, then
 # asserted the same pair itself with `link add`. Between that add and B's
-# next seal, plain `verify <edge>` used to raise "no birth certificate yet"
-# from inside the own-copies loop — before imported copies were even
-# collected — so a copy that verified a moment ago became unreachable except
-# via --signer. The pending own copy must not cost the imported rows.
+# next seal, the pending own copy must not cost the imported rows.
 @test
 def "an unsealed own copy does not hide a verifiable imported copy" [] {
     let tmp_dir = $in.tmp_dir
@@ -1332,7 +1322,7 @@ def "an unsealed own copy does not hide a verifiable imported copy" [] {
     assert ($rows | first | get valid)
     assert equal ($rows | first | get record.signer) $born.record.signer
 
-    # When the pending copy is ALL there is, the old refusal still stands —
+    # When the pending copy is ALL there is, `verify` refuses —
     # pointing at seal, not at "unknown edge".
     let second = link add $P2 $P1 --repo $b.repo --allow-missing
     let err = try { verify $second.edge_cid --repo $b.repo; null } catch {|e| $e.msg }
@@ -1346,9 +1336,8 @@ def "an unsealed own copy does not hide a verifiable imported copy" [] {
 # Import takes custody of an act; it does not speak about one. So the link CID
 # it returns is derived and its preimage is not written here — the custodian's
 # store gains a file when the custodian names the cyberlink, not when the bytes
-# arrive. The previous behaviour minted it, on a reason that had already
-# expired (the sealed receipt states the act's components now, so nothing here
-# needed that CID dereferenced).
+# arrive. Nothing here needs that CID dereferenced:
+# the sealed receipt states the act's components.
 @test
 def "import derives the link CID it returns and publishes no preimage for it" [] {
     let tmp_dir = $in.tmp_dir
@@ -1371,11 +1360,10 @@ def "import derives the link CID it returns and publishes no preimage for it" []
 
 # The layout's whole point: one edge filename may exist under several signer
 # directories, and verify's contract is one row per own signer directory —
-# per-signer certs, per-signer credit. Never pinned sealed: the only
-# multi-signer fixture ran read-only `link touching`. Also the first coverage
-# of `--signer` on repo-level verify: a filter bug (matching the wrong field,
+# per-signer certs, per-signer credit. Also covers
+# `--signer` on repo-level verify: a filter bug (matching the wrong field,
 # or the full path instead of the basename) would return every copy or
-# refuse a signer that holds the edge, and the suite stayed green.
+# refuse a signer that holds the edge.
 @test
 def "verify returns one row per own signer and --signer narrows to one act" [] {
     let tmp_dir = $in.tmp_dir
@@ -1409,9 +1397,7 @@ def "verify returns one row per own signer and --signer narrows to one act" [] {
 # addressing it. Pinned two ways, because the writer (import) and the checker
 # (custody verification) share their helpers: the raw bytes against a
 # hand-spelled prefix, and the recovered address against a hand-spelled
-# canonical triple. Before the fields were spelled out this held one derived
-# CID, and flipping it to the edge CID — the natural slip of an edge-first
-# refactoring — kept every test green.
+# canonical triple.
 @test
 def "the receipt states the act and still derives to the cyberlink CID" [] {
     let tmp_dir = $in.tmp_dir

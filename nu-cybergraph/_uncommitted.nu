@@ -6,8 +6,7 @@
 #
 # The question it exists to answer: the seal manifest is every git-tracked file
 # under the graph home, so a store file outside the index is bytes no root
-# covers, while the link naming it is signed and frozen. That gap used to be
-# closed only by the operator remembering to commit `particles/` before sealing.
+# covers, while the link naming it is signed and frozen.
 
 use _layout.nu [ particles-dir store-cid ]
 use _read.nu [ reachable-cids ]
@@ -27,10 +26,9 @@ use _read.nu [ reachable-cids ]
 # that is not a technicality — `git ls-files` reads the index, so the manifest
 # covers it already.
 #
-# One shape is refused rather than reported, because it is not a state an
-# operator can act on from a table cell: a name under `particles/` that is no
-# address at all. The store's filename rule is what makes every reader agree on
-# what it holds, and a seal would catalogue such a file unchecked.
+# A name under `particles/` that is no address at all is reported with a null
+# `cid`, and refused by `seal`: the store's filename rule is what makes every
+# reader agree on what it holds, and a seal would catalogue such a file unchecked.
 #
 # The bytes are NOT hashed back to the name here. Every read path already does
 # that where it matters (`particle cat`, the graph reader), and this reading
@@ -58,11 +56,9 @@ export def uncommitted-files [root: path]: nothing -> table {
         let rel = $line | str substring 3.. | split row " -> " | last
         let file = $top | path join $rel
         # A name under particles/ that is no address reads as null here and
-        # stays null in the row. It used to be refused on the spot; that
-        # refusal is now `strays`, one rule over the whole graph home rather
-        # than this one directory — and `seal`, the reason it mattered,
-        # enforces it before staging anything. A reading reports what is
-        # there; refusing is the seal's job.
+        # stays null in the row. The refusal is `strays`, one rule over the
+        # whole graph home — and `seal` enforces it before staging anything.
+        # A reading reports what is there; refusing is the seal's job.
         let cid = store-cid $file
         # A tracked file deleted from the working tree: nothing to size, and
         # nothing to stage either. Reported rather than dropped — the graph

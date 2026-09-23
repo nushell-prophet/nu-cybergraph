@@ -472,11 +472,10 @@ export def same [
 
 # Claimed time: {about: X, op: claimed_at} → T — "I claim X's time is T". X is
 # any CID: a link file (= the triple), an edge or cyberlink derived CID, or a
-# published file. The heir of the claimed_at field removed from the link
-# record: as an edge the claim is optional and per-signer, and the act keeps one
-# CID for everyone. Claimed or in-record, the time stays unproven either way —
-# the provable bound is the OTS anchor of the birth seal (README, time
-# semantics).
+# published file. As an edge the claim is optional and per-signer, and the act
+# keeps one CID for everyone. Claimed or in-record, the time stays unproven
+# either way — the provable bound is the OTS anchor of the birth seal (README,
+# time semantics).
 @example "claim when an act happened" { convention claimed-at QmX… "2026-07-16T00:00:00+00:00" }
 export def claimed-at [
     about: string # the CID whose time is claimed

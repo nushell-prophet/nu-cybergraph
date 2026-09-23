@@ -54,10 +54,10 @@ export def add [
     # endpoints resolved to.
     #
     # What that costs: stating something about the edge just made
-    # (`link add A <edge>`) is now two steps — `particle add-edge` puts the
+    # (`link add A <edge>`) is two steps — `particle add-edge` puts the
     # pair record in the store, then its CID can be named. The bytes that
-    # writes are byte-identical to this link file, which looks like the copy
-    # that used to live here; the difference is that a writer decided on it,
+    # writes are byte-identical to this link file, which looks like a copy;
+    # the difference is that a writer decided on it,
     # for a reference they are about to make. It is also what keeps
     # `link touching` whole: its walk upward reaches an edge through a store
     # file, and that file is there whenever someone meant to point at it.
