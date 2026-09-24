@@ -29,11 +29,10 @@
 # permanent public write, so it must not sit in a path that re-runs on every
 # refresh.
 
-# Relative to this file, never absolute. The absolute paths that stood here
-# named `/Users/user/git/cy-container/nu-cybergraph` — the RECIPIENT checkout,
-# not the monorepo this file now ships in. So a refresh run from here checked
-# the published copy of the code rather than the code beside it, which is the
-# one thing an embeds document exists to prevent.
+# Relative to this file, never absolute: an absolute path names one machine's
+# checkout, so a refresh would check whatever code sits there rather than the
+# code beside this file, which is the one thing an embeds document exists to
+# prevent.
 use ../nu-cybergraph
 use ../nu-cybergraph/_verify-helpers.nu [ verify-bundle ]
 use ../nu-cybergraph/_signer.nu [ own-signer ]

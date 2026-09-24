@@ -30,7 +30,7 @@ def canonical-pubkeys [dir: path]: nothing -> table {
         # Why the caught error is re-raised with its message intact, and not
         # folded into the refusal below: `pubkey canonical` shells out to
         # OpenSSH, so it throws for reasons that are not about the key at all —
-        # nu-multiproof 310c29b names a missing ssh-keygen as a toolchain
+        # nu-multiproof's pubkey.nu names a missing ssh-keygen as a toolchain
         # problem for exactly this reason. A bare `try {}` turned that into
         # "non-canonical pubkey file" over a perfectly good ed25519 key (probed
         # with a PATH holding no ssh-keygen), sending the operator after the
@@ -97,7 +97,7 @@ def verify-proof-dir [dir: path --cert: path --multiproofs-dir: path]: nothing -
 # Both sides of the match are key material, and that is the whole point.
 # Matching the pubkey file's STEM against the principal in the verdict row
 # instead lets a file NAME authorize an identity: a principal is the key's own
-# fingerprint (nu-multiproof b6d7b11) and `init` happens to name the file after
+# fingerprint (`signing-principal` in nu-multiproof's _key-helpers.nu) and `init` happens to name the file after
 # it, but a bundle is free to name its files anything. Filing the victim's key as
 # `<attacker-fingerprint>.pub` (with the attacker's own key beside it under any
 # other name, so the trust list still renders it and the signature still

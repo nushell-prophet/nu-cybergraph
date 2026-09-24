@@ -67,7 +67,7 @@ def assemble-seal-artifacts [root: path out: path root_hex: string]: nothing -> 
     }
 
     # Signer pubkeys, found by KEY MATERIAL. The middle segment of a sig name is
-    # the signer's fingerprint (nu-multiproof b6d7b11: `sig-path-for` names the
+    # the signer's fingerprint (nu-multiproof's _sig.nu: `sig-path-for` names the
     # file after `signing-principal`, which is the key's own digest), while a
     # pubkey file's name is decoration — upstream pins that a key registered
     # under any name still signs and verifies. Joining the segment onto
@@ -187,7 +187,7 @@ def assemble-particles [root: path out: path rec: record]: nothing -> nothing {
 #
 # What this deliberately does NOT check is what makes a key USABLE: a `.pub`
 # beside it and its fingerprint registered in pubkeys/. Those are upstream's
-# rules — `ssh-sign sign` -> `signing-principal`, nu-multiproof b6d7b11, "a
+# rules — `ssh-sign sign` -> `signing-principal` in nu-multiproof's _key-helpers.nu, "a
 # principal is not the signer's to choose" — and a copy here would enforce one
 # invariant in two places, drifting the moment upstream narrows it again (it
 # just did). main's cleanup is what makes their refusal survivable.

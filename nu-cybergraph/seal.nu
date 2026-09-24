@@ -80,7 +80,7 @@ export def main [
     }
 
     # Upstream's seal now asks its registration question before rewriting
-    # anything (nu-multiproof 923daa1), so the fingerprint pre-check that
+    # anything (nu-multiproof's seal.nu), so the fingerprint pre-check that
     # lived here — with its own copy of the signing-key resolution — is gone
     # with it. What stays is the bootstrap case upstream cannot name: an empty
     # pubkeys/ means `nu-cybergraph init` has not run, and registration is
@@ -267,7 +267,7 @@ export def main [
     #
     # A link is an assertion by a signer, so the endorsement anchor IS the claim;
     # an anchor over the root alone dates bytes without saying who asserted them.
-    # Upstream keeps both by default on purpose (nu-multiproof de3c2dd) — an
+    # Upstream keeps both by default on purpose (nu-multiproof's `seal --no-content-anchor`) — an
     # archive that must stay checkable with no key material wants the content
     # anchor, because deriving content-time through the signature inherits every
     # way SSH verification can rot. That trade is taken here knowingly.
