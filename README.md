@@ -1,7 +1,7 @@
 # nu-cybergraph
 
 A local cybergraph on a git backend:
-content-addressed link records between particles, with per-link authorship and birth-time proofs built on [nu-multiproof](https://codeberg.org/nushell-prophet/nu-multiproof/).
+content-addressed link records between particles, with per-link authorship and birth-time proofs built on [nu-multiproof](https://github.com/nushell-prophet/nu-multiproof).
 
 🚧 Proof of concept, agent-written, barely tested
 — do not treat as secure.
@@ -781,7 +781,7 @@ erasing the sender's directional claim
 
 ## Dependencies
 
-- [nu-multiproof](https://codeberg.org/nushell-prophet/nu-multiproof/) as a live sibling checkout at `../nu-multiproof`
+- [nu-multiproof](https://github.com/nushell-prophet/nu-multiproof) as a live sibling checkout at `../nu-multiproof`
   — resolved in exactly one place, the `nu-cybergraph/_deps/` shims;
   edit them if your checkout lives elsewhere.
   Not a submodule: the two repos are co-developed and a pin would lag.

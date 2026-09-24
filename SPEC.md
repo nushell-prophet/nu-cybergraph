@@ -817,7 +817,7 @@ Dropping them leaves the record and certificate alone.
 
 ## 7. Proof layer — normative by reference
 
-The merkle and timestamp layer is [nu-multiproof](https://codeberg.org/nushell-prophet/nu-multiproof/),
+The merkle and timestamp layer is [nu-multiproof](https://github.com/nushell-prophet/nu-multiproof),
 and this spec does not restate it.
 A reimplementation needs, from that project's `README.md`:
 
