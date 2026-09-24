@@ -46,7 +46,7 @@ use ../nu-cybergraph/_signer.nu [ own-signer ]
 # dotnu cds into the script's own directory first, so `..` is this repo; running
 # the file by hand means `cd docs` first.
 let CG = ".." | path expand
-let MP = "../../nu-multiproof" | path expand
+let MP = "../nu-multiproof" | path expand
 
 # ─────────────────────────────────────────────────────────────────────────────
 # 1. What we are testing against

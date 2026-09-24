@@ -54,14 +54,14 @@ so a check is never what gets dropped for simplicity.
   Changing them breaks every existing CID
   — treat as a format version bump, not an edit.
 
-## Dependencies are live sibling checkouts
+## nu-multiproof lives inside this repo
 
-`_deps/` is the single resolution point for nu-multiproof (`../nu-multiproof`)
+`_deps/` is the single resolution point for nu-multiproof (`nu-multiproof/`)
 — one shim file per dependency,
 so a `use` site parses only the subtree it needs (nushell re-parses a module at every use site; a single-file facade charged every importer for all six deps).
-toolkit.nu resolves nutest the same way.
-No pinning
-— the repos are co-developed.
+One clone carries the exact nu-multiproof this repo was tested with,
+and nu-multiproof keeps its own recipient, exported from this directory.
+toolkit.nu resolves nutest as a sibling checkout, `../nutest`.
 If an interface change in nu-multiproof breaks this repo,
 fix it here in the same session,
 or park a note in `todo/`.

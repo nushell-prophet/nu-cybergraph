@@ -781,10 +781,10 @@ erasing the sender's directional claim
 
 ## Dependencies
 
-- [nu-multiproof](https://github.com/nushell-prophet/nu-multiproof) as a live sibling checkout at `../nu-multiproof`
-  — resolved in exactly one place, the `nu-cybergraph/_deps/` shims;
-  edit them if your checkout lives elsewhere.
-  Not a submodule: the two repos are co-developed and a pin would lag.
+- [nu-multiproof](https://github.com/nushell-prophet/nu-multiproof), carried inside this repo at `nu-multiproof/`
+  — resolved in exactly one place, the `nu-cybergraph/_deps/` shims.
+  A clone holds the exact version this repo was tested with;
+  nu-multiproof is also published on its own, from the same directory.
 - `rg` ([ripgrep](https://github.com/BurntSushi/ripgrep)), optional and only for `link touching`/`link tally`:
   it narrows which files the reader opens.
   Absent, the same commands read every record and return the same rows
@@ -795,8 +795,10 @@ erasing the sender's directional claim
 
 ## Testing
 
-Requires [nutest](https://github.com/vyadh/nutest) as a live sibling checkout at `../nutest`
-— the same convention as the nu-multiproof dependency, and the path `toolkit.nu` imports.
+Requires [nutest](https://github.com/vyadh/nutest) as a live sibling checkout at `../nutest`,
+the path `toolkit.nu` imports.
+nu-multiproof's own suite runs from `nu-multiproof/` and imports `../nutest` too,
+so it needs nutest inside the clone as well, at `nutest` (gitignored).
 
 ```nushell no-run
 use toolkit.nu *; main test

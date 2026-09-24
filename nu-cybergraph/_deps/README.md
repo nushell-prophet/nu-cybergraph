@@ -1,12 +1,13 @@
 # `_deps/` — the single resolution point for nu-multiproof
 
-One shim file per dependency, each a bare `export use` of a live sibling checkout.
-Edit these paths when the checkout lives elsewhere;
-nothing else in the repo names them.
+One shim file per dependency, each a bare `export use` of `nu-multiproof/` inside this repo.
+Nothing else in the repo names that path.
 
-Not a pin
-— the two repos are co-developed, so `_deps/` follows whatever is on disk.
-An interface change upstream that breaks this repo is fixed here in the same session,
+A pin by construction
+— a clone of this repo carries the exact nu-multiproof it was tested with.
+nu-multiproof is still co-developed and published on its own,
+exported from this same directory.
+An interface change in it that breaks this repo is fixed here in the same session,
 or parked in `todo/`.
 
 One file per dependency, not one facade:
