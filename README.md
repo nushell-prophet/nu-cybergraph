@@ -250,6 +250,8 @@ A sha256 git backend (`git init --object-format=sha256`) is recommended;
 the merkle/certificate layer works on sha1 repos too.
 Note GitHub does not host sha256 repos
 — Codeberg and plain remotes do.
+This repo is hosted on GitHub,
+so its own history is sha1.
 
 **Graph home.** The graph home is always `<git-root>/cybergraph/`
 — `init` creates it, every command finds it.
