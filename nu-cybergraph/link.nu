@@ -67,8 +67,10 @@ export def add [
     # is not an argument here (CLAUDE.md, "An academic prototype, not a
     # product").
     let edge = edge-cid $pair
+
     mkdir (signer-dir $root $signer_cid)
     let out = link-path $root $signer_cid $edge
+
     # The path IS the triple — signer in the directory, edge in the filename —
     # so file existence IS the triple guard: one act, one address, one file —
     # mirroring bostrom's consensus, which rejected a repeat cyberlink. Why no
@@ -128,6 +130,7 @@ export def add [
 # drift.
 def statement [index: record l: record]: nothing -> record {
     let src = deref $index $l.cid_from
+
     {
         edge_cid: $l.edge_cid
         link_cid: $l.link_cid
@@ -158,6 +161,7 @@ export def list [
 ]: nothing -> table {
     let root = graph-root $repo
     let index = store-index $root
+
     read-links $root | each {|l| statement $index $l }
 }
 
@@ -180,11 +184,13 @@ export def imported [
     --repo: path # Repo root (default: git root of current directory)
 ]: nothing -> table {
     let root = graph-root $repo
+
     list-dirs (imported-dir $root)
     | each {|signer_dir| list-dirs $signer_dir }
     | flatten
     | each {|bundle|
         let index = store-index $bundle
+
         read-links $bundle | each {|l| statement $index $l }
     }
     | flatten
@@ -217,12 +223,15 @@ export def touching [
     }
     let root = graph-root $repo
     let hits = touches $root $cid --scan=$scan
+
     if ($hits | is-empty) { return [] }
     let index = store-index $root
+
     $hits
     | sort-by file role
     | each {|h|
         let rec = read-link $h.file
+
         statement $index ({edge_cid: ($h.file | path parse | get stem) link_cid: (link-cid $rec)} | merge $rec)
         | insert role $h.role
         | move role --after link_cid

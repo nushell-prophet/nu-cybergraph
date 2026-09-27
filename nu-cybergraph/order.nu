@@ -66,6 +66,7 @@ export def list [
     --repo: path # Repo root (default: git root of current directory)
 ]: nothing -> table {
     let root = graph-root $repo
+
     assert-numbered-run $root
     project-run $root
     | select signer edge seq provisional added_at
@@ -89,6 +90,7 @@ export def list [
 def arrival-times [repo_root: path graph: path]: nothing -> table {
     let result = ^git -C $repo_root log --reverse --diff-filter=A --format=%cI --name-only -- ($graph | path relative-to $repo_root)
         | complete
+
     if $result.exit_code != 0 {
         error make {msg: $"git log failed over ($graph): ($result.stderr | str trim) — backfill reads arrival order out of history, so it needs the graph to be in a git repo"}
     }
@@ -125,6 +127,7 @@ export def backfill [
     let root = graph-root $repo
     let repo_root = $root | path dirname
     let held = order-files $root
+
     if ($held | is-not-empty) {
         error make {msg: $"order/ already holds ($held | length) positions — backfill stamps a graph that predates the run, once. A graph where some links have a position and some do not is a question about which half, and `link add` is what writes one for a new act"}
     }
@@ -135,6 +138,7 @@ export def backfill [
         | insert added_at {|l| $arrival | where rel == $l.rel | get --optional 0.at }
 
     let unseen = $stamps | where added_at == null
+
     if ($unseen | is-not-empty) {
         error make {msg: $"link records git has never seen: ($unseen | get rel | str join ', ') — a backfill takes the time the repo recorded, and history holds no arrival time for a file that was never committed. Commit them, then run the backfill again"}
     }

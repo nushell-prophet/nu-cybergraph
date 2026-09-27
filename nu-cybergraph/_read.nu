@@ -30,6 +30,7 @@ export def read-links [root: path]: nothing -> table {
     | sort-by file
     | each {|l|
         let rec = read-link $l.file
+
         {edge_cid: $l.edge link_cid: (link-cid $rec)} | merge $rec
     }
 }
@@ -51,6 +52,7 @@ def deref-file [file: path cid: string]: nothing -> any {
     # is what makes one code path out of two input types. It is lossless here
     # because particle-verify hashed those same bytes back to this CID first.
     let parsed = try { $bytes | into binary | decode utf-8 | from json } catch { null }
+
     if not ($parsed | describe | str starts-with "record") { return null }
     if not ($parsed | values | all {|v| ($v | describe) == "string" }) { return null }
     $parsed
@@ -61,6 +63,7 @@ def deref-file [file: path cid: string]: nothing -> any {
 # CID — legitimate, a cyberlink names CIDs and the bytes need not be local.
 export def deref [index: record cid: string]: nothing -> any {
     let file = index-find $index $cid --optional
+
     if $file == null { return null }
     deref-file $file $cid
 }
@@ -84,11 +87,13 @@ export def deref [index: record cid: string]: nothing -> any {
 # filename rules in `touches`, which is where the two are made to agree.
 export def candidates [root: path cid: string --scan]: nothing -> list<path> {
     let dirs = (signer-dirs $root) ++ ([(particles-dir $root)] | where ($it | path exists))
+
     if ($dirs | is-empty) { return [] }
     if $scan or (which rg | is-empty) {
         return ($dirs | each {|d| list-files $d } | flatten)
     }
     let found = ^rg --no-config --no-ignore --fixed-strings --files-with-matches -- $cid ...$dirs | complete
+
     match $found.exit_code {
         0 => { $found.stdout | lines | where $it != "" }
         1 => { [] } # rg's "no matches", not a failure
@@ -136,6 +141,7 @@ export def touches [root: path cid: string --scan]: nothing -> table {
         | where ($it in $link_paths)
         | each {|f|
             let rec = read-link $f
+
             $EDGE_KEYS
             | where (($rec | get $it) == $cid)
             | each {|key| {file: $f role: $key} }
@@ -147,6 +153,7 @@ export def touches [root: path cid: string --scan]: nothing -> table {
         | each {|f|
             let record_cid = store-cid $f
             let rec = deref-file $f $record_cid
+
             if $rec == null { [] } else {
                 $rec
                 | columns
@@ -199,6 +206,7 @@ export def reachable-cids [root: path]: nothing -> list<string> {
         | uniq
     mut seen = []
     mut frontier = $seeds
+
     while ($frontier | is-not-empty) {
         $seen = ($seen ++ $frontier | uniq)
         # `deref` returns null for a CID whose bytes are not local and for one

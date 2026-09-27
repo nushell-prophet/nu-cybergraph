@@ -70,6 +70,7 @@ const SEQ_RE = '^(0|[1-9][0-9]*)$'
 # state.
 def validate-position [rec: record]: nothing -> nothing {
     let cols = $rec | columns | sort
+
     if $cols == $PROVISIONAL_KEYS {
         assert-utc-timestamp $rec "added_at" "position"
     } else if $cols == $NUMBERED_KEYS {
@@ -113,6 +114,7 @@ def write-seq [file: path seq: int]: nothing -> nothing {
 # than being numbered into something plausible.
 export def read-position [file: path]: nothing -> record {
     let rec = open --raw $file | from json
+
     validate-position $rec
     $rec
 }
@@ -132,6 +134,7 @@ def positions [root: path]: nothing -> table {
     order-files $root
     | each {|r|
         let state = {seq: null added_at: null} | merge (read-position $r.file)
+
         $r | merge {
             # A string on disk, for the reason SEQ_RE gives; a number here,
             # because a run is compared and counted, never rendered.
@@ -154,10 +157,12 @@ export def assert-bijection [root: path]: nothing -> nothing {
     let links = link-files $root | each {|l| $"($l.signer)/($l.edge)" }
     let numbered = order-files $root | each {|p| $"($p.signer)/($p.edge)" }
     let unnumbered = $links | where $it not-in $numbered
+
     if ($unnumbered | is-not-empty) {
         error make {msg: $"link records with no position: ($unnumbered | str join ', ') — every link a seal catalogues carries its number in the signer's run, or a withheld link is indistinguishable from one that was never made. A record written by hand is not numbered by anything: remove it and re-run `nu-cybergraph link add`, or `nu-cybergraph order backfill` on a graph that predates the run"}
     }
     let orphans = $numbered | where $it not-in $links
+
     if ($orphans | is-not-empty) {
         error make {msg: $"positions naming no link record: ($orphans | str join ', ') — a number in the run without the act it counts. Remove the position, or restore the record it belongs to"}
     }
@@ -181,6 +186,7 @@ export def assert-bijection [root: path]: nothing -> nothing {
 export def assert-numbered-run [root: path]: nothing -> nothing {
     for signer in (positions $root | where not provisional | group-by signer --to-table) {
         let seqs = $signer.items | get seq | sort
+
         # The rule read directly: a run of 0..N with no gap and no repeat is a
         # run where every number equals its own index once sorted.
         if ($seqs | enumerate | any {|r| $r.item != $r.index }) {
@@ -233,6 +239,7 @@ def project-signer-run [rows: table]: nothing -> table {
         | insert arrived {|r| $r.added_at | into datetime }
         | sort-by arrived edge
         | reject arrived
+
     $assigned | append ($waiting | enumerate | each {|r| $r.item | update seq ($next + $r.index) })
 }
 
@@ -248,6 +255,7 @@ def project-signer-run [rows: table]: nothing -> table {
 # number is one the graph has already signed.
 export def number-provisional [root: path]: nothing -> int {
     let minted = project-run $root | where provisional
+
     # `for`, not `each`: a raise inside an `each` closure comes back as "Eval
     # block failed with pipeline input", and a half-numbered run is what the
     # operator would then have to read the state of.

@@ -65,6 +65,7 @@ export def receipt-bytes [rec: record]: nothing -> binary {
 # a receipt's authority is the seal covering it, not its filename.
 export def read-receipt [file: path]: nothing -> record {
     let rec = open --raw $file | from json
+
     validate-receipt $rec
     $rec
 }
@@ -75,6 +76,7 @@ export def read-receipt [file: path]: nothing -> record {
 # recomputes to compare against it.
 export def bundle-manifest [bundle: path]: nothing -> table {
     let root = $bundle | path expand
+
     list-files $root --recursive
     | path relative-to $root
     | where $it !~ $'^($CUSTODY_DIR)/'
@@ -87,12 +89,14 @@ export def bundle-manifest [bundle: path]: nothing -> table {
 # enforces contiguity and the receipt chain against it.
 export def custody-layers [bundle: path]: nothing -> table {
     let dir = custody-dir $bundle
+
     if not ($dir | path exists) {
         return []
     }
     list-dirs $dir
     | each {|d|
         let idx = $d | path basename | parse --regex '^(?<index>\d+)-' | get --optional 0.index
+
         if $idx == null {
             error make {msg: $"malformed custody layer name: ($d) — expected <index>-<signer-prefix>"}
         }

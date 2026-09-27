@@ -62,6 +62,7 @@ export const PARTICLE_EXT_RE = '^[A-Za-z0-9]+(\.[A-Za-z0-9]+)*$'
 # CID, and readers resolve it whatever extension the file carries.
 export def particle-path [root: path cid: string --ext: string]: nothing -> path {
     let name = if $ext == null { $cid } else { $"($cid).($ext)" }
+
     particles-dir $root | path join $name
 }
 
@@ -78,8 +79,10 @@ export def particle-path [root: path cid: string --ext: string]: nothing -> path
 export def store-cid [file: path]: nothing -> any {
     let base = $file | path basename
     let cid = $base | split row "." | first
+
     if $cid !~ $CID_V0_RE { return null }
     let ext = $base | str substring (($cid | str length) + 1)..
+
     if ($base != $cid) and ($ext !~ $PARTICLE_EXT_RE) { return null }
     $cid
 }
@@ -140,6 +143,7 @@ export def receipt-relpath [author: string edge_cid: string]: nothing -> string 
 # caller who does not.
 export def receipt-cid [file: path]: nothing -> string {
     let base = $file | path basename
+
     if not ($base | str ends-with $RECEIPT_SUFFIX) {
         error make {msg: $"not a receipt filename: ($base) — expected <cid>($RECEIPT_SUFFIX)"}
     }
@@ -202,6 +206,7 @@ export def order-path [root: path signer: string edge_cid: string]: nothing -> p
 # spells out.
 export def order-cid [file: path]: nothing -> string {
     let base = $file | path basename
+
     if not ($base | str ends-with $ORDER_SUFFIX) {
         error make {msg: $"not a position filename: ($base) — expected <cid>($ORDER_SUFFIX)"}
     }
@@ -370,6 +375,7 @@ def cert-name [file: path]: nothing -> any {
 # that filter.
 def receipt-name [file: path]: nothing -> any {
     let receipt = named-after $file $RECEIPT_SUFFIX
+
     if $receipt != null { $receipt } else { named-after $file (receipt-cert-filename "") }
 }
 
@@ -378,6 +384,7 @@ def receipt-name [file: path]: nothing -> any {
 # same two suffixes read the same way.
 def order-name [file: path]: nothing -> any {
     let position = named-after $file $ORDER_SUFFIX
+
     if $position != null { $position } else { named-after $file (order-cert-filename "") }
 }
 
@@ -385,8 +392,10 @@ def order-name [file: path]: nothing -> any {
 # graph home shares, so the three rules above are one rule with three suffixes.
 def named-after [file: path suffix: string]: nothing -> any {
     let base = $file | path basename
+
     if not ($base | str ends-with $suffix) { return null }
     let stem = $base | str substring ..<(-1 * ($suffix | str length))
+
     if $stem =~ $CID_V0_RE { $stem } else { null }
 }
 
@@ -414,6 +423,7 @@ def cid-dirs-only [dir: path allowed: string]: nothing -> table {
 def top-strays [root: path]: nothing -> table {
     unexpected $root $ALLOWS.root {|e|
         let name = $e.name | path basename
+
         $e.type == "dir" and (($name in $RESERVED_DIRS) or ($name =~ $CID_V0_RE))
     }
 }
@@ -439,6 +449,7 @@ export def strays [root: path]: nothing -> table {
     let links = signer-dirs $root | each {|d|
         unexpected $d $ALLOWS.signer {|e|
             let parsed = $e.name | path parse
+
             $e.type != "dir" and $parsed.extension == "json" and $parsed.stem =~ $CID_V0_RE
         }
     } | flatten
@@ -496,7 +507,8 @@ export def strays [root: path]: nothing -> table {
 # is the deep reading, and `seal` is where the deep rule is enforced.
 export def assert-known-home [root: path]: nothing -> nothing {
     let foreign = top-strays $root
+
     if ($foreign | is-not-empty) {
-        error make {msg: $"unknown graph home ($root): ($foreign | each {|r| $r.path | path basename } | str join ', ') — a graph home holds ($ALLOWS.root). A reader cannot tell a graph it does not understand from an empty one, so this refuses instead of answering nothing. A graph in the pre-signer-directory layout predates the current format and is not migrated: see the pre-1.0 note in CLAUDE.md"}
+        error make {msg: $"unknown graph home ($root): ($foreign | get path | path basename | str join ', ') — a graph home holds ($ALLOWS.root). A reader cannot tell a graph it does not understand from an empty one, so this refuses instead of answering nothing. A graph in the pre-signer-directory layout predates the current format and is not migrated: see the pre-1.0 note in CLAUDE.md"}
     }
 }

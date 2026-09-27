@@ -68,6 +68,7 @@ export def handoff-bytes [rec: record]: nothing -> binary {
 # signature beside it, checked by verification, not here.
 export def read-handoff [file: path]: nothing -> record {
     let rec = open --raw $file | from json
+
     validate-handoff $rec
     $rec
 }

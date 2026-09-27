@@ -36,6 +36,7 @@ export def add [
 ]: [nothing -> string string -> string binary -> string] {
     let piped = $in
     let root = graph-root $repo
+
     if $content != null and $piped != null {
         error make {msg: "content given both as an argument and by pipeline — pass one"}
     }
@@ -46,6 +47,7 @@ export def add [
     } else {
         error make {msg: "nothing to publish — pass a string argument or pipe content in"}
     }
+
     $bytes | particle-store $root --ext $ext
 }
 
@@ -165,6 +167,7 @@ export def uncommitted [
 
     if $propose_commit {
         let take = stageable $rows
+
         if ($take | is-empty) {
             error make {msg: "nothing to propose: no untracked store file is named by this graph"}
         }

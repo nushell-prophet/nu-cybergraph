@@ -38,7 +38,7 @@ const GOLDEN_SHA256 = "65731236a5d63c4aa23bd7bf63ee6f6a0ad8fc4bd14df9ae73e1837d0
 # existing handoff signature and every receipt that hashed one — a format
 # version bump, not an edit.
 @test
-def "golden bytes: HANDOFF_KEYS order, compact JSON, one trailing newline" [] {
+def "the golden bytes follow the handoff key order as compact JSON with one trailing newline" [] {
     assert equal (handoff-bytes (golden-handoff) | decode) $"($GOLDEN_BYTES)\n"
     assert equal (handoff-bytes (golden-handoff) | hash sha256) $GOLDEN_SHA256
 }
@@ -50,6 +50,7 @@ def "golden bytes: HANDOFF_KEYS order, compact JSON, one trailing newline" [] {
 @test
 def "the stated components derive back to the cyberlink CID" [] {
     let act = (golden-handoff) | select cid_from cid_to signer
+
     assert equal (record-bytes $act | cid-v0) "QmRyRXXRM7ztFTPiyXjDtra9ND2oU64iE2jcydwubW17Ze"
 }
 
@@ -65,6 +66,7 @@ def "the signed bytes open with the schema token" [] {
 @test
 def "input key order does not change the signed bytes" [] {
     let reordered = (golden-handoff) | select handed_at receipt to from signer cid_to cid_from schema
+
     assert equal (handoff-bytes $reordered | decode) $"($GOLDEN_BYTES)\n"
 }
 
@@ -108,10 +110,12 @@ def "receipt is null or a sha256 hex" [] {
 def "read-handoff validates what it reads" [] {
     let tmp = mktemp --directory
     let good = $tmp | path join good.handoff.json
+
     handoff-bytes (golden-handoff) | save --raw $good
     assert equal (read-handoff $good) (golden-handoff)
 
     let bad = $tmp | path join bad.handoff.json
+
     ((golden-handoff) | update schema "cybergraph-handoff-v1" | to json --raw) | save --raw $bad
     assert error {|| read-handoff $bad }
     rm --recursive --force $tmp

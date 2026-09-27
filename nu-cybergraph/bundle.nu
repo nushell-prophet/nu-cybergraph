@@ -53,6 +53,7 @@ use _handoff.nu [ handoff-bytes HANDOFF_SCHEMA ]
 # committing to that root. Shared by the birth bundle and custody layers.
 def assemble-seal-artifacts [root: path out: path root_hex: string]: nothing -> nothing {
     let snap = snapshot-dir $root $root_hex
+
     if not ($snap | path exists) {
         error make {msg: $"seal snapshot missing for root ($root_hex) — the proof predates the seals/ convention?"}
     }
@@ -81,11 +82,13 @@ def assemble-seal-artifacts [root: path out: path root_hex: string]: nothing -> 
         | each {|f| {path: $f fingerprint: (open --raw $f | pubkey fingerprint)} }
     let copied = $signers | each {|fp|
             let hit = $registered | where fingerprint == $fp
+
             if ($hit | is-empty) { null } else {
                 copy-file ($hit | first | get path) ($out | path join multiproofs pubkeys)
                 $fp
             }
         }
+
     if ($copied | is-empty) {
         error make {msg: "no signer pubkey found for the snapshot's signatures — the bundle could never verify"}
     }
@@ -105,8 +108,10 @@ def assemble-ots [root: path out: path root_hex: string]: nothing -> nothing {
         | where ($it | path basename | str starts-with "tree-root.")
         | where {|d|
             let frozen = $d | path join tree-root.txt
+
             ($frozen | path exists) and (open --raw $frozen | str contains $root_hex)
         }
+
     if ($ots_bundles | is-empty) {
         print "note: no OTS bundle for this root (sealed with --no-stamp?) — the bundle's timestamp will report absent"
         return
@@ -136,20 +141,24 @@ def assemble-ots [root: path out: path root_hex: string]: nothing -> nothing {
 # two small files.
 def assemble-position [root: path out: path signer: string edge_cid: string birth_root: string]: nothing -> nothing {
     let cert = order-cert-path $root $signer $edge_cid
+
     if not ($cert | path exists) {
         error make {msg: $"no frozen position proof for ($signer)'s ($edge_cid) — run `nu-cybergraph seal` first, then export: a number no seal has catalogued is provable to nobody"}
     }
     let relpath = order-relpath $signer $edge_cid
+
     mkdir ($out | path join ($relpath | path dirname))
     copy-file (order-path $root $signer $edge_cid) ($out | path join $relpath)
     copy-file $cert ($out | path join ($relpath | path dirname) (order-cert-filename $edge_cid))
 
     let proof = open --raw $cert | from json
     let snap = snapshot-dir $root $proof.root
+
     if not ($snap | path exists) {
         error make {msg: $"seal snapshot missing for root ($proof.root) — the position proof predates the seals/ convention?"}
     }
     let dest = snapshot-dir $out $proof.root
+
     mkdir $dest
     for f in (list-files $snap) {
         copy-file $f $dest
@@ -171,6 +180,7 @@ def assemble-position [root: path out: path signer: string edge_cid: string birt
 def assemble-particles [root: path out: path rec: record]: nothing -> nothing {
     for cid in ([$rec.cid_from $rec.cid_to] | uniq) {
         let file = particle-find $root $cid --optional
+
         if $file != null {
             mkdir (particles-dir $out)
             copy-file $file (particles-dir $out)
@@ -194,10 +204,12 @@ def assemble-particles [root: path out: path rec: record]: nothing -> nothing {
 def resolve-handoff-key [root: path key: any]: nothing -> path {
     if $key != null { return $key }
     let k = ^git -C $root config user.signingKey | complete
+
     if $k.exit_code != 0 or ($k.stdout | str trim | is-empty) {
         error make {msg: "handoff needs a signing key: set git config user.signingKey or pass --key"}
     }
     let raw = $k.stdout | str trim
+
     # git's inline form carries the key material instead of a path. Upstream
     # signs with it by materializing a temp file and owning its lifetime
     # (`with-signing-key`); reproducing that here would be a second copy of
@@ -225,6 +237,7 @@ def write-handoff [root: path dir: path edge_cid: string act: record to: string 
         handed_at: (date now | format date "%+")
     }
     let file = $dir | path join (handoff-filename $edge_cid)
+
     handoff-bytes $handoff | save --raw $file
     # `ignore`: upstream hands back the .sig path, which no caller reads — and
     # dropping it is what lets every writer in this file share one contract,
@@ -241,6 +254,7 @@ def write-handoff [root: path dir: path edge_cid: string act: record to: string 
 # exists" check leaves the same debris, so one cleanup covers them all.
 def assert-complete-bundle [out: path]: nothing -> nothing {
     let certs = list-files $out --suffix ".cert.json"
+
     if ($certs | length) != 1 {
         error make {msg: $"bundle came out incomplete: ($certs | length) *.cert.json at the root instead of 1 — partial bundle removed, re-run the export"}
     }
@@ -257,6 +271,7 @@ def assemble-bundle [root: path out: path edge_cid: string resolved: record act:
         let cert = cert-path $root $resolved.signer $edge_cid
         let proof = open --raw $cert | from json
         let record_file = $root | path join $proof.leaf.filepath
+
         mkdir ($out | path join ($proof.leaf.filepath | path dirname))
         copy-file $record_file ($out | path join $proof.leaf.filepath)
         copy-file $cert ($out | path join (cert-filename $edge_cid))
@@ -277,6 +292,7 @@ def assemble-bundle [root: path out: path edge_cid: string resolved: record act:
     # handoff inside state the act's three components (see _verify-helpers.nu).
     let author = $resolved.signer
     let rcert = receipt-cert-path $root $author $edge_cid
+
     if not ($rcert | path exists) {
         error make {msg: $"no frozen receipt proof for ($author)'s ($edge_cid) — run `nu-cybergraph seal` after import, then re-export"}
     }
@@ -287,6 +303,7 @@ def assemble-bundle [root: path out: path edge_cid: string resolved: record act:
     let index = (custody-layers $out | length) + 1
     let layer = custody-dir $out | path join (custody-layer-dirname $index $receipt.custodian)
     let proof = open --raw $rcert | from json
+
     mkdir ($layer | path join ($receipt_relpath | path dirname))
     copy-file ($root | path join $receipt_relpath) ($layer | path join $receipt_relpath)
     copy-file $rcert ($layer | path join (receipt-cert-filename $edge_cid))
@@ -294,6 +311,7 @@ def assemble-bundle [root: path out: path edge_cid: string resolved: record act:
     if $to != null {
         # A custodian's handoff pins their receipt — the exact chain state handed over
         let receipt_hash = open --raw ($root | path join $receipt_relpath) | hash sha256
+
         write-handoff $root $layer $edge_cid $act $to $receipt_hash $key
     }
 }
@@ -312,6 +330,7 @@ export def main [
     --links-only # own act only: without particles — the record, its certificate and its position with their proofs (no-op re-exporting an imported act — its particles, if any, are the sender's foreign bytes, copied unchanged either way)
 ]: nothing -> path {
     let root = graph-root $repo
+
     if $to != null and $to !~ $CID_V0_RE {
         error make {msg: $"--to must be a signer CID \(base58btc CID v0\): ($to)"}
     }
@@ -322,12 +341,13 @@ export def main [
     # when the argument named the act directly. More than one candidate is a
     # question only the caller can answer — refused, never guessed.
     let own_hits = list-dirs (certs-dir $root)
-        | each { path basename }
-        | where {|s| $signer == null or $s == $signer }
+        | path basename
+        | where $signer == null or $it == $signer
         | where ((cert-path $root $it $edge_cid) | path exists)
     let imported_hits = if ($own_hits | is-empty) {
-        imported-edge-copies $root $edge_cid | where {|h| $signer == null or $h.signer == $signer }
+        imported-edge-copies $root $edge_cid | where $signer == null or signer == $signer
     } else { [] }
+
     if ($own_hits | is-empty) and ($imported_hits | is-empty) {
         error make {msg: $"unknown edge: ($edge_cid) — no birth certificate in certs/ and nothing in imported/"}
     }
@@ -348,6 +368,7 @@ export def main [
     let record_root = if $resolved.own { $root } else { $resolved.dir }
     let act = read-link (link-path $record_root $resolved.signer $edge_cid)
     let out = if $out != null { $out | path expand } else { exports-dir $root | path join $resolved.signer $edge_cid }
+
     if ($out | path exists) {
         error make {msg: $"bundle destination already exists: ($out)"}
     }

@@ -35,6 +35,7 @@ use _deps/cid-v0.nu [ cid-v0 ]
 export def record-bytes [rec: record]: nothing -> binary {
     for key in ($rec | columns) {
         let kind = $rec | get $key | describe
+
         if $kind != "string" {
             error make {msg: $"canonical record values must be strings — ($key) is ($kind); a reference to another record is its CID"}
         }

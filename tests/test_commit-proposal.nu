@@ -62,11 +62,13 @@ def stamped-result []: nothing -> record {
 # graph home and the key registered as its identity.
 def graph-with-a-link [tmp_dir: path]: nothing -> record {
     let repo = $tmp_dir | path join repo
+
     mkdir $repo
     ^git init --object-format=sha256 -q $repo
     ^git -C $repo config user.name t
     ^git -C $repo config user.email t@t
     let key = $tmp_dir | path join key
+
     ^ssh-keygen -t ed25519 -f $key -N "" -q
     ^git -C $repo config user.signingKey $key
     init --repo $repo
@@ -97,15 +99,15 @@ def "a stamped seal names its bundle and reports the endorsement anchor alone" [
 }
 
 @test
-def "two signatures are counted, and read as plural" [] {
-    let two = stamped-result | update sealed.sig_ots {|r| $r.sealed.sig_ots | append "/graph/x.ots" }
+def "two signatures are counted and read as plural" [] {
+    let two = stamped-result | update sealed.sig_ots { append "/graph/x.ots" }
 
     assert str contains (seal-commit-line $two "/graph" "QmSigner") "Anchors: 2 endorsements"
 }
 
 @test
 def "a seal with no stamp reports no anchor and names no bundle" [] {
-    let unstamped = stamped-result | update sealed {|r| $r.sealed | reject bundle sig_ots }
+    let unstamped = stamped-result | update sealed { reject bundle sig_ots }
 
     let line = seal-commit-line $unstamped "/graph" "QmSigner"
 
@@ -157,7 +159,7 @@ def "a numbered position is named in the body and silence is the ordinary case" 
 # so the body must name the one this seal wrote — derived from the root, the same
 # way `bundle` looks it up.
 @test
-def "the snapshot is derived from the root, not read off the seal result" [] {
+def "the snapshot is derived from the root and not read off the seal result" [] {
     # What `seal` returns is relative to wherever it was RUN from, and a commit
     # body is read from anywhere. So this field must not be the source.
     let elsewhere = stamped-result | update snapshot "../../somewhere/else"
@@ -169,7 +171,7 @@ def "the snapshot is derived from the root, not read off the seal result" [] {
 }
 
 @test
-def "the signer is the CID passed in, not anything read off a filename" [] {
+def "the signer is the CID passed in and not anything read off a filename" [] {
     let cid = "QmYwAPJzv5CZsnA625s3Xf2nemtYgPpHdWEz79ojWnPbdG"
 
     # The result's own .sig path says "abc" — the proposal must ignore it.
@@ -180,7 +182,7 @@ def "the signer is the CID passed in, not anything read off a filename" [] {
 }
 
 @test
-def "the message body is real lines, not escapes" [] {
+def "the message body is real lines and not escapes" [] {
     let line = seal-commit-line (stamped-result) "/graph" "QmSigner"
 
     # The operator is meant to edit this before running it, and a body escaped
@@ -209,6 +211,7 @@ def "a graph path holding a quote still parses as one argument" [] {
 
     assert equal ($quoted | lines | length) 1
     let round_tripped = ^nu --commands $"print --raw ($quoted)" | str trim --right --char "\n"
+
     assert equal $round_tripped $nasty
 }
 
@@ -222,6 +225,7 @@ def "multiline mode keeps newlines but still escapes a quote" [] {
 
     assert equal ($quoted | lines | length) 3
     let round_tripped = ^nu --commands $"print --raw ($quoted)" | str trim --right --char "\n"
+
     assert equal $round_tripped $body
 }
 
@@ -235,6 +239,7 @@ def "a newline in a path cannot break out of the quoted argument" [] {
 
     assert equal ($quoted | lines | length) 1
     let round_tripped = ^nu --commands $"print --raw ($quoted)" | str trim --right --char "\n"
+
     assert equal $round_tripped $nasty
 }
 
@@ -274,9 +279,11 @@ def "the proposed block runs and commits exactly what the seal wrote" [] {
     # `complete` so git's own chatter stays out of the test report — and so a
     # failure reports the block's stderr, which a bare throw would drop.
     let run = do { ^nu --commands (seal-commit-line $result $g.root $signer) } | complete
+
     assert equal $run.exit_code 0 $"the proposed block did not run: ($run.stderr)"
 
     let message = ^git -C $g.repo log -1 --format=%B
+
     assert str contains $message $"seal: graph catalogued at merkle root ($root_hex | str substring 0..<8)"
     assert str contains $message $"Merkle root: ($root_hex)"
     assert str contains $message $"Signed by: ($signer)"
@@ -288,11 +295,12 @@ def "the proposed block runs and commits exactly what the seal wrote" [] {
 
     # The seal's own artifacts landed, and nothing outside the graph home.
     let committed = ^git -C $g.repo show --name-only --format= HEAD | lines | where $it != ""
-    assert ($committed | all {|f| $f | str starts-with "cybergraph/" })
-    assert ($committed | any {|f| $f | str starts-with $"cybergraph/($signer)/" })
-    assert ($committed | any {|f| $f | str starts-with "cybergraph/certs/" })
-    assert ($committed | any {|f| $f | str starts-with "cybergraph/seals/" })
-    assert ($committed | any {|f| $f == "cybergraph/multiproofs/tree-root.txt" })
+
+    assert ($committed | all { str starts-with "cybergraph/" })
+    assert ($committed | any { str starts-with $"cybergraph/($signer)/" })
+    assert ($committed | any { str starts-with "cybergraph/certs/" })
+    assert ($committed | any { str starts-with "cybergraph/seals/" })
+    assert ("cybergraph/multiproofs/tree-root.txt" in $committed)
 
     # Nothing is left staged: the proposal's pathspec has to cover every path the
     # seal touched, deletions included.

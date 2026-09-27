@@ -37,6 +37,7 @@ use _deps/pubkey.nu [ pubkey ]
 def key-pubkey [named: path]: nothing -> string {
     let expanded = $named | path expand
     let pub = if ($"($expanded).pub" | path exists) { $"($expanded).pub" } else { $expanded }
+
     if not ($pub | path exists) {
         error make {msg: $"signing key not on this machine: ($named)"}
     }
@@ -64,10 +65,12 @@ def signing-pubkey [root: path key: any]: nothing -> string {
     # the identity outright, and must not depend on a config it bypassed.
     if $key != null { return (key-pubkey $key) }
     let git = do { ^git -C $root config user.signingKey } | complete
+
     if $git.exit_code != 0 or ($git.stdout | str trim | is-empty) {
         error make {msg: "no git `user.signingKey` in this checkout, so nothing says which registered key writes here — set it with: git config user.signingKey <path-to-key>"}
     }
     let raw = $git.stdout | str trim
+
     if ($raw | str starts-with "key::") {
         return ($raw | str replace "key::" "" | pubkey canonical)
     }
@@ -79,11 +82,13 @@ def signing-pubkey [root: path key: any]: nothing -> string {
 # own; a write command resolves its identity from the config `seal` will use.
 export def own-signer [root: path --key: path]: nothing -> string {
     let pubs = list-files ($root | path join multiproofs pubkeys) --suffix ".pub"
+
     if ($pubs | is-empty) {
         error make {msg: "no pubkey registered in multiproofs/pubkeys/ — run `nu-cybergraph init` first"}
     }
     let mine = signing-pubkey $root $key
-    let registered = $pubs | where {|f| (open --raw $f) == $mine }
+    let registered = $pubs | where (open --raw $it) == $mine
+
     # Registration is what makes a signature readable: a record naming a signer
     # the trust list holds no key for fails the binding at `verify`, `bundle`
     # and `import`. Refuse before writing it, not three commands later.

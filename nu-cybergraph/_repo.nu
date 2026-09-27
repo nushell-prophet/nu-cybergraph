@@ -8,6 +8,7 @@ use _layout.nu [ assert-known-home ]
 export def repo-root [repo?: path]: nothing -> path {
     if $repo != null {
         let expanded = $repo | path expand
+
         # Catch the typo here: unchecked, it surfaces later as a confusing
         # downstream error ("no pubkey registered" for a path that isn't there).
         if not ($expanded | path exists) {
@@ -16,6 +17,7 @@ export def repo-root [repo?: path]: nothing -> path {
         return $expanded
     }
     let result = ^git rev-parse --show-toplevel | complete
+
     if $result.exit_code != 0 {
         error make {msg: "not inside a git repository — pass --repo to target one explicitly"}
     }
@@ -38,6 +40,7 @@ export def repo-root [repo?: path]: nothing -> path {
 # a bundle through the same layout helpers, and a bundle is not a home.
 export def graph-root [repo?: path]: nothing -> path {
     let root = graph-home $repo
+
     assert-known-home $root
     $root
 }

@@ -19,6 +19,7 @@ use _deps/cid-v0.nu [ cid-v0 ]
 export def store-index [root: path]: nothing -> record {
     list-files (particles-dir $root) | reduce --fold {} {|p acc|
         let cid = store-cid $p
+
         if $cid == null {
             $acc
         } else {
@@ -43,6 +44,7 @@ def particle-files [root: path cid: string]: nothing -> list<string> {
 # declared `path` at parse time.
 export def index-find [index: record cid: string --optional]: nothing -> any {
     let files = $index | get --optional $cid | default []
+
     match ($files | length) {
         0 => { if $optional { null } else { error make {msg: $"no file ($cid) in store"} } }
         1 => { $files | first }
@@ -61,6 +63,7 @@ export def particle-find [root: path cid: string --optional]: nothing -> any {
 # way whether a human or a query met it.
 export def particle-verify [file: path cid: string]: nothing -> any {
     let content = open --raw $file
+
     if ($content | into binary | cid-v0) != $cid {
         error make {msg: $"tampered file: ($file | path basename) does not hash to its name"}
     }
@@ -71,6 +74,7 @@ export def particle-verify [file: path cid: string]: nothing -> any {
 # forwards to particle-find — absence returns null, tampering still raises.
 export def particle-read [root: path cid: string --optional]: nothing -> any {
     let file = particle-find $root $cid --optional=$optional
+
     if $file == null { return null }
     particle-verify $file $cid
 }
@@ -84,10 +88,12 @@ export def particle-read [root: path cid: string --optional]: nothing -> any {
 # wins and no second copy is written (one CID, one file).
 export def particle-store [root: path --ext: string]: binary -> string {
     let bytes = $in
+
     if $ext != null and $ext !~ $PARTICLE_EXT_RE {
         error make {msg: $"malformed particle extension: ($ext) — expected dot-separated alphanumeric segments, e.g. md"}
     }
     let cid = $bytes | cid-v0
+
     if (particle-files $root $cid | is-empty) {
         mkdir (particles-dir $root)
         # No null guard around the forward: nushell refuses `--ext null` only

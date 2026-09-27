@@ -38,11 +38,13 @@ use _read.nu [ reachable-cids ]
 # one escape hatch this was asked to be.
 export def uncommitted-files [root: path]: nothing -> table {
     let dir = particles-dir $root
+
     if not ($dir | path exists) { return [] }
     let top = ^git -C $root rev-parse --show-toplevel | str trim
     let dirty = ^git -C $root status --porcelain=v1 --untracked-files=all -- $dir
         | lines
         | where $it != ""
+
     # Before `reachable-cids`, which reads the store and dereferences every
     # endpoint: a clean store is the common case and it costs one `git status`.
     if ($dirty | is-empty) { return [] }
@@ -71,6 +73,7 @@ export def uncommitted-files [root: path]: nothing -> table {
         } else {
             "orphan"
         }
+
         {
             file: $file
             cid: $cid
@@ -90,5 +93,5 @@ export def uncommitted-files [root: path]: nothing -> table {
 # command's business. The row still appears in the reading — that a file was
 # published and linked to nothing is worth seeing.
 export def stageable [rows: table]: nothing -> table {
-    $rows | where {|r| (not $r.tracked) and ($r.state == "reachable") }
+    $rows | where not tracked and state == "reachable"
 }

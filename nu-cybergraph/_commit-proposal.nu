@@ -76,6 +76,7 @@ export def seal-commit-line [
         "Anchors: none, sealed with --no-stamp"
     } else {
         let endorsements = $sealed | get --optional sig_ots | default [] | length
+
         $"Anchors: (count-of $endorsements 'endorsement'), pending until Bitcoin confirms"
     }
 
@@ -148,10 +149,11 @@ export def seal-commit-line [
     # commit — `particle uncommitted --propose-commit`, which has to run BEFORE the
     # seal for the manifest to cover them. Seal refuses when it has not.
     let staged = (
-        (signer-dirs $root | each { path basename }) ++ [$CERTS_DIR $SEALS_DIR $IMPORTED_DIR $RECEIPTS_DIR $ORDER_DIR "multiproofs"]
+        (signer-dirs $root | path basename) ++ [$CERTS_DIR $SEALS_DIR $IMPORTED_DIR $RECEIPTS_DIR $ORDER_DIR "multiproofs"]
     )
         | where {|d|
             let dir = $root | path join $d
+
             ($dir | path exists) and (ls $dir | is-not-empty)
         }
 
@@ -184,7 +186,7 @@ export def particle-commit-line [
     rows: table # stageable rows from `_uncommitted.nu uncommitted-files`
     root: path # graph home the store belongs to
 ]: nothing -> string {
-    let staged = $rows | get file | each { path relative-to $root }
+    let staged = $rows | get file | path relative-to $root
 
     let message = [
         $"particles: publish (count-of ($rows | length) 'file') the graph names"

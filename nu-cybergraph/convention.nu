@@ -119,6 +119,7 @@ def address [root: path index: record expr: any allow_missing: bool literal: boo
     let resolved = $expr | columns | reduce --fold {} {|key acc|
             $acc | insert $key (if $key == "op" { $expr.op } else { address $root $index ($expr | get $key) $allow_missing $literal })
         }
+
     record-bytes $resolved | particle-store $root
 }
 
@@ -149,6 +150,7 @@ def edge [
     # takes it as given rather than asking a second time.
     let signer_cid = resolve-signer $root $signer
     let index = store-index $root
+
     link add (address $root $index $src $allow_missing $literal) (address $root $index $tgt $allow_missing $literal) --signer $signer_cid --repo $repo --allow-missing
 }
 
@@ -205,6 +207,7 @@ export def "confirm-edge" [
 ]: nothing -> record {
     let root = graph-root $repo
     let signer_cid = resolve-signer $root $signer
+
     edge {op: "confirm_edge"} (publish-edge $root $cid_from $cid_to $allow_missing $literal) $signer_cid $repo $allow_missing $literal
 }
 
@@ -224,6 +227,7 @@ export def "confirm-link" [
 ]: nothing -> record {
     let root = graph-root $repo
     let signer_cid = resolve-signer $root $signer
+
     edge {op: "confirm_link"} (publish-link $root $cid_from $cid_to $confirmed_signer $allow_missing $literal) $signer_cid $repo $allow_missing $literal
 }
 
@@ -241,6 +245,7 @@ export def "deny-edge" [
 ]: nothing -> record {
     let root = graph-root $repo
     let signer_cid = resolve-signer $root $signer
+
     edge {op: "deny_edge"} (publish-edge $root $cid_from $cid_to $allow_missing $literal) $signer_cid $repo $allow_missing $literal
 }
 
@@ -260,6 +265,7 @@ export def "deny-link" [
 ]: nothing -> record {
     let root = graph-root $repo
     let signer_cid = resolve-signer $root $signer
+
     edge {op: "deny_link"} (publish-link $root $cid_from $cid_to $disputed_signer $allow_missing $literal) $signer_cid $repo $allow_missing $literal
 }
 
@@ -488,6 +494,7 @@ export def claimed-at [
     let t = if $timestamp != null { $timestamp } else {
         date now | date to-timezone UTC | format date "%+"
     }
+
     # Checked at the one spot time claims are born: RFC 3339 shape (constrained charset — the
     # timestamp file stays escape-free), then a real calendar date (the regex
     # admits month 13, `into datetime` rejects it).

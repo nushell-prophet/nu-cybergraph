@@ -17,6 +17,7 @@ const N = "QmddrVz92VH3LqT2i7uXeK4AVh6LyU7zjDiLbSdChPsULr"
 @before-each
 def setup []: nothing -> record {
     let tmp = mktemp --directory
+
     {tmp: $tmp root: ($tmp | path join cybergraph)}
 }
 
@@ -29,6 +30,7 @@ def cleanup [] {
 def "particle add stores the exact bytes under their own CID" [] {
     let root = $in.root
     let cid = particle add "cyber" --repo $in.tmp
+
     assert equal $cid ("cyber" | into binary | cid-v0)
     assert equal (open --raw (particle-path $root $cid) | into binary) ("cyber" | into binary)
 }
@@ -37,6 +39,7 @@ def "particle add stores the exact bytes under their own CID" [] {
 def "particle add is idempotent and accepts piped string or binary" [] {
     let tmp = $in.tmp
     let first = particle add "cyber" --repo $tmp
+
     assert equal (particle add "cyber" --repo $tmp) $first
     assert equal ("cyber" | particle add --repo $tmp) $first
     assert equal (0x[63 79 62 65 72] | particle add --repo $tmp) $first
@@ -45,6 +48,7 @@ def "particle add is idempotent and accepts piped string or binary" [] {
 @test
 def "particle add refuses ambiguous or missing input" [] {
     let tmp = $in.tmp
+
     assert error {|| "piped" | particle add "argument" --repo $tmp }
     assert error {|| particle add --repo $tmp }
 }
@@ -55,6 +59,7 @@ def "particle add refuses ambiguous or missing input" [] {
 def "particle add publishes a CID-shaped string as content" [] {
     let tmp = $in.tmp
     let cid = particle add $A --repo $tmp
+
     assert not equal $cid $A
     assert equal $cid ($A | into binary | cid-v0)
 }
@@ -63,8 +68,10 @@ def "particle add publishes a CID-shaped string as content" [] {
 def "particle add opens an argument that names an existing path" [] {
     let tmp = $in.tmp
     let file = $tmp | path join "doc.md"
+
     "hello" | save --raw $file
     let expected = "hello" | into binary | cid-v0
+
     assert equal (particle add $file --repo $tmp) $expected
     assert equal (open --raw $file | particle add --repo $tmp) $expected
 }
@@ -73,6 +80,7 @@ def "particle add opens an argument that names an existing path" [] {
 def "particle add --literal publishes a path string as its own bytes" [] {
     let tmp = $in.tmp
     let file = $tmp | path join "doc.md"
+
     "hello" | save --raw $file
     assert equal (particle add $file --repo $tmp --literal) ($file | into binary | cid-v0)
 }
@@ -80,6 +88,7 @@ def "particle add --literal publishes a path string as its own bytes" [] {
 @test
 def "particle add refuses a path-shaped argument that names nothing" [] {
     let tmp = $in.tmp
+
     assert error {|| particle add ($tmp | path join "missing.md") --repo $tmp }
     # A regular string sharing no path shape (no separator, no extension) is
     # never mistaken for a missing path — it just publishes as content.
@@ -93,6 +102,7 @@ def "particle add refuses a path-shaped argument that names nothing" [] {
 @test
 def "particle add refuses a dotfile-shaped argument that names nothing" [] {
     let tmp = $in.tmp
+
     assert error {|| particle add ".env" --repo $tmp }
 }
 
@@ -100,6 +110,7 @@ def "particle add refuses a dotfile-shaped argument that names nothing" [] {
 def "particle add accepts a path-shaped string when piped" [] {
     let tmp = $in.tmp
     let file = $tmp | path join "doc.md"
+
     "hello" | save --raw $file
     assert equal ($file | particle add --repo $tmp) ($file | into binary | cid-v0)
 }
@@ -111,14 +122,16 @@ def "particle add accepts a path-shaped string when piped" [] {
 def "particle add refuses a dangling symlink argument" [] {
     let tmp = $in.tmp
     let link = $tmp | path join "dangling"
+
     ^ln -s ($tmp | path join "does-not-exist") $link
     assert error {|| particle add $link --repo $tmp }
 }
 
 @test
-def "particle add --ext stores under <cid>.md and returns the bare CID" [] {
+def "particle add --ext stores the file under the CID with the extension and returns the bare CID" [] {
     let tmp = $in.tmp
     let cid = particle add "# doc" --ext md --repo $tmp
+
     assert equal $cid ("# doc" | into binary | cid-v0)
     assert ((particle-path $in.root $cid --ext md) | path exists)
 }
@@ -129,6 +142,7 @@ def "particle add --ext stores under <cid>.md and returns the bare CID" [] {
 def "particle add is idempotent across extensions" [] {
     let tmp = $in.tmp
     let bare = particle add "cyber" --repo $tmp
+
     assert equal (particle add "cyber" --ext md --repo $tmp) $bare
     assert equal (ls (particles-dir $in.root) | length) 1
     assert ((particle-path $in.root $bare) | path exists)
@@ -137,16 +151,18 @@ def "particle add is idempotent across extensions" [] {
 @test
 def "particle add rejects a malformed extension" [] {
     let tmp = $in.tmp
+
     assert error {|| particle add "x" --ext ".md" --repo $tmp }
     assert error {|| particle add "x" --ext "m d" --repo $tmp }
     assert error {|| particle add "x" --ext "a/b" --repo $tmp }
 }
 
 @test
-def "particle cat returns exact bytes by bare CID, whatever the extension" [] {
+def "particle cat returns exact bytes by bare CID whatever the extension" [] {
     let tmp = $in.tmp
     let bare = particle add "cyber" --repo $tmp
     let ext = particle add "# doc" --ext md --repo $tmp
+
     assert equal (particle cat $bare --repo $tmp) "cyber"
     assert equal (particle cat $ext --repo $tmp) "# doc"
 }
@@ -155,6 +171,7 @@ def "particle cat returns exact bytes by bare CID, whatever the extension" [] {
 def "particle cat refuses anything but a bare CID" [] {
     let tmp = $in.tmp
     let cid = particle add "# doc" --ext md --repo $tmp
+
     assert error {|| particle cat $"($cid).md" --repo $tmp }
     assert error {|| particle cat ([particles $cid] | path join) --repo $tmp }
 }
@@ -169,6 +186,7 @@ def "particle cat fails fast on a store with two files for one CID" [] {
     let tmp = $in.tmp
     let root = $in.root
     let cid = particle add "cyber" --repo $tmp
+
     "cyber" | save --raw (particle-path $root $cid --ext md)
     assert error {|| particle cat $cid --repo $tmp }
 }
@@ -178,6 +196,7 @@ def "particle cat rejects a tampered store file" [] {
     let tmp = $in.tmp
     let root = $in.root
     let cid = particle add "cyber" --repo $tmp
+
     "evil" | save --force --raw (particle-path $root $cid)
     assert error {|| particle cat $cid --repo $tmp }
 }
@@ -197,6 +216,7 @@ def "particle cat --optional still rejects a tampered file" [] {
     let tmp = $in.tmp
     let root = $in.root
     let cid = particle add "cyber" --repo $tmp
+
     "evil" | save --force --raw (particle-path $root $cid)
     assert error {|| particle cat $cid --repo $tmp --optional }
 }
@@ -206,6 +226,7 @@ def "particle cat --optional still fails on two files for one CID" [] {
     let tmp = $in.tmp
     let root = $in.root
     let cid = particle add "cyber" --repo $tmp
+
     "cyber" | save --raw (particle-path $root $cid --ext md)
     assert error {|| particle cat $cid --repo $tmp --optional }
 }
@@ -213,6 +234,7 @@ def "particle cat --optional still fails on two files for one CID" [] {
 @test
 def "link add resolves text endpoints to published files" [] {
     let r = link add "cyber" "bostrom" --repo $in.tmp --signer $N | get record
+
     assert equal $r.cid_from ("cyber" | into binary | cid-v0)
     assert equal $r.cid_to ("bostrom" | into binary | cid-v0)
     assert equal (open --raw (particle-path $in.root $r.cid_to)) "bostrom"
@@ -223,8 +245,10 @@ def "link add opens a text endpoint that names an existing path" [] {
     let tmp = $in.tmp
     let root = $in.root
     let file = $tmp | path join "doc.md"
+
     "hello" | save --raw $file
     let r = link add $file "bostrom" --repo $tmp --signer $N | get record
+
     assert equal $r.cid_from ("hello" | into binary | cid-v0)
     assert equal (open --raw (particle-path $root $r.cid_from)) "hello"
 }
@@ -233,14 +257,17 @@ def "link add opens a text endpoint that names an existing path" [] {
 def "link add --literal publishes a path-shaped endpoint as its own bytes" [] {
     let tmp = $in.tmp
     let file = $tmp | path join "doc.md"
+
     "hello" | save --raw $file
     let r = link add $file "bostrom" --repo $tmp --signer $N --literal | get record
+
     assert equal $r.cid_from ($file | into binary | cid-v0)
 }
 
 @test
 def "link add refuses a path-shaped endpoint that names nothing" [] {
     let tmp = $in.tmp
+
     assert error {|| link add ($tmp | path join "missing.md") "bostrom" --repo $tmp --signer $N }
 }
 
@@ -249,6 +276,7 @@ def "link add refuses a path-shaped endpoint that names nothing" [] {
 @test
 def "link add publishes nothing when the repo has no signer identity" [] {
     let tmp = $in.tmp
+
     assert error {|| link add "cyber" "bostrom" --repo $tmp }
     assert not ((particles-dir $in.root) | path exists)
 }
@@ -260,6 +288,7 @@ def "link add publishes nothing when the repo has no signer identity" [] {
 def "link add publishes a bare-string signer as a particle" [] {
     let tmp = $in.tmp
     let r = link add "cyber" "bostrom" --repo $tmp --signer "alice" | get record
+
     assert equal $r.signer ("alice" | into binary | cid-v0)
     assert equal (open --raw (particle-path $in.root $r.signer)) "alice"
 }
@@ -270,6 +299,7 @@ def "link add publishes a bare-string signer as a particle" [] {
 def "convention verbs publish a bare-string signer as a particle" [] {
     let tmp = $in.tmp
     let r = convention agree-particle "cyber" --repo $tmp --signer "alice" | get record
+
     assert equal $r.signer ("alice" | into binary | cid-v0)
 }
 
@@ -280,10 +310,13 @@ def "convention verbs publish a bare-string signer as a particle" [] {
 def "link add publishes a path-shaped signer as its own bytes" [] {
     let tmp = $in.tmp
     let key = $tmp | path join "other.pub"
+
     "ssh-ed25519 AAAA\n" | save --raw $key
     let r = link add "cyber" "bostrom" --repo $tmp --signer $key | get record
+
     assert equal $r.signer ($key | into binary | cid-v0)
     let named = link add "cyber" "prophet" --repo $tmp --signer "agent-1.v2" | get record
+
     assert equal $named.signer ("agent-1.v2" | into binary | cid-v0)
 }
 
@@ -294,6 +327,7 @@ def "link add publishes a path-shaped signer as its own bytes" [] {
 @test
 def "link add takes a signer CID this repo holds no file for" [] {
     let r = link add "cyber" "bostrom" --repo $in.tmp --signer $N | get record
+
     assert equal $r.signer $N
     assert equal ((particle-path $in.root $N) | path exists) false
 }
@@ -301,6 +335,7 @@ def "link add takes a signer CID this repo holds no file for" [] {
 @test
 def "link add publishes neither of its own addresses" [] {
     let r = link add $A $B --repo $in.tmp --signer $N --allow-missing
+
     # The endpoints were addresses already, so nothing was minted for them,
     # and the two addresses the command reports are derived, not published —
     # so the store is not created at all. The store holds bytes something
@@ -316,7 +351,8 @@ def "link add publishes neither of its own addresses" [] {
 @test
 def "link add publishes its endpoints and nothing besides" [] {
     let r = link add "cyber" "prophet" --repo $in.tmp --signer $N
-    let stored = ls (particles-dir $in.root) | get name | each { path basename } | sort
+    let stored = ls (particles-dir $in.root) | get name | path basename | sort
+
     assert equal $stored ([$r.record.cid_from $r.record.cid_to] | sort)
 }
 
@@ -328,15 +364,19 @@ def "link add publishes its endpoints and nothing besides" [] {
 def "an edge is linked to by publishing its preimage first" [] {
     let tmp = $in.tmp
     let born = link add "cyber" "prophet" --repo $tmp --signer $N
+
     # Step one refuses, and says so, rather than resolving the address out of
     # the link file that happens to hold the same bytes.
     assert error {|| link add "cyber" $born.edge_cid --repo $tmp --signer $N }
     let published = particle add-edge $born.record.cid_from $born.record.cid_to --repo $tmp
+
     assert equal $published $born.edge_cid
     let about = link add "cyber" $born.edge_cid --repo $tmp --signer $N
+
     assert equal $about.record.cid_to $born.edge_cid
     # ...and it reads back as the edge itself, not as an opaque address.
     let row = link list --repo $tmp | where edge_cid == $about.edge_cid | first
+
     assert equal $row.tgt {cid_from: $born.record.cid_from cid_to: $born.record.cid_to}
 }
 
@@ -346,14 +386,16 @@ def "an edge is linked to by publishing its preimage first" [] {
 @test
 def "the publishers apply the same operand rule as every other write command" [] {
     let tmp = $in.tmp
+
     # A CID this repo holds no bytes for is refused, exactly as `link add`
     # refuses it, and the same flag lets a deliberate forward reference past.
     assert error {|| particle add-edge $A $B --repo $tmp }
     assert equal (particle add-edge $A $B --repo $tmp --allow-missing) (derive {cid_from: $A cid_to: $B})
     # Text is content: published first, then named by its CID.
     let edge = particle add-edge "cyber" "prophet" --repo $tmp
-    let published = ls (particles-dir $in.root) | get name | each { path basename }
+    let published = ls (particles-dir $in.root) | get name | path basename
     let cyber = "cyber" | into binary | cid-v0
+
     assert ($cyber in $published)
     assert ($edge in $published)
 }
@@ -362,11 +404,12 @@ def "the publishers apply the same operand rule as every other write command" []
 # but its address still has to have a publishable preimage, or `confirm-link A B S`
 # names something no reader can resolve.
 @test
-def "a cyberlink preimage is published the same way, signer included" [] {
+def "a cyberlink preimage is published the same way with the signer included" [] {
     let tmp = $in.tmp
     let born = link add "cyber" "prophet" --repo $tmp --signer $N
     let expected = derive $born.record
     let published = particle add-link $born.record.cid_from $born.record.cid_to $N --repo $tmp
+
     assert equal $published $expected
     assert equal (open --raw (particle-path $in.root $expected) | into binary | cid-v0) $expected
 }
@@ -379,6 +422,7 @@ def "a cyberlink preimage is published the same way, signer included" [] {
 def "link add refuses a CID endpoint this repo holds no file for" [] {
     let tmp = $in.tmp
     let err = try { link add $A $B --repo $tmp --signer $N; null } catch {|e| $e.msg }
+
     assert ($err != null) "an unpublished CID endpoint was accepted with no flag"
     assert ($err | str contains $A) $"the refusal does not name the missing CID: ($err)"
     assert ($err | str contains "allow-missing") $"the refusal does not name its own escape hatch: ($err)"
@@ -389,6 +433,7 @@ def "link add refuses a CID endpoint this repo holds no file for" [] {
 @test
 def "convention verbs refuse a CID operand this repo holds no file for" [] {
     let tmp = $in.tmp
+
     assert error {|| convention agree-particle $A --repo $tmp --signer $N }
     convention agree-particle $A --repo $tmp --signer $N --allow-missing | ignore
 }
@@ -401,6 +446,7 @@ def "convention verbs refuse a CID operand this repo holds no file for" [] {
 @test
 def "allow-missing reaches an operand nested inside the address expression" [] {
     let tmp = $in.tmp
+
     assert error {|| convention confirm-link $A $B $N --repo $tmp --signer $N }
     convention confirm-link $A $B $N --repo $tmp --signer $N --allow-missing | ignore
 
@@ -411,6 +457,7 @@ def "allow-missing reaches an operand nested inside the address expression" [] {
 @test
 def "convention verbs resolve text arguments before hashing" [] {
     let q = convention question $A "why?" --repo $in.tmp --signer $N --allow-missing | get record
+
     assert equal $q.cid_from (derive {about: $A op: "question"})
     assert equal $q.cid_to ("why?" | into binary | cid-v0)
     assert equal (open --raw (particle-path $in.root $q.cid_to)) "why?"
@@ -420,6 +467,7 @@ def "convention verbs resolve text arguments before hashing" [] {
 def "convention verbs resolve args embedded in derived sources" [] {
     let q = convention quote-particle "source text" "text" --repo $in.tmp --signer $N | get record
     let src_cid = "source text" | into binary | cid-v0
+
     assert equal $q.cid_from (derive {about: $src_cid op: "quote_particle"})
     assert equal (open --raw (particle-path $in.root $src_cid)) "source text"
 }

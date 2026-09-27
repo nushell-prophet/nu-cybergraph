@@ -26,10 +26,12 @@ export def main [
 ]: nothing -> record {
     let root = graph-root $repo
     let v = verify-bundle $bundle
+
     if not $v.valid {
         error make {msg: $"refusing to import: ($v.error)"}
     }
     let me = own-signer $root
+
     # A bundle handed to someone else must not land here: this repo's custody
     # layer could never verify (the chain demands the previous holder's
     # handoff name THIS custodian), so fail before anything mutates.
@@ -47,6 +49,7 @@ export def main [
     let edge_cid = $v.leaf.filepath | path parse | get stem
     let link_cid = link-cid $v.record
     let dest = imported-dir $root | path join $v.signer.cid $edge_cid
+
     if ($dest | path exists) {
         error make {msg: $"already imported: ($dest)"}
     }
@@ -67,6 +70,7 @@ export def main [
     # this repo seals, the sender's claim can no longer be stripped.
     let handoff = if $v.handed_to == null { null } else {
         let tail_dir = if ($layers | is-empty) { $dest } else { $layers | last | get dir }
+
         open --raw ($tail_dir | path join (handoff-filename $edge_cid)) | hash sha256
     }
     let receipt = {
@@ -80,6 +84,7 @@ export def main [
         handoff: $handoff
     }
     let receipt_path = $root | path join (receipt-relpath $v.signer.cid $edge_cid)
+
     mkdir ($receipt_path | path dirname)
     receipt-bytes $receipt | save --raw $receipt_path
 

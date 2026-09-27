@@ -33,11 +33,13 @@ def cleanup [] {
 
 def empty-graph [tmp_dir: path]: nothing -> record {
     let repo = $tmp_dir | path join repo
+
     mkdir $repo
     ^git init --object-format=sha256 -q $repo
     ^git -C $repo config user.name t
     ^git -C $repo config user.email t@t
     let key = $tmp_dir | path join key
+
     ^ssh-keygen -t ed25519 -f $key -N "" -q
     ^git -C $repo config user.signingKey $key
     init --repo $repo
@@ -52,6 +54,7 @@ def empty-graph [tmp_dir: path]: nothing -> record {
 def "a graph in the superseded links layout is refused and not read as empty" [] {
     let g = empty-graph $in.tmp_dir
     let added = link add "cyber" "bostrom" --repo $g.repo
+
     # Rewrite the store into the pre-signer-directory shape: one flat
     # `links/` directory, exactly what the old tool wrote.
     mkdir ($g.root | path join links)
@@ -64,6 +67,7 @@ def "a graph in the superseded links layout is refused and not read as empty" []
         {|| link tally "QmYwAPJzv5CZsnA625s3Xf2nemtYgPpHdWEz79ojWnPbdG" --repo $g.repo }
     ] {
         let err = try { do $reading; null } catch {|e| $e.msg }
+
         assert not ($err | is-empty) "a reading answered instead of refusing an unknown home"
         assert str contains $err "unknown graph home"
         assert str contains $err "links"
@@ -74,6 +78,7 @@ def "a graph in the superseded links layout is refused and not read as empty" []
 def "a seal over a graph in the superseded layout mints no root" [] {
     let g = empty-graph $in.tmp_dir
     let added = link add "cyber" "bostrom" --repo $g.repo
+
     mkdir ($g.root | path join links)
     open --raw $added.path | save --raw ($g.root | path join links $"($added.edge_cid).json")
     rm --recursive --force ($added.path | path dirname)
@@ -88,6 +93,7 @@ def "a seal over a graph in the superseded layout mints no root" [] {
 @test
 def "a hand-written file at the graph root is refused" [] {
     let g = empty-graph $in.tmp_dir
+
     "notes to self" | save --raw ($g.root | path join README.md)
 
     let err = try { link list --repo $g.repo; null } catch {|e| $e.msg }
@@ -99,6 +105,7 @@ def "a hand-written file at the graph root is refused" [] {
 @test
 def "the proof directory is not a stray" [] {
     let g = empty-graph $in.tmp_dir
+
     link add "cyber" "bostrom" --repo $g.repo
 
     # multiproofs/ sits inside the graph home and is nu-multiproof's, so it is
@@ -112,6 +119,7 @@ def "the proof directory is not a stray" [] {
 @test
 def "strays names the path the directory and what that directory allows" [] {
     let g = empty-graph $in.tmp_dir
+
     mkdir ($g.root | path join particles)
     "notes" | save --raw ($g.root | path join particles README.md)
 
@@ -128,6 +136,7 @@ def "a name that is no address is a stray in every directory that addresses its 
     let g = empty-graph $in.tmp_dir
     let added = link add "cyber" "bostrom" --repo $g.repo
     let signer_dir = $added.path | path dirname
+
     "x" | save --raw ($signer_dir | path join "notes.json")
     "x" | save --raw ($g.root | path join particles "notes.txt")
     mkdir ($g.root | path join certs "not-a-cid")
@@ -141,7 +150,7 @@ def "a name that is no address is a stray in every directory that addresses its 
 
     let rows = _layout strays $g.root
 
-    assert equal ($rows | get path | each { path basename } | sort) (
+    assert equal ($rows | get path | path basename | sort) (
         ["NOTHEX" "not-a-cid" "not-a-cid" "not-a-cid" "notes.json" "notes.order.json" "notes.txt"]
     )
 }
@@ -149,6 +158,7 @@ def "a name that is no address is a stray in every directory that addresses its 
 @test
 def "a clean graph has no strays and the reading is the command" [] {
     let g = empty-graph $in.tmp_dir
+
     link add "cyber" "bostrom" --repo $g.repo
     particle add "a thesis" --repo $g.repo --literal | ignore
 
@@ -162,6 +172,7 @@ def "what a bundle holds inside is not this rule to enforce" [] {
     let added = link add "cyber" "bostrom" --repo $g.repo
     let signer = $added.path | path dirname | path basename
     let bundle = $g.root | path join exports $signer $added.edge_cid
+
     mkdir ($bundle | path join particles)
     "anything at all" | save --raw ($bundle | path join "README.md")
 
@@ -181,16 +192,19 @@ def "what a bundle holds inside is not this rule to enforce" [] {
 def "the reading survives a top level the refusal rejects" [] {
     let g = empty-graph $in.tmp_dir
     let added = link add "cyber" "bostrom" --repo $g.repo
+
     mkdir ($g.root | path join links)
     open --raw $added.path | save --raw ($g.root | path join links $"($added.edge_cid).json")
 
     # A reading of the graph refuses...
     let err = try { link list --repo $g.repo; null } catch {|e| $e.msg }
+
     assert str contains $err "unknown graph home"
 
     # ...and the command that says why does not.
     let rows = strays --repo $g.repo
-    assert equal ($rows | get path | each { path basename }) ["links"]
+
+    assert equal ($rows | get path | path basename) ["links"]
     assert str contains ($rows | get 0.allowed) "<signer-cid>/ directories"
 }
 

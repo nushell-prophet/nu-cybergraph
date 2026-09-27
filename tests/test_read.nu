@@ -18,6 +18,7 @@ const S2 = "QmddrVz92VH3LqT2i7uXeK4AVh6LyU7zjDiLbSdChPsUL2"
 @before-each
 def setup []: nothing -> record {
     let tmp = mktemp --directory
+
     {tmp: $tmp root: ($tmp | path join cybergraph)}
 }
 
@@ -27,16 +28,19 @@ def cleanup [] {
 }
 
 @test
-def "a plain edge reads as a plain edge, an instruction reads as its verb" [] {
+def "a plain edge reads as a plain edge and an instruction reads as its verb" [] {
     let tmp = $in.tmp
+
     link add $A $B --signer $S --repo $tmp --allow-missing
     convention update-particle $B $C --signer $S --repo $tmp --allow-missing
 
     let plain = link list --repo $tmp | where cid_from == $A | first
+
     assert equal $plain.op null
     assert equal $plain.src null
 
     let instr = link list --repo $tmp | where op == "update_particle" | first
+
     assert equal $instr.src {about: $B op: "update_particle"}
     assert equal $instr.cid_to $C
     # The verb is readable without knowing the store: the source dereferences.
@@ -44,22 +48,26 @@ def "a plain edge reads as a plain edge, an instruction reads as its verb" [] {
 }
 
 @test
-def "touching names the position, which is what tells the two ends apart" [] {
+def "touching names the position which is what tells the two ends apart" [] {
     let tmp = $in.tmp
+
     link add $A $B --signer $S --repo $tmp --allow-missing # B is a plain endpoint
     convention update-particle $B $C --signer $S --repo $tmp --allow-missing # B is the replaced particle
     convention confirm-edge $A $B --signer $S --repo $tmp --allow-missing # B is inside the edge confirmed
 
     let roles = link touching $B --repo $tmp | get role | sort
+
     assert equal $roles ["cid_from.about" "cid_to" "cid_to.cid_to"]
 }
 
 @test
 def "touching reaches an operand two records deep" [] {
     let tmp = $in.tmp
+
     # answer-edge: {cid_from: {about: B, op: question}, cid_to: Q, op: answer_edge} → A
     convention answer-edge $B "why?" "because" --signer $S --repo $tmp --allow-missing
     let hit = link touching $B --repo $tmp
+
     assert equal ($hit | length) 1
     assert equal ($hit | first | get role) "cid_from.cid_from.about"
     assert equal ($hit | first | get op) "answer_edge"
@@ -68,13 +76,15 @@ def "touching reaches an operand two records deep" [] {
 @test
 def "a link naming one CID twice is returned twice" [] {
     let tmp = $in.tmp
+
     link add $A $A --signer $S --repo $tmp --allow-missing
     assert equal (link touching $A --repo $tmp | get role | sort) ["cid_from" "cid_to"]
 }
 
 @test
-def "tally counts links and signers per verb and position, and never their sum" [] {
+def "tally counts links and signers per verb and position and never their sum" [] {
     let tmp = $in.tmp
+
     link add $A $B --signer $S --repo $tmp --allow-missing # the edge
     link add $A $B --signer $S2 --repo $tmp --allow-missing # the same edge, another signer
     convention confirm-edge $A $B --signer $S2 --repo $tmp --allow-missing # confirmation of it
@@ -82,9 +92,11 @@ def "tally counts links and signers per verb and position, and never their sum" 
 
     let t = link tally $B --repo $tmp
     let plain = $t | where op == null and role == "cid_to" | first
+
     assert equal $plain.links 2
     assert equal $plain.signers 2 # two voices, not one twice
     let confirmed = $t | where op == "confirm_edge" | first
+
     assert equal $confirmed.links 1
     # Repetition and confirmation stay two numbers: no row merges them, and no
     # column totals them.
@@ -94,6 +106,7 @@ def "tally counts links and signers per verb and position, and never their sum" 
 @test
 def "the rg-narrowed reading and the full scan return the same rows" [] {
     let tmp = $in.tmp
+
     link add $A $B --signer $S --repo $tmp --allow-missing
     convention update-particle $B $C --signer $S --repo $tmp --allow-missing
     convention confirm-edge $A $B --signer $S2 --repo $tmp --allow-missing
@@ -120,6 +133,7 @@ def "the rg-narrowed reading and the full scan return the same rows" [] {
 @test
 def "a file that is not a graph file is ignored by both readings" [] {
     let ctx = $in
+
     convention update-particle $B $C --signer $S --repo $ctx.tmp --allow-missing
     let expected = link touching $B --repo $ctx.tmp
 
@@ -135,10 +149,12 @@ def "a file that is not a graph file is ignored by both readings" [] {
 @test
 def "a signer is named by every link it signed" [] {
     let tmp = $in.tmp
+
     link add $A $B --signer $S --repo $tmp --allow-missing
     link add $A $C --signer $S --repo $tmp --allow-missing
     link add $B $C --signer $S2 --repo $tmp --allow-missing
     let signed = link touching $S --repo $tmp
+
     assert equal ($signed | get role | uniq) ["signer"]
     assert equal ($signed | length) 2
 }
@@ -149,6 +165,7 @@ def "a file that only quotes a CID states nothing about it" [] {
     # The text search finds this file; reading it decides. A chapter naming a
     # CID in prose is not an edge, and no verification step would make it one.
     let quoting = particle add $"see ($B) for the earlier version" --repo $tmp
+
     link add $quoting $C --signer $S --repo $tmp --allow-missing
     assert equal (link touching $B --repo $tmp) []
 }
@@ -159,8 +176,10 @@ def "a published file that is not a canonical record is not an instruction" [] {
     # A JSON object with a non-string value is not the format's record form, so
     # its fields are not operands and the edge is plain.
     let nested = particle add '{"about":{"cid":"x"},"op":"update_particle"}' --repo $tmp
+
     link add $nested $C --signer $S --repo $tmp --allow-missing
     let plain = particle add "just text" --repo $tmp
+
     link add $plain $C --signer $S --repo $tmp --allow-missing
 
     assert equal (link list --repo $tmp | get op | uniq) [null]
@@ -169,8 +188,10 @@ def "a published file that is not a canonical record is not an instruction" [] {
 @test
 def "the reader refuses a store file that does not hash to its name" [] {
     let ctx = $in
+
     convention update-particle $B $C --signer $S --repo $ctx.tmp --allow-missing
     let src = derive {about: $B op: "update_particle"}
+
     "tampered" | save --force --raw (particle-path $ctx.root $src)
     assert error {|| link list --repo $ctx.tmp }
 }

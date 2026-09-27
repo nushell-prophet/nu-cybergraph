@@ -42,6 +42,7 @@ def assert-frozen-proof [proof: path leaf: string]: nothing -> nothing {
         error make {msg: $"($proof) is a ($proof | path type), not the frozen proof for ($leaf) — remove it and seal again"}
     }
     let named = open $proof | get --optional leaf.filepath
+
     if $named == null {
         error make {msg: $"($proof) carries no leaf.filepath, so it is not a frozen proof for ($leaf) — remove it and seal again"}
     }
@@ -87,6 +88,7 @@ export def main [
     # deliberate — it establishes the signer identity — so seal points there
     # instead of registering as a side effect.
     let registered = list-files ($root | path join multiproofs pubkeys) --suffix ".pub"
+
     if ($registered | is-empty) {
         error make {msg: "no pubkey registered in multiproofs/pubkeys/ — run `nu-cybergraph init` first"}
     }
@@ -158,8 +160,10 @@ export def main [
     # One rule at one point. The tree it enforces is SPEC section 3, which this
     # turns from prose into a check — see `_layout.nu strays`.
     let stray = strays $root
+
     if ($stray | is-not-empty) {
         let named = $stray | each {|r| $"($r.path | cwd-relative) \(($r.under | path basename) holds ($r.allowed))" } | str join ', '
+
         error make {msg: $"not the graph layout: ($named) — a seal signs whatever is committed under the graph home, so it refuses while it reaches a file the layout does not describe. Remove it and seal again, or move it beside the graph home rather than inside it. `nu-cybergraph strays` lists them without sealing"}
     }
 
@@ -234,6 +238,7 @@ export def main [
     # has to be exactly what `particle uncommitted --propose-commit` would stage,
     # or the seal refuses over a file the proposal never offers to commit.
     let loose = stageable (uncommitted-files $root)
+
     if ($loose | is-not-empty) and not $allow_untracked_particles {
         error make --unspanned {msg: $"the graph names bytes git does not track: ($loose | each {|r| $r.file | cwd-relative } | str join ', ') — the seal manifest walks `git ls-files`, so these would enter no root and the links naming them would be frozen pointing at nothing attested. Run `nu-cybergraph particle uncommitted --propose-commit` first, or seal with --allow-untracked-particles"}
     }
@@ -253,6 +258,7 @@ export def main [
         (signer-dirs $root) ++ ([$CERTS_DIR $SEALS_DIR $IMPORTED_DIR $RECEIPTS_DIR $ORDER_DIR] | each {|d| $root | path join $d })
     )
         | where (($it | path exists) and (ls $it | is-not-empty))
+
     if ($stage | is-not-empty) {
         ^git -C $root add -- ...$stage
     }
@@ -302,6 +308,7 @@ export def main [
     # its certificates name" — the success path is identical either way, so only
     # a failed loop can tell the two orderings apart.
     let snap = snapshot-dir $root $root_hex
+
     # Why the guard never fires in this module's own flow, and why that is not an
     # accident to rely on quietly: `snapshot-dir` is keyed by the merkle root, and
     # every seal mints a new root — because `$stage` above includes `seals/`. The
@@ -356,12 +363,14 @@ export def main [
     # rather than a verdict — parked, not fixed here.
     let newborn = link-files $root
         | where (not ((cert-path $root $it.signer $it.edge) | path exists))
+
     # `path expand` because this is a handle, not a label: `merkle prove` returns
     # its path relative to the cwd, and `move-file` must not depend on where the
     # operator happened to stand. The expand is the exact inverse — it resolves
     # against that same cwd — so it is a no-op on the absolute form.
     for l in $newborn {
         let proof = merkle prove ($l.file | path relative-to $root) --repo $root | path expand
+
         # certs mirror the link layout, so the certificate's own signer
         # directory may not exist yet — `mv` needs the parent standing.
         mkdir (certs-dir $root | path join $l.signer)
@@ -375,8 +384,10 @@ export def main [
     # already-frozen proofs.)
     let new_receipts = receipt-files $root
         | where (not ((receipt-cert-path $root $it.author $it.edge) | path exists))
+
     for r in $new_receipts {
         let proof = merkle prove ($r.file | path relative-to $root) --repo $root | path expand
+
         # The frozen proof lands beside its receipt, in the same author
         # directory — the parent already exists.
         move-file $proof (receipt-cert-path $root $r.author $r.edge)
@@ -388,8 +399,10 @@ export def main [
     # with .order.json — the suffix skips already-frozen proofs.)
     let new_positions = order-files $root
         | where (not ((order-cert-path $root $it.signer $it.edge) | path exists))
+
     for p in $new_positions {
         let proof = merkle prove ($p.file | path relative-to $root) --repo $root | path expand
+
         # The frozen proof lands beside its position, in the same signer
         # directory — the parent already exists.
         move-file $proof (order-cert-path $root $p.signer $p.edge)
@@ -444,6 +457,7 @@ export def chain [
 ]: nothing -> table {
     let root = graph-root $repo
     let dir = seals-dir $root
+
     if not ($dir | path exists) {
         error make {msg: $"no seals/ directory at ($dir) — either this graph was never sealed, or the snapshots were removed and every certificate here verifies against nothing"}
     }
@@ -457,10 +471,12 @@ export def chain [
 
     for i in 0..<($rows | length) {
         let row = $rows | get $i
+
         if $row.seq != $i {
             error make {msg: $"seal chain breaks at seq ($row.seq): expected ($i) — a snapshot under seals/ is missing, and every certificate born under it verifies against nothing"}
         }
         let expected_prev = if $i == 0 { "genesis" } else { ($rows | get ($i - 1)).root }
+
         if $row.prev != $expected_prev {
             error make {msg: $"seal ($row.seq) supersedes ($row.prev) but the seal before it is ($expected_prev) — the chain forks here"}
         }

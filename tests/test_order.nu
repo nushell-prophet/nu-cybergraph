@@ -40,11 +40,13 @@ def cleanup [] {
 
 def make-signer [tmp_dir: path]: nothing -> record {
     let repo = $tmp_dir | path join repo
+
     mkdir $repo
     ^git init --object-format=sha256 -q $repo
     ^git -C $repo config user.name t
     ^git -C $repo config user.email t@t
     let key = $tmp_dir | path join key
+
     ^ssh-keygen -t ed25519 -f $key -N "" -q
     ^git -C $repo config user.signingKey $key
     init --repo $repo
@@ -67,9 +69,11 @@ def "link add stamps each act with the time it arrived" [] {
 
     let stamps = [$first $second] | each {|l|
         let file = order-path $s.home $l.record.signer $l.edge_cid
+
         assert ($file | path exists) $"no position beside ($l.edge_cid)"
         read-position $file | get added_at
     }
+
     for at in $stamps { assert ($at =~ $RFC3339_UTC_RE) $"stamped ($at)" }
     assert ((($stamps | first) | into datetime) <= (($stamps | last) | into datetime))
 }
@@ -110,6 +114,7 @@ def "each signer directory carries its own run" [] {
     let s = make-signer $in.tmp_dir
     let mine = link add $P1 $P2 --repo $s.repo --allow-missing
     let adhoc = link add $P1 $P2 --repo $s.repo --allow-missing --signer alice
+
     seal --repo $s.repo --no-stamp --allow-untracked-particles | ignore
 
     assert not equal $mine.record.signer $adhoc.record.signer
@@ -124,6 +129,7 @@ def "each signer directory carries its own run" [] {
 def "the numbered position states its number as a decimal string" [] {
     let s = make-signer $in.tmp_dir
     let born = link add $P1 $P2 --repo $s.repo --allow-missing
+
     seal --repo $s.repo --no-stamp --allow-untracked-particles | ignore
 
     let bytes = open --raw (order-path $s.home $born.record.signer $born.edge_cid)
@@ -151,6 +157,7 @@ def "a position holding two keys or one key with the other value is refused" [] 
     ] {
         $bad | save --raw --force $file
         let err = try { read-position $file; null } catch {|e| $e.msg }
+
         assert ($err != null) $"read a position out of ($bad)"
     }
 }
@@ -164,12 +171,14 @@ def "a seal freezes the position beside it and never rewrites it" [] {
 
     let first = seal --repo $s.repo --no-stamp --allow-untracked-particles
     let proof = order-cert-path $s.home $born.record.signer $born.edge_cid
+
     assert equal $first.positions 1
     assert equal $first.numbered 1
     assert ($proof | path exists) "the seal catalogued the number and froze nothing"
     let frozen = open --raw $proof
 
     let second = seal --repo $s.repo --no-stamp --allow-untracked-particles
+
     assert equal $second.positions 0
     assert equal $second.numbered 0 "a re-seal renumbered a position no longer provisional"
     assert equal (open --raw $proof) $frozen "a later seal rewrote a frozen position proof"
@@ -182,6 +191,7 @@ def "a seal freezes the position beside it and never rewrites it" [] {
 def "the number enters the same root as the record it counts" [] {
     let s = make-signer $in.tmp_dir
     let born = link add $P1 $P2 --repo $s.repo --allow-missing
+
     seal --repo $s.repo --no-stamp --allow-untracked-particles | ignore
 
     let birth = open --raw (cert-path $s.home $born.record.signer $born.edge_cid) | from json
@@ -200,6 +210,7 @@ def "a seal refuses a link record no run counts" [] {
     let s = make-signer $in.tmp_dir
     let born = link add $P1 $P2 --repo $s.repo --allow-missing
     let pair = {cid_from: $P1 cid_to: $P3}
+
     edge-bytes $pair | save --raw (link-path $s.home $born.record.signer (edge-cid $pair))
 
     let err = try { seal --repo $s.repo --no-stamp --allow-untracked-particles; null } catch {|e| $e.msg }
@@ -212,6 +223,7 @@ def "a seal refuses a link record no run counts" [] {
 def "a seal refuses a position that counts no act" [] {
     let s = make-signer $in.tmp_dir
     let born = link add $P1 $P2 --repo $s.repo --allow-missing
+
     write-added-at (order-path $s.home $born.record.signer (edge-cid {cid_from: $P1 cid_to: $P3})) ("2026-01-01T00:00:00Z" | into datetime)
 
     let err = try { seal --repo $s.repo --no-stamp --allow-untracked-particles; null } catch {|e| $e.msg }
@@ -229,6 +241,7 @@ def "a seal refuses a position that counts no act" [] {
 def "a seal refuses a numbered run with a hole" [] {
     let s = make-signer $in.tmp_dir
     let born = [[$P1 $P2] [$P1 $P3] [$P2 $P3]] | each {|p| link add $p.0 $p.1 --repo $s.repo --allow-missing }
+
     seal --repo $s.repo --no-stamp --allow-untracked-particles | ignore
     let signer = $born | get 0.record.signer
     let hole = $born | where {|l| (seq-of (order-path $s.home $signer $l.edge_cid)) == 1 } | first
@@ -250,15 +263,17 @@ def "a seal refuses a numbered run with a hole" [] {
 # Numbering starts after the last number already assigned, and what is already
 # signed does not move.
 @test
-def "the seal numbers the provisional by arrival time, after what is already numbered" [] {
+def "the seal numbers the provisional by arrival time after what is already numbered" [] {
     let s = make-signer $in.tmp_dir
     let born = link add $P1 $P2 --repo $s.repo --allow-missing
+
     seal --repo $s.repo --no-stamp --allow-untracked-particles | ignore
     let signer = $born.record.signer
     let frozen_proof = open --raw (order-cert-path $s.home $signer $born.edge_cid)
 
     let late = link add $P1 $P3 --repo $s.repo --allow-missing
     let early = link add $P2 $P3 --repo $s.repo --allow-missing
+
     write-added-at (order-path $s.home $signer $late.edge_cid) ("2026-02-02T00:00:00Z" | into datetime)
     write-added-at (order-path $s.home $signer $early.edge_cid) ("2026-01-01T00:00:00Z" | into datetime)
 
@@ -280,6 +295,7 @@ def "positions claiming the same instant are ordered byte-wise by edge CID" [] {
     let a = link add $P1 $P3 --repo $s.repo --allow-missing
     let b = link add $P2 $P3 --repo $s.repo --allow-missing
     let signer = $a.record.signer
+
     for edge in [$a.edge_cid $b.edge_cid] {
         write-added-at (order-path $s.home $signer $edge) ("2026-01-01T00:00:00Z" | into datetime)
     }
@@ -287,6 +303,7 @@ def "positions claiming the same instant are ordered byte-wise by edge CID" [] {
     seal --repo $s.repo --no-stamp --allow-untracked-particles | ignore
 
     let ordered = [$a.edge_cid $b.edge_cid] | sort
+
     assert equal (seq-of (order-path $s.home $signer ($ordered | first))) 0
     assert equal (seq-of (order-path $s.home $signer ($ordered | last))) 1
 }
@@ -301,10 +318,12 @@ def "positions claiming the same instant are ordered byte-wise by edge CID" [] {
 def "order list states the minted number and the one a provisional position will get" [] {
     let s = make-signer $in.tmp_dir
     let born = link add $P1 $P2 --repo $s.repo --allow-missing
+
     seal --repo $s.repo --no-stamp --allow-untracked-particles | ignore
     let late = link add $P1 $P3 --repo $s.repo --allow-missing
     let early = link add $P2 $P3 --repo $s.repo --allow-missing
     let signer = $born.record.signer
+
     write-added-at (order-path $s.home $signer $late.edge_cid) ("2026-02-02T00:00:00Z" | into datetime)
     write-added-at (order-path $s.home $signer $early.edge_cid) ("2026-01-01T00:00:00Z" | into datetime)
     # A second run under its own signer directory, numbered from 0 of its own.
@@ -326,6 +345,7 @@ def "order list states the minted number and the one a provisional position will
     # And what it projected is what the seal mints.
     seal --repo $s.repo --no-stamp --allow-untracked-particles | ignore
     let sealed = order list --repo $s.repo
+
     assert equal ($sealed | select signer edge seq) ($run | select signer edge seq)
     assert equal ($sealed | get provisional | uniq) [false]
 }
@@ -337,9 +357,11 @@ def "order list states the minted number and the one a provisional position will
 def "order list refuses a numbered run with a hole" [] {
     let s = make-signer $in.tmp_dir
     let born = [[$P1 $P2] [$P1 $P3]] | each {|p| link add $p.0 $p.1 --repo $s.repo --allow-missing }
+
     seal --repo $s.repo --no-stamp --allow-untracked-particles | ignore
     let signer = $born | get 0.record.signer
     let hole = $born | where {|l| (seq-of (order-path $s.home $signer $l.edge_cid)) == 0 } | first
+
     rm (order-path $s.home $signer $hole.edge_cid)
 
     let err = try { order list --repo $s.repo; null } catch {|e| $e.msg }
@@ -351,9 +373,10 @@ def "order list refuses a numbered run with a hole" [] {
 # --- the bundle and the verdict ---
 
 @test
-def "a bundle carries the number, its proof and the seal that froze it" [] {
+def "a bundle carries the number and its proof and the seal that froze it" [] {
     let s = make-signer $in.tmp_dir
     let born = link add $P1 $P2 --repo $s.repo --allow-missing
+
     seal --repo $s.repo --no-stamp --allow-untracked-particles | ignore
 
     let out = bundle $born.edge_cid --repo $s.repo --out ($in.tmp_dir | path join out)
@@ -361,6 +384,7 @@ def "a bundle carries the number, its proof and the seal that froze it" [] {
     assert ((order-path $out $born.record.signer $born.edge_cid) | path exists) "the bundle carries no number"
     assert ((order-cert-path $out $born.record.signer $born.edge_cid) | path exists) "the bundle carries no proof of the number"
     let root12 = open --raw (order-cert-path $out $born.record.signer $born.edge_cid) | from json | get root | str substring 0..11
+
     assert (($out | path join seals $root12 tree-root.txt) | path exists) "the bundle carries no seal for the number"
 }
 
@@ -371,10 +395,12 @@ def "a bundle carries the number, its proof and the seal that froze it" [] {
 def "the number verifies as its own verdict and never as the link validity" [] {
     let s = make-signer $in.tmp_dir
     let born = link add $P1 $P2 --repo $s.repo --allow-missing
+
     seal --repo $s.repo --no-stamp --allow-untracked-particles | ignore
     let out = bundle $born.edge_cid --repo $s.repo --out ($in.tmp_dir | path join out)
 
     let proven = verify-bundle $out
+
     assert $proven.valid
     assert equal $proven.position.seq 0
     assert equal $proven.position.added_at null "a proven position states a number, never a time"
@@ -411,6 +437,7 @@ def "a foreign bundle whose seal covers a claimed time is refused" [] {
     ^git -C $s.home add -- ($s.home | path join $signer) (order-dir $s.home)
     let root_hex = seal --repo $s.home --no-stamp | get merkle_root
     let snap = snapshot-dir $s.home $root_hex
+
     mkdir $snap
     for f in (ls ($s.home | path join multiproofs) | where name =~ 'tree-root\.txt' | get name) {
         cp $f $snap
@@ -437,6 +464,7 @@ def "a foreign bundle whose seal covers a claimed time is refused" [] {
 def "verify in the repo reports the number too" [] {
     let s = make-signer $in.tmp_dir
     let born = link add $P1 $P2 --repo $s.repo --allow-missing
+
     seal --repo $s.repo --no-stamp --allow-untracked-particles | ignore
 
     let rows = verify $born.edge_cid --repo $s.repo
@@ -451,8 +479,10 @@ def "verify in the repo reports the number too" [] {
 def "a position with no frozen proof reads as unproven" [] {
     let s = make-signer $in.tmp_dir
     let born = link add $P1 $P2 --repo $s.repo --allow-missing
+
     seal --repo $s.repo --no-stamp --allow-untracked-particles | ignore
     let out = bundle $born.edge_cid --repo $s.repo --out ($in.tmp_dir | path join out)
+
     rm (order-cert-path $out $born.record.signer $born.edge_cid)
 
     let v = verify-bundle $out
@@ -475,6 +505,7 @@ def "backfill stamps the graph in the order git recorded" [] {
     let first = link add $P1 $P2 --repo $s.repo --allow-missing
     let second = link add $P1 $P3 --repo $s.repo --allow-missing
     let third = link add $P2 $P3 --repo $s.repo --allow-missing
+
     # A graph that predates the run: the records are there, the positions are not.
     rm --recursive (order-dir $s.home)
     # Committed out of the order they were written on purpose, so the answer
@@ -507,8 +538,10 @@ def "backfill stamps the graph in the order git recorded" [] {
     # And the graph seals: the bijection the backfill exists for is satisfied,
     # and the numbering follows the order git recorded.
     let sealed = seal --repo $s.repo --no-stamp --allow-untracked-particles
+
     assert equal $sealed.positions 3
     let signer = $first.record.signer
+
     assert equal (seq-of (order-path $s.home $signer $second.edge_cid)) 0
     assert equal (seq-of (order-path $s.home $signer $first.edge_cid)) 1
     assert equal (seq-of (order-path $s.home $signer $third.edge_cid)) 2
@@ -522,6 +555,7 @@ def "backfill refuses a link git has never seen and writes nothing" [] {
     let s = make-signer $in.tmp_dir
     let committed = link add $P1 $P2 --repo $s.repo --allow-missing
     let loose = link add $P1 $P3 --repo $s.repo --allow-missing
+
     rm --recursive (order-dir $s.home)
     ^git -C $s.repo add -- (link-path $s.home $committed.record.signer $committed.edge_cid)
     ^git -C $s.repo commit -q -m "add one link"
@@ -539,6 +573,7 @@ def "backfill refuses a link git has never seen and writes nothing" [] {
 @test
 def "backfill refuses a graph that already holds a position" [] {
     let s = make-signer $in.tmp_dir
+
     link add $P1 $P2 --repo $s.repo --allow-missing | ignore
 
     let err = try { order backfill --repo $s.repo; null } catch {|e| $e.msg }

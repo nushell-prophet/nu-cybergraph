@@ -20,6 +20,7 @@ use _order.nu [read-position]
 def canonical-pubkeys [dir: path]: nothing -> table {
     let pubs = list-files ($dir | path join multiproofs pubkeys) --suffix ".pub"
         | each {|f| {path: $f bytes: (open --raw $f | into binary)} }
+
     for pub in $pubs {
         # decode only to hand text to ssh-keygen; the verdict below is on the
         # bytes. `decode` strips a UTF-8 BOM (so does `decode utf-8` — probed on
@@ -52,6 +53,7 @@ def canonical-pubkeys [dir: path]: nothing -> table {
         let canon = try { $raw | pubkey canonical } catch {|e|
             error make {msg: $"($pub.path): ($e.msg)"}
         }
+
         if $pub.bytes != ($canon | into binary) {
             error make {msg: $"non-canonical pubkey file: ($pub.path) — expected `<type> <base64>` + newline, no comment, no BOM"}
         }
@@ -80,12 +82,14 @@ def verify-proof-dir [dir: path --cert: path --multiproofs-dir: path]: nothing -
     # the caller named the certificate — and over a graph home it finds none.
     let proof = if $cert != null { $cert } else {
         let certs = list-files $dir --suffix ".cert.json"
+
         if ($certs | length) != 1 {
             error make {msg: $"expected exactly one *.cert.json at the root of ($dir), found ($certs | length)"}
         }
         $certs | first
     }
     let pubs = canonical-pubkeys $dir
+
     {v: (merkle verify $proof --repo $dir --multiproofs-dir $multiproofs_dir) pubs: $pubs}
 }
 
@@ -107,6 +111,7 @@ def verify-proof-dir [dir: path --cert: path --multiproofs-dir: path]: nothing -
 # key's fingerprint cannot borrow its authorship".
 def bound [sigs: table pubs: table claimed: string]: nothing -> bool {
     let signers = $sigs | where valid | get signer
+
     $pubs | any {|p| ($p.bytes | cid-v0) == $claimed and $p.fingerprint in $signers }
 }
 
@@ -154,6 +159,7 @@ def bound [sigs: table pubs: table claimed: string]: nothing -> bool {
 def endorsed-by [ends: table pubs: table claimed: string]: nothing -> any {
     let fingerprints = $pubs | where ($it.bytes | cid-v0) == $claimed | get fingerprint
     let rows = $ends | where signer in $fingerprints
+
     # Preference order concatenated, then taken from the front: anchored (lowest
     # block) before pending before whatever is left. `$rows` last is the `absent`
     # tier and repeats the earlier ones harmlessly — only index 0 is read.
@@ -190,6 +196,7 @@ export def stamp-cell [stamp: record]: nothing -> string {
 # themselves — no signature namespace is involved (see _handoff.nu).
 def check-handoff [dir: path edge_cid: string record: record holder: string expected_receipt: any pubs: table]: nothing -> any {
     let file = $dir | path join (handoff-filename $edge_cid)
+
     if not ($file | path exists) {
         return null
     }
@@ -210,6 +217,7 @@ def check-handoff [dir: path edge_cid: string record: record holder: string expe
     # module already throws on those (missing cert, non-canonical pubkey).
     let sigs = ssh-sign verify $file --pubkeys-dir ($dir | path join multiproofs pubkeys)
     let signed = bound $sigs $pubs $h.from
+
     {
         to: $h.to
         hash: (open --raw $file | hash sha256)
@@ -227,6 +235,7 @@ def check-handoff [dir: path edge_cid: string record: record holder: string expe
 # read side, so the two branches below cannot disagree about it.
 def state-seq [state: record]: nothing -> any {
     let seq = $state | get --optional seq
+
     if $seq == null { null } else { $seq | into int }
 }
 
@@ -259,11 +268,13 @@ def state-seq [state: record]: nothing -> any {
 def check-position [dir: path signer: string edge_cid: string pubs: table]: nothing -> any {
     let file = order-path $dir $signer $edge_cid
     let cert = order-cert-path $dir $signer $edge_cid
+
     if not (($file | path exists) or ($cert | path exists)) {
         return null
     }
     if not ($cert | path exists) {
         let state = read-position $file
+
         return {
             seq: (state-seq $state)
             added_at: ($state | get --optional added_at)
@@ -275,10 +286,12 @@ def check-position [dir: path signer: string edge_cid: string pubs: table]: noth
         }
     }
     let proof = open --raw $cert | from json
+
     if ($proof | get --optional leaf.filepath) != (order-relpath $signer $edge_cid) {
         error make {msg: $"($cert) proves ($proof | get --optional leaf.filepath), not this link's position — a proof under the wrong name certifies the wrong number"}
     }
     let snapshot = snapshot-dir $dir $proof.root
+
     if not ($snapshot | path exists) {
         error make {msg: $"seal snapshot missing for the position of ($edge_cid): root ($proof.root | str substring 0..11) — the number was frozen under a seal this ($dir) does not carry"}
     }
@@ -300,6 +313,7 @@ def check-position [dir: path signer: string edge_cid: string pubs: table]: noth
     # exactly what this format says it never does — the graph carries no times,
     # because a claimed one is provable to nobody.
     let attests_a_time = ($v.content_verified == true) and (($state | get --optional seq) == null)
+
     {
         seq: (state-seq $state)
         added_at: ($state | get --optional added_at)
@@ -336,6 +350,7 @@ def check-position [dir: path signer: string edge_cid: string pubs: table]: noth
 def verify-custody [bundle: path edge_cid: string record: record root_handoff: any]: nothing -> table {
     let author = $record.signer
     let layers = custody-layers $bundle
+
     if ($layers | is-empty) {
         return []
     }
@@ -347,13 +362,16 @@ def verify-custody [bundle: path edge_cid: string record: record root_handoff: a
     mut prev_hash = ""
     mut prev_handoff = $root_handoff
     mut out = []
+
     for layer in $layers {
         let checked = verify-proof-dir $layer.dir
         let v = $checked.v
+
         if $v.leaf.filepath != (receipt-relpath $author $edge_cid) {
             error make {msg: $"custody layer ($layer.dir) proves ($v.leaf.filepath), not this link's receipt"}
         }
         let receipt = read-receipt ($layer.dir | path join $v.leaf.filepath)
+
         # Field by field against the verified record — the receipt states the
         # act's three components, so this is a compare, not a re-derivation.
         if ($receipt | select ...$LINK_KEYS) != ($record | select ...$LINK_KEYS) {
@@ -386,6 +404,7 @@ def verify-custody [bundle: path edge_cid: string record: record root_handoff: a
         } else if $own_handoff != null and not $own_handoff.valid {
             $own_handoff.error
         } else { null }
+
         $prev_hash = $receipt_hash
         $prev_handoff = $own_handoff
         $out = $out | append {
@@ -482,6 +501,7 @@ export def verify-bundle [bundle: path --cert: path --multiproofs-dir: path]: no
     } else {
         'NOT BOUND (no valid signature by the claimed signer)'
     }
+
     print $"signer:    ($signer_line)"
 
     # Two spellings of one act, used side by side below: paths and filenames go
@@ -492,6 +512,7 @@ export def verify-bundle [bundle: path --cert: path --multiproofs-dir: path]: no
     # that was the point of spelling the components out.
     let edge_cid = $v.leaf.filepath | path parse | get stem
     let position = check-position $bundle $rec.signer $edge_cid $birth.pubs
+
     if $position != null {
         # The state is read off which column is filled, the way the file itself
         # says it: a number belongs to the run, a time is only a claim about
@@ -501,12 +522,14 @@ export def verify-bundle [bundle: path --cert: path --multiproofs-dir: path]: no
         } else if $position.added_at != null {
             $"not numbered yet, added at ($position.added_at)"
         } else { "unreadable" }
+
         print $"position:  ($stated), (if $position.valid { 'proven' } else { $"NOT PROVEN \(($position.error))" })"
     }
     let root_handoff = check-handoff $bundle $edge_cid $rec $rec.signer null $birth.pubs
     let custody = verify-custody $bundle $edge_cid $rec $root_handoff
     let custody_ok = $custody | all { $in.valid }
     let root_handoff_ok = $root_handoff == null or $root_handoff.valid
+
     if ($custody | is-not-empty) {
         print $"custody:   ($custody | length) layers, (if $custody_ok { 'chain valid' } else { 'CHAIN INVALID' })"
     }
@@ -518,6 +541,7 @@ export def verify-bundle [bundle: path --cert: path --multiproofs-dir: path]: no
     # fails verification, but a caller keying on handed_to alone must not be
     # handed its forged `to`.
     let handed_to = if $tail_handoff == null or not $tail_handoff.valid { null } else { $tail_handoff.to }
+
     if $handed_to != null {
         print $"handoff:   addressed to ($handed_to)"
     }

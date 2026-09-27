@@ -27,7 +27,7 @@ const GOLDEN_EDGE_CID = "QmUiARbMPT9WNXqvgb2BB9gWFXRiCEqD96AF5xebwNTCTT"
 const GOLDEN_SIGNER = "QmddrVz92VH3LqT2i7uXeK4AVh6LyU7zjDiLbSdChPsULr"
 
 @test
-def "golden bytes: alphabetical key order, compact JSON, one trailing newline" [] {
+def "the golden bytes have alphabetical key order as compact JSON with one trailing newline" [] {
     assert equal (edge-bytes (golden-pair) | decode) $"($GOLDEN_EDGE_BYTES)\n"
     assert equal (edge-cid (golden-pair)) $GOLDEN_EDGE_CID
     assert equal (link-bytes (golden-record) | decode) $"($GOLDEN_BYTES)\n"
@@ -50,6 +50,7 @@ def "both addresses are plain derived CIDs under the one canon" [] {
 @test
 def "the edge CID is the same for every signer of that edge" [] {
     let other = (golden-record) | update signer $GOLDEN_CID
+
     assert equal (edge-bytes ($other | reject signer)) (edge-bytes (golden-pair))
     assert ((link-cid $other) != (link-cid (golden-record)))
 }
@@ -61,6 +62,7 @@ def "input key order does not change the CID" [] {
         cid_to: "QmW9519sfmW2MvDb4TU4dKtiFAXm1UPDvE7JrMaBjprVHp"
         cid_from: "QmUQUHEmv651XCBhiWUQpx2zf4PDts1aXL324ZFyV4QZPF"
     }
+
     assert equal (link-cid $reordered) $GOLDEN_CID
     assert equal (edge-cid ($reordered | reject signer)) $GOLDEN_EDGE_CID
 }
@@ -90,8 +92,10 @@ def "malformed records are rejected" [] {
 @test
 def "read-link reads the pair from the file and the signer from the path" [] {
     let tmp = mktemp --directory
+
     mkdir ($tmp | path join $GOLDEN_SIGNER)
     let good = $tmp | path join $GOLDEN_SIGNER $"($GOLDEN_EDGE_CID).json"
+
     edge-bytes (golden-pair) | save --raw $good
     assert equal (read-link $good) (golden-record)
     rm --recursive --force $tmp
@@ -103,10 +107,13 @@ def "read-link reads the pair from the file and the signer from the path" [] {
 @test
 def "read-link refuses a file outside a signer directory" [] {
     let tmp = mktemp --directory
+
     mkdir ($tmp | path join "not-a-cid")
     let stray = $tmp | path join "not-a-cid" $"($GOLDEN_EDGE_CID).json"
+
     edge-bytes (golden-pair) | save --raw $stray
     let err = try { read-link $stray; null } catch {|e| $e.msg }
+
     assert ($err != null)
     assert ($err | str contains "signer directory")
     rm --recursive --force $tmp
@@ -115,17 +122,20 @@ def "read-link refuses a file outside a signer directory" [] {
 @test
 def "read-link enforces self-addressing on raw bytes" [] {
     let tmp = mktemp --directory
+
     mkdir ($tmp | path join $GOLDEN_SIGNER)
 
     # Same bytes under a wrong name: rejected before any field is trusted
     let other_pair = (golden-pair) | update cid_to (golden-pair).cid_from
     let renamed = $tmp | path join $GOLDEN_SIGNER $"(edge-cid $other_pair).json"
+
     edge-bytes (golden-pair) | save --raw $renamed
     assert error {|| read-link $renamed }
 
     # Semantically equal but non-canonical bytes (pretty-printed) under the
     # canonical name: rejected — the CID covers bytes, not meaning
     let pretty = $tmp | path join $GOLDEN_SIGNER $"($GOLDEN_EDGE_CID).json"
+
     (golden-pair) | to json --indent 2 | save --raw --force $pretty
     assert error {|| read-link $pretty }
     rm --recursive --force $tmp
@@ -134,6 +144,7 @@ def "read-link enforces self-addressing on raw bytes" [] {
 @test
 def "read-link rejects non-canonical bytes even under their own address" [] {
     let tmp = mktemp --directory
+
     mkdir ($tmp | path join $GOLDEN_SIGNER)
     # Each of these is a valid pair, self-addressed by its OWN CID — so the
     # filename check passes. Accepting them would give one act two addresses
@@ -147,11 +158,14 @@ def "read-link rejects non-canonical bytes even under their own address" [] {
         # decoy no reader ever sees
         ($GOLDEN_EDGE_BYTES | str replace '{' $'{"cid_from":"($GOLDEN_CID)",')
     ]
+
     for bytes in $variants {
         let body = $"($bytes)\n"
         let file = $tmp | path join $GOLDEN_SIGNER $"(($body | into binary | cid-v0)).json"
+
         $body | save --raw --force $file
         let err = try { read-link $file; null } catch {|e| $e.msg }
+
         assert ($err != null) $"non-canonical bytes were accepted: ($bytes)"
         assert ($err | str contains "is not canonical bytes")
         assert ($err | str contains $GOLDEN_EDGE_CID) "the error must name the act's one address"

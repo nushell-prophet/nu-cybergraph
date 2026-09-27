@@ -20,6 +20,7 @@ export def publish-edge [
     literal: bool
 ]: nothing -> string {
     let index = store-index $root
+
     edge-bytes {
         cid_from: (resolve-particle $root $index $cid_from --allow-missing=$allow_missing --literal=$literal)
         cid_to: (resolve-particle $root $index $cid_to --allow-missing=$allow_missing --literal=$literal)
@@ -39,6 +40,7 @@ export def publish-link [
     literal: bool
 ]: nothing -> string {
     let index = store-index $root
+
     link-bytes {
         cid_from: (resolve-particle $root $index $cid_from --allow-missing=$allow_missing --literal=$literal)
         cid_to: (resolve-particle $root $index $cid_to --allow-missing=$allow_missing --literal=$literal)

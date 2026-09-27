@@ -38,6 +38,7 @@ export const SHA256_RE = '^[0-9a-f]{64}$'
 # starts here, so an unknown field is refused before any value is read.
 export def assert-keys [rec: record keys: list<string> what: string]: nothing -> nothing {
     let cols = $rec | columns
+
     if ($cols | sort) != ($keys | sort) {
         error make {msg: $"($what) must have exactly keys ($keys | str join ', ') — got ($cols | str join ', ')"}
     }
@@ -71,6 +72,7 @@ export def assert-utc-timestamp [rec: record key: string what: string]: nothing 
 # missing value.
 export def assert-hash-or-null [rec: record key: string what: string]: nothing -> nothing {
     let value = $rec | get $key
+
     if $value != null and $value !~ $SHA256_RE {
         error make {msg: $"($what) ($key) must be null or a sha256 hex: ($value | to json)"}
     }

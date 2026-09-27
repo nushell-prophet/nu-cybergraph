@@ -31,6 +31,7 @@ export def list-files [
         | where type != dir
         | get name
         | where ($suffix == "" or ($it | path basename | str ends-with $suffix))
+
     if not $recursive {
         return $here
     }
@@ -39,6 +40,7 @@ export def list-files [
         | get name
         | each {|sub| list-files $sub --recursive --suffix $suffix }
         | flatten
+
     $here ++ $deeper
 }
 
@@ -107,6 +109,7 @@ export def copy-file [src: path dst: path]: nothing -> nothing {
     let landed = if ($dst | path exists) and ($dst | path type) == "dir" {
         $dst | path join ($src | path basename)
     } else { $dst }
+
     open --raw $src | into binary | save --raw $landed
 }
 
@@ -152,6 +155,7 @@ export def copy-file [src: path dst: path]: nothing -> nothing {
 export def move-file [src: path dst: path]: nothing -> nothing {
     if ($dst | path type) != null {
         let occupied = $dst | path type
+
         error make {msg: $"refusing to move ($src) onto ($dst): a ($occupied) is already there, and what this module has frozen it does not rewrite. Nothing was moved — the source is still at ($src). Before deleting what stands there, note that a re-seal mints a new merkle root, so the certificate written then would name a later root than the link's birth seal"}
     }
     mv $src $dst
@@ -177,8 +181,10 @@ export def copy-tree [src: path dst: path]: nothing -> nothing {
         error make {msg: $"copy-tree destination already exists: ($dst) — it must be the copy, not a directory to copy into"}
     }
     let source = $src | path expand
+
     cp --recursive $source $dst
     let target = $dst | path expand
+
     # `catch` and not `finally`: the cleanup must run only on the failing path,
     # or a good copy would be deleted. `error make $e.raw` re-raises the value
     # itself, so nothing is rebuilt from `$e.msg` and nothing is lost — the
@@ -201,6 +207,7 @@ def assert-same-tree [source: path target: path]: nothing -> nothing {
     let got = list-files $target --recursive | path relative-to $target | sort
     let lost = $want | where $it not-in $got
     let extra = $got | where $it not-in $want
+
     if ($lost | is-not-empty) or ($extra | is-not-empty) {
         error make {msg: $"copy of ($source) into ($target) is not faithful — missing: ($lost | str join ', ') | unexpected: ($extra | str join ', ')"}
     }
@@ -216,6 +223,7 @@ def assert-same-tree [source: path target: path]: nothing -> nothing {
     # through symlinks, and that half stays open.
     for p in $want {
         let s = $source | path join $p
+
         if ($s | path type) != "file" {
             error make {msg: $"($p) under ($source) is not a regular file \(($s | path type)) — a bundle carries files, and following a link would read bytes it does not contain"}
         }
@@ -251,6 +259,7 @@ def assert-same-tree [source: path target: path]: nothing -> nothing {
 # imported) for the reason given at the top of this file.
 export def cwd-relative []: path -> path {
     let p = $in
+
     if ($p | str starts-with ($env.PWD | path join "")) {
         $p | path relative-to $env.PWD
     } else {

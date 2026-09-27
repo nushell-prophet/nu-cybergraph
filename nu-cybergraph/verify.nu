@@ -26,8 +26,8 @@ export def main [
 ]: nothing -> table {
     let root = graph-root $repo
     let held = signer-dirs $root
-        | each { path basename }
-        | where {|s| $signer == null or $s == $signer }
+        | path basename
+        | where $signer == null or $it == $signer
         | where ((link-path $root $it $edge_cid) | path exists)
     # An own copy with no certificate yet is pending its seal, not broken —
     # `link add` of an edge this repo also holds as an import is a supported
@@ -55,15 +55,17 @@ export def main [
             # anything.
             let born = open --raw $cert | from json | get root
             let snapshot = snapshot-dir $root $born
+
             if not ($snapshot | path exists) {
                 error make {msg: $"seal snapshot missing for root ($born | str substring 0..11) — the certificate predates the seals/ convention?"}
             }
             verify-bundle $root --cert $cert --multiproofs-dir $snapshot
         }
     let imported = imported-edge-copies $root $edge_cid
-        | where {|h| $signer == null or $h.signer == $signer }
+        | where $signer == null or signer == $signer
         | each {|h| verify-bundle $h.dir }
     let rows = $own ++ $imported
+
     if ($rows | is-empty) {
         if ($pending | is-not-empty) {
             error make {msg: $"($pending | first)/($edge_cid).json has no birth certificate yet — run `nu-cybergraph seal` first"}

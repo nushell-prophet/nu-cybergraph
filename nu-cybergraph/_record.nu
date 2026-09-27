@@ -87,18 +87,21 @@ export def link-cid [rec: record]: nothing -> string {
 # covered.
 export def read-link [file: path]: nothing -> record {
     let signer = $file | path dirname | path basename
+
     if $signer !~ $CID_V0_RE {
         error make {msg: $"($file) does not sit in a signer directory: ($signer) is not a base58btc CID v0, and the signer of a link is its directory's name"}
     }
     let bytes = open --raw $file | into binary
     let raw_cid = $bytes | cid-v0
     let stem = $file | path parse | get stem
+
     if $raw_cid != $stem {
         error make {msg: $"($file) does not match its content address: bytes hash to ($raw_cid)"}
     }
     # Explicit utf-8: bare `decode` GUESSES the encoding, so a UTF-16 file
     # parsed back to the same pair under its own (different) CID.
     let rec = $bytes | decode utf-8 | from json
+
     validate-edge $rec
     # Self-addressing alone only proves the bytes are named by their own hash.
     # It does NOT pin them to the canon: reordered keys, added whitespace, or a
@@ -108,6 +111,7 @@ export def read-link [file: path]: nothing -> record {
     # would stop being the preimage of the edge address — the identity README
     # "Link record format" is built on.
     let canonical = record-bytes $rec
+
     if $bytes != $canonical {
         error make {msg: $"($file) is not canonical bytes for its record — one act has one address, and this record's is ($canonical | cid-v0)"}
     }

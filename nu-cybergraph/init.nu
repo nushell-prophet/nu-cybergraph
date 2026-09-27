@@ -23,6 +23,7 @@ export def main [
     let root = graph-root $repo
     let pubkeys_dir = $root | path join multiproofs pubkeys
     let before = list-files $pubkeys_dir --suffix ".pub"
+
     if $co_signer != null {
         return (add-co-signer $root $pubkeys_dir $before $co_signer)
     }
@@ -64,13 +65,14 @@ export def main [
     # over a home with a co-signer registers nothing new and passes straight
     # through.
     if ($before | is-not-empty) and ($after | length) > ($before | length) {
-        let added = $after | where {|f| $f not-in $before }
+        let added = $after | where $it not-in $before
+
         for f in $added { rm $f }
         error make {
             msg: (
                 [
                     $"`init` registers the identity of ($pubkeys_dir | path relative-to $root) and does not grow its trust list — it holds ($before | length) already"
-                    $"the key this run registered was removed again: ($added | each { path basename } | str join ', ')"
+                    $"the key this run registered was removed again: ($added | path basename | str join ', ')"
                     "to add a key beside the identity on purpose, pass --co-signer"
                 ] | str join "\n"
             )
@@ -103,5 +105,6 @@ def add-co-signer [root: path pubkeys_dir: path before: list<path> key: path]: n
     }
     init --repo $root --pubkey $key
     let after = list-files $pubkeys_dir --suffix ".pub"
+
     print $"trust list: ($after | length) keys — the identity is still the key this checkout signs with"
 }
