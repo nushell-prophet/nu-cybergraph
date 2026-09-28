@@ -16,12 +16,14 @@ due to the uniqueness and substantiality of Cybergraph.
 
 Three of the four stay coined here
 — *cybergraph*, *cyberlink*, *particle*.
-A **particle** is a carrier of meaning:
-the meaning arises in the reader when they read its content (`bostrom-journal` bj002, "Cyberlink and cybergraph").
-Its content is the bytes of a file;
-its name is the CID v0 of those bytes;
-its role is a **vertex** of the graph,
-which it becomes when its CID stands in an edge.
+A **particle** is a file whose CID stands in an edge:
+one name for the **vertex** of the graph and the bytes of the file under that CID (`bostrom-journal` bj001, «Частицы»; bj002, "Cyberlink and cybergraph").
+It is a carrier of meaning:
+the meaning arises in the reader when they read its content.
+Any file has a CID v0 of its bytes;
+it becomes a particle when a link names that CID.
+The store and the `particle` commands say particle for any published file,
+since a file is published to be named.
 
 *Neuron* is the one term this repo drops:
 the one who signs a cyberlink is a **signer**, which says what it does here and needs no gloss.
@@ -29,9 +31,9 @@ the one who signs a cyberlink is a **signer**, which says what it does here and 
 
 ## Concept
 
-Everything published here is a **particle**:
-bytes addressed by the CID v0 of those bytes,
-a carrier of meaning that becomes a **vertex** of the graph the moment its CID stands in an edge.
+Everything published here is a file addressed by the CID v0 of its bytes,
+and a **particle** the moment a link names that CID:
+the vertex of the graph and the bytes under it, one name.
 A **link** is a directed edge between two particles, asserted by a **signer**
 — an identity that is itself just the CID of an SSH public key,
 so a signer is referenced like any other particle.

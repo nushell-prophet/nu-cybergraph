@@ -20,8 +20,8 @@ MUST, MUST NOT, SHOULD and MAY are used as in RFC 2119.
 
 | term | meaning |
 |---|---|
-| particle | a carrier of meaning: its content is the bytes of a file, its name is the CID v0 of those bytes |
-| vertex | the role a particle takes when its CID stands in an edge, not a second thing |
+| particle | a file whose CID stands in an edge: one name for the vertex of the graph and the bytes under that CID, the carrier of meaning (bj001: a file becomes a particle of the cybergraph when its CID stands in an edge); the store and the `particle` commands say particle for any published file, since a file is published to be named |
+| vertex | the same particle in graph-theory words: its place in the graph, apart from its bytes |
 | edge | the pair `{cid_from, cid_to}` — the unit of the operational layer; one address shared by every signer asserting it |
 | link, cyberlink | an edge asserted by one signer — the triple; its file holds the pair, the signer lives in the path |
 | signer | an identity: the CID v0 of an SSH public key file in canonical form |
