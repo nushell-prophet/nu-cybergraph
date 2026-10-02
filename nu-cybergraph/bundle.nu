@@ -3,7 +3,7 @@
 # "Verifying without the origin repo".
 #
 # An OWN link (has a birth certificate in certs/) exports the birth bundle,
-# plus the particle files its two ends address (when this repo holds them) —
+# plus the particle files its two ends reach (when this repo holds them) —
 # without them an importer has the record but not the preimage of the
 # instruction it names (bj002 "Reading instructions"), and can only decode
 # the edge's meaning by scanning particles/ across every repo it can reach.
@@ -45,7 +45,8 @@ use _validate.nu [ CID_V0_RE ]
 use _record.nu [ read-link ]
 use _receipt.nu [ read-receipt custody-layers ]
 use _signer.nu [ own-signer ]
-use _particle.nu [ particle-find ]
+use _particle.nu [ index-find store-index ]
+use _read.nu [ operand-closure ]
 use _handoff.nu [ handoff-bytes HANDOFF_SCHEMA ]
 
 # Copy one seal's verification artifacts into a proof dir: the snapshot's
@@ -171,15 +172,18 @@ def assemble-position [root: path out: path signer: string edge_cid: string birt
     }
 }
 
-# Copy the particle files a link record's two ends address, for whichever of
-# them this repo actually holds a file for. cid_from is always the preimage
-# of the record's instruction; cid_to is one too for edges that name a
-# particle rather than another link (an "about" edge names a link CID
-# instead, and `particle-find` then just returns nothing — trying both ends
-# uniformly is simpler than asking each verb which of its fields is which).
+# Copy the particle files a link record's two ends reach, for whichever of
+# them this repo actually holds a file for: each end, and every operand an
+# instruction preimage among them names, down to the leaves. One level is not
+# enough — a relation about an edge names the edge's address in `about`, and
+# the pair behind it is what says which edge. A CID with no local file is
+# skipped, the same at every depth — trying every CID uniformly is simpler
+# than asking each verb which of its fields is which.
 def assemble-particles [root: path out: path rec: record]: nothing -> nothing {
-    for cid in ([$rec.cid_from $rec.cid_to] | uniq) {
-        let file = particle-find $root $cid --optional
+    let index = store-index $root
+
+    for cid in ([$rec.cid_from $rec.cid_to] | operand-closure $index) {
+        let file = index-find $index $cid --optional
 
         if $file != null {
             mkdir (particles-dir $out)

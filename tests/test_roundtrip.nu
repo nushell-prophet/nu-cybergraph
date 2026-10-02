@@ -25,7 +25,7 @@ use ../nu-cybergraph/verify.nu
 use ../nu-cybergraph/verify-bundle.nu
 use ../nu-cybergraph/convention.nu
 use ../nu-cybergraph/particle.nu
-use ../nu-cybergraph/_derive.nu [record-bytes]
+use ../nu-cybergraph/_derive.nu [record-bytes derive]
 use ../nu-cybergraph/_verify-helpers.nu [stamp-cell]
 use ../nu-cybergraph/_fs.nu [list-files list-dirs]
 use ../nu-cybergraph/_deps/cid-v0.nu [cid-v0]
@@ -182,6 +182,33 @@ def "bundle carries the particles of the ends by default and links-only drops th
     let out_unresolved = bundle $unresolved.edge_cid --repo $a.repo --out ($tmp_dir | path join out-unresolved)
 
     assert not (($out_unresolved | path join particles) | path exists)
+}
+
+# A relation about an edge names the edge's address in `about`, so the two ends
+# stop one level short: the pair behind `about` is what says which edge, and an
+# answer's question record sits one level deeper still.
+@test
+def "bundle carries every record the ends reach and not only the ends" [] {
+    let tmp_dir = $in.tmp_dir
+    let a = make-signer $tmp_dir "a"
+    let update = convention update-edge $P1 $P2 "new version" --repo $a.repo --allow-missing
+    let answer = convention answer-edge $P1 $P2 "because" --repo $a.repo --allow-missing
+
+    seal --repo $a.repo --no-stamp --allow-untracked-particles | ignore
+
+    let bundled = {|edge_cid name|
+        bundle $edge_cid --repo $a.repo --out ($tmp_dir | path join $name)
+        | path join particles
+        | list-files $in
+        | path basename
+        | sort
+    }
+    let question = derive {about: $P1 op: "question"}
+
+    # P1 and P2 are bare CIDs with no local bytes, so they are skipped at depth
+    # as they are at the ends.
+    assert equal (do $bundled $update.edge_cid update) ([$update.record.cid_from (derive {cid_from: $P1 cid_to: $P2}) $update.record.cid_to] | sort)
+    assert equal (do $bundled $answer.edge_cid answer) ([$answer.record.cid_from (derive {cid_from: $question cid_to: $P2}) $question $answer.record.cid_to] | sort)
 }
 
 # A bundle arriving without its record is refused either way — this is about

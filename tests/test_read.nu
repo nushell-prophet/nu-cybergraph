@@ -47,6 +47,27 @@ def "a plain edge reads as a plain edge and an instruction reads as its verb" []
     assert equal $instr.cid_from (derive {about: $B op: "update_particle"})
 }
 
+# A relation about an edge names the edge's address in `about`, one level
+# below the source: the reading goes down to it, and for an answer one level
+# further, to the question record.
+@test
+def "an instruction reads back at every depth" [] {
+    let tmp = $in.tmp
+
+    convention update-edge $A $B $C --signer $S --repo $tmp --allow-missing
+    convention answer-edge $A $B $C --signer $S --repo $tmp --allow-missing
+
+    let rows = link list --repo $tmp
+
+    let update = $rows | where op == "update_edge" | first
+    let answer = $rows | where op == "answer_edge" | first
+
+    assert equal $update.src_tree {about: {cid_from: $A cid_to: $B} op: "update_edge"}
+    assert equal $answer.src_tree {about: {cid_from: {about: $A op: "question"} cid_to: $B} op: "answer_edge"}
+    # `src` keeps the subject's address, so relations still group by it.
+    assert equal $update.src {about: (derive {cid_from: $A cid_to: $B}) op: "update_edge"}
+}
+
 @test
 def "touching names the position which is what tells the two ends apart" [] {
     let tmp = $in.tmp
@@ -61,15 +82,15 @@ def "touching names the position which is what tells the two ends apart" [] {
 }
 
 @test
-def "touching reaches an operand two records deep" [] {
+def "touching reaches an operand three records deep" [] {
     let tmp = $in.tmp
 
-    # answer-edge: {cid_from: {about: B, op: question}, cid_to: Q, op: answer_edge} → A
+    # answer-edge: {about: {cid_from: {about: B, op: question}, cid_to: Q}, op: answer_edge} → A
     convention answer-edge $B "why?" "because" --signer $S --repo $tmp --allow-missing
     let hit = link touching $B --repo $tmp
 
     assert equal ($hit | length) 1
-    assert equal ($hit | first | get role) "cid_from.cid_from.about"
+    assert equal ($hit | first | get role) "cid_from.about.cid_from.about"
     assert equal ($hit | first | get op) "answer_edge"
 }
 
@@ -119,7 +140,7 @@ def "the rg-narrowed reading and the full scan return the same rows" [] {
     # branch, and an equality test alone would then pin nothing.
     assert equal (link touching $B --repo $tmp --scan | get role | sort) [
         "cid_from.about"
-        "cid_from.cid_from.about"
+        "cid_from.about.cid_from.about"
         "cid_to"
         "cid_to.cid_to"
     ]

@@ -42,10 +42,15 @@
 #   question            {about: B, op: question}                      → Q
 #   author-particle     {about: B, op: author_particle}               → P
 #   same                {about: P1, op: same}                         → P2
-#   update-edge         {cid_from: A, cid_to: B, op: update_edge}     → C
+#   update-edge         {about: {cid_from: A, cid_to: B}, op: update_edge} → C
 #   update-particle     {about: B, op: update_particle}               → C
-#   answer-edge         {cid_from: {about: B, op: question}, cid_to: Q, op: answer_edge} → A
+#   answer-edge         {about: {cid_from: {about: B, op: question}, cid_to: Q}, op: answer_edge} → A
 #   claimed-at          {about: X, op: claimed_at}                    → T
+#
+# Two shapes, and no third. A verdict (confirm, deny, agree, disagree) has a
+# fixed source, {op}, and its subject in the target. A relation has its subject
+# in `about` and points at the other file; when the subject is an edge, `about`
+# holds the edge's address, the same CID a verdict targets.
 #
 # Eighteen verbs for twelve conventions — confirm and deny are one convention
 # each and two verbs each, one per subject. Four answer to no convention:
@@ -63,7 +68,8 @@
 # confirm_link, deny_edge / deny_link, update_edge / update_particle, and —
 # with a single possible subject — agree_particle, disagree_particle,
 # quote_particle, author_particle, translation_particle, answer_edge. The
-# record shape carries the same fact, but only for a reader that parses it,
+# record shape does not: update_edge and update_particle share {about, op},
+# so the subject shows only to a reader that dereferences `about`,
 # and a CID is opaque: no tool can tell a particle CID from an edge address
 # at write time unless the preimage already sits in the store. So the word is
 # the one check that always works — `agree_particle → {cid_from, cid_to}` is
@@ -83,7 +89,7 @@
 # reader reports two numbers and never their sum — bj002's formula keeps them
 # apart as f(repeats, confirms, denies, signer_weights, time_decay).
 # Instructions force the distinction: several signers can propose an update
-# from the one source {cid_from: A, cid_to: B, op: update_edge}, and repetitions
+# from the one source {about: {cid_from: A, cid_to: B}, op: update_edge}, and repetitions
 # cannot pick between their versions, because repeating someone else's update
 # claims you derived it yourself. Confirmations are what tell the proposals
 # apart.
@@ -110,9 +116,9 @@ export use _derive.nu [ derive ]
 # is then published as a self-addressed file and its CID returned. The one
 # place the grammar is interpreted.
 #
-# `index` is built once by `edge` and threaded through the recursion — a
-# convention can nest several operands (`answer-edge` embeds a whole question
-# record), and rebuilding it per operand is the scan-per-lookup cost
+# `index` is built once by the caller and threaded through the recursion —
+# one call resolves every operand of the source and the target, and
+# rebuilding it per operand is the scan-per-lookup cost
 # `resolve-particle`'s own doc comment measures against.
 def address [root: path index: record expr: any allow_missing: bool literal: bool]: nothing -> string {
     if ($expr | describe) == "string" { return (resolve-particle $root $index $expr --allow-missing=$allow_missing --literal=$literal) }
@@ -173,7 +179,8 @@ export def repeat [
 }
 
 # What the four verbs below speak about — the edge, or one signer's cyberlink —
-# is published through `_publish.nu`, the bodies behind `particle add-edge` /
+# and the edge `update-edge` and `answer-edge` take as their subject, is
+# published through `_publish.nu`, the bodies behind `particle add-edge` /
 # `add-link`, and not by building the record here and letting `address`
 # publish it. Those verbs mint exactly these two records, and a second
 # construction site is how the two drifted: `address` resolves every value as
@@ -269,9 +276,10 @@ export def "deny-link" [
     edge {op: "deny_link"} (publish-link $root $cid_from $cid_to $disputed_signer $allow_missing $literal) $signer_cid $repo $allow_missing $literal
 }
 
-# Update an edge: {cid_from: A, cid_to: B, op: update_edge} → C marks C as the
-# new target of the edge A → B. The record embeds the edge's own fields;
-# updates reissue from the same source, so the latest is the current version
+# Update an edge: {about: {cid_from: A, cid_to: B}, op: update_edge} → C marks
+# C as the new target of the edge A → B. The subject is the edge's address, so
+# the act is tied to that edge and to no other; updates reissue from the same
+# source, so the latest is the current version
 # (bj002 "Updating a previously published edge").
 @example "update edge A → B to point at C" { convention update-edge QmA… QmB… QmC… }
 export def "update-edge" [
@@ -283,7 +291,10 @@ export def "update-edge" [
     --allow-missing # skip the local-file check on a CID operand (see resolve-particle)
     --literal # treat a content operand as literal even if it names a path (see resolve-arg-bytes)
 ]: nothing -> record {
-    edge {cid_from: $cid_from cid_to: $cid_to op: "update_edge"} $cid_new $signer $repo $allow_missing $literal
+    let root = graph-root $repo
+    let signer_cid = resolve-signer $root $signer
+
+    edge {about: (publish-edge $root $cid_from $cid_to $allow_missing $literal) op: "update_edge"} $cid_new $signer_cid $repo $allow_missing $literal
 }
 
 # Update a particle: {about: B, op: update_particle} → C — "C is the version
@@ -298,9 +309,10 @@ export def "update-edge" [
 # extension like `claimed-at`, which the open set of conventions permits
 # (bj002 "Updating a previously published edge").
 #
-# Its own op word, not `update_edge`: the record shape already keeps the two
-# addresses apart, but only for a reader that parses it, and a reader filtering
-# `link list` on the op column would have seen one word for two subjects.
+# Its own op word, not `update_edge`: both records have the one shape
+# {about, op}, and what `about` names — an edge address or a particle — shows
+# only to a reader that dereferences it. The word is what keeps the two acts
+# apart, in the address and in `link list`'s op column alike.
 #
 # Direction: source is the version being replaced, not the newest one. A chain
 # written the other way round would need the reader to know the newest CID before
@@ -426,9 +438,9 @@ export def question [
     edge {about: $about op: "question"} $question $signer $repo $allow_missing $literal
 }
 
-# Answer: {cid_from: {about: B, op: question}, cid_to: Q, op: answer_edge} → A —
-# "A answers the question Q about B". The record embeds the question edge's
-# fields (the same move as update), so the answer attaches to the
+# Answer: {about: {cid_from: {about: B, op: question}, cid_to: Q}, op: answer_edge}
+# → A — "A answers the question Q about B". The subject is the address of the
+# question edge (the same move as update), so the answer attaches to the
 # question-in-context, not the bare Q — one Q asked about different Bs does
 # not glue answers together (bj002 "Question and answer").
 @example "A answers question Q about B" { convention answer-edge QmB… QmQ… QmA… }
@@ -441,7 +453,11 @@ export def "answer-edge" [
     --allow-missing # skip the local-file check on a CID operand (see resolve-particle)
     --literal # treat a content operand as literal even if it names a path (see resolve-arg-bytes)
 ]: nothing -> record {
-    edge {cid_from: {about: $about op: "question"} cid_to: $question op: "answer_edge"} $answer $signer $repo $allow_missing $literal
+    let root = graph-root $repo
+    let signer_cid = resolve-signer $root $signer
+    let asked = address $root (store-index $root) {about: $about op: "question"} $allow_missing $literal
+
+    edge {about: (publish-edge $root $asked $question $allow_missing $literal) op: "answer_edge"} $answer $signer_cid $repo $allow_missing $literal
 }
 
 # Authorship: {about: B, op: author_particle} → P — "the author of particle B is P". The

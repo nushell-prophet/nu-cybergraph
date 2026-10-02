@@ -6,7 +6,7 @@ use _layout.nu [ signer-dir link-path imported-dir order-dir order-path ]
 use _order.nu [ write-added-at ]
 use _particle.nu [ resolve-particle store-index ]
 use _signer.nu [ resolve-signer ]
-use _read.nu [ read-links deref touches ]
+use _read.nu [ read-links deref unfold touches ]
 use _validate.nu [ CID_V0_RE ]
 use _fs.nu [ list-dirs cwd-relative ]
 
@@ -130,6 +130,7 @@ export def add [
 # drift.
 def statement [index: record l: record]: nothing -> record {
     let src = deref $index $l.cid_from
+    let tgt = deref $index $l.cid_to
 
     {
         edge_cid: $l.edge_cid
@@ -139,7 +140,9 @@ def statement [index: record l: record]: nothing -> record {
         signer: $l.signer
         op: (if $src == null { null } else { $src | get --optional op })
         src: $src
-        tgt: (deref $index $l.cid_to)
+        tgt: $tgt
+        src_tree: (if $src == null { null } else { $src | unfold $index })
+        tgt_tree: (if $tgt == null { null } else { $tgt | unfold $index })
     }
 }
 
@@ -147,8 +150,10 @@ def statement [index: record l: record]: nothing -> record {
 # stored, then what it says. `op` is the verb the source record declares — null
 # for a plain edge, which is not a lesser thing: "this root publishes this file"
 # needs no verb. `src` and `tgt` are the endpoints' own records where the store
-# holds them, so the operands a convention hid behind a derived CID are back in
-# the open.
+# holds them, as published, so every operand keeps its address — a reader
+# grouping relations by subject reads `src.about`. `src_tree` and `tgt_tree`
+# read them back at every depth, so the operands a convention hid behind a
+# derived CID are back in the open.
 #
 # Own links only (the signer directories at the graph root). An imported
 # bundle is another signer's copy, checked
@@ -169,7 +174,7 @@ export def list [
 # decoded the same way `list` decodes its own graph — read-link's
 # self-address and canonical-form check, then operands dereferenced against
 # JUST that bundle's own particles/. A bundle is an island: `bundle` attaches
-# the ends' particles when the exporter held them (see its own doc comment),
+# the particles the ends reach when the exporter held them (see its own doc comment),
 # so most edges decode fully from the bundle alone; this never reaches into
 # this repo's own particles/, which would blur "what the bundle proves" with
 # "what this repo separately happens to know" too.

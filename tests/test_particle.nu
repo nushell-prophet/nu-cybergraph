@@ -438,11 +438,11 @@ def "convention verbs refuse a CID operand this repo holds no file for" [] {
     convention agree-particle $A --repo $tmp --signer $N --allow-missing | ignore
 }
 
-# The check and its escape hatch both walk the whole address expression, not
-# just its top-level leaf — confirm's cyberlink form nests a signer CID
-# inside the target record, and answer nests a question record two levels
-# inside the source. Either bare CID missing locally must refuse without the
-# flag, and --allow-missing must reach it wherever it sits.
+# The check and its escape hatch both reach an operand below the top-level
+# leaf — confirm's cyberlink form puts a signer CID inside the target record,
+# and answer puts the question's subject inside a question record, inside the
+# address of the edge its source names. Either bare CID missing locally must
+# refuse without the flag, and --allow-missing must reach it wherever it sits.
 @test
 def "allow-missing reaches an operand nested inside the address expression" [] {
     let tmp = $in.tmp

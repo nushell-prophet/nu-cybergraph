@@ -68,7 +68,7 @@ nu-cybergraph link imported              # the same reading over every link a la
 nu-cybergraph seal                       # sign the root + stamp that signature, freeze new certificates
 nu-cybergraph seal --propose-commit      # …and leave the git commit for that seal in the prompt, unrun
 nu-cybergraph seal chain                 # the run of seals, oldest first — refuses a gap
-nu-cybergraph bundle Qm…edge             # portable bundle → exports/<signer>/<edge>/, ends' particles included (imported act: re-export + custody layer)
+nu-cybergraph bundle Qm…edge             # portable bundle → exports/<signer>/<edge>/, particles the ends reach included (imported act: re-export + custody layer)
 nu-cybergraph bundle Qm…edge --links-only # own act: …without particles, the record + certificate alone (no-op re-exporting an import)
 nu-cybergraph bundle Qm…edge --to Qm…signer # …plus a signed handoff naming the recipient
 nu-cybergraph import path/to/bundle      # verify, keep under imported/<signer>/<edge>/, write custody receipt
@@ -323,8 +323,9 @@ because a name that hides its subject behind an optional argument is what this s
 A verb's name and its `op` word name the subject wherever the verb has one
 — `confirm-edge`/`confirm-link`, `deny-edge`/`deny-link`, `update-edge`/`update-particle`,
 and, with a single possible subject, `agree-particle`, `disagree-particle`, `quote-particle`, `author-particle`, `translation-particle`, `answer-edge`.
-The record shape carries the same fact,
-but only for a reader that parses the record,
+The record shape does not:
+`update_edge` and `update_particle` share `{about, op}`,
+so the subject shows only to a reader that dereferences `about`,
 and a CID is opaque:
 no tool can tell a particle CID from an edge address at write time unless the preimage already sits in the store.
 So the word is the one check that always works.
@@ -394,14 +395,14 @@ if a shape ever changes, both move together.
 | `confirm-link A B S` | `{"op":"confirm_link"} → {"cid_from":A,"cid_to":B,"signer":S}` (a signer's cyberlink) |
 | `deny-edge A B` | `{"op":"deny_edge"} → {"cid_from":A,"cid_to":B}` |
 | `deny-link A B S` | `{"op":"deny_link"} → {"cid_from":A,"cid_to":B,"signer":S}` (a signer's cyberlink) |
-| `update-edge A B C` | `{"cid_from":A,"cid_to":B,"op":"update_edge"} → C` |
+| `update-edge A B C` | `{"about":{"cid_from":A,"cid_to":B},"op":"update_edge"} → C` |
 | `update-particle B C` | `{"about":B,"op":"update_particle"} → C` (extension, not in bj002; the same act about a particle instead of an edge — a version chain) |
 | `quote-particle A B` | `{"about":A,"op":"quote_particle"} → B` |
 | `translation-particle A B` | `{"about":A,"op":"translation_particle"} → B` (extension, not in bj002; B says in another language what A says, and the direction records which came first) |
 | `agree-particle B` / `disagree-particle B` | `{"op":"agree_particle"\|"disagree_particle"} → B` |
 | `pro C B` / `con C B` | `{"about":C,"op":"pro"\|"con"} → B` |
 | `question B Q` | `{"about":B,"op":"question"} → Q` |
-| `answer-edge B Q A` | `{"cid_from":{"about":B,"op":"question"},"cid_to":Q,"op":"answer_edge"} → A` |
+| `answer-edge B Q A` | `{"about":{"cid_from":{"about":B,"op":"question"},"cid_to":Q},"op":"answer_edge"} → A` |
 | `author-particle B P` | `{"about":B,"op":"author_particle"} → P` |
 | `same P1 P2` | `{"about":P1,"op":"same"} → P2` |
 | `claimed-at X T` | `{"about":X,"op":"claimed_at"} → T` (extension, not in bj002; T is an RFC 3339 timestamp published as a file) |
@@ -412,6 +413,16 @@ and the verb publishes it as it mints it
 and a reader who has the CID can open it.
 The edge target of the two-argument forms is the pair record,
 byte-identical to the link file itself and published the same way, by the act that names it.
+`update-edge` and `answer-edge` publish that pair record too,
+as their subject.
+
+A source record has one of two shapes.
+A verdict (`confirm`, `deny`, `agree`, `disagree`) has a fixed source `{op}` and its subject in the target.
+A relation has its subject in `about` and points at the other file
+— and when the subject is an edge, `about` holds the edge's address,
+the same CID a verdict on that edge targets.
+The address ties the act to that one edge,
+so an update or an answer needs no copy of the edge's fields.
 
 ## Reading the graph
 
@@ -425,7 +436,7 @@ three over this signer's own graph, and one over what imported bundles carry.
 
 | command | what it answers |
 |---|---|
-| `link list` | the whole graph, one row per record: `edge_cid` and `link_cid` (both addresses), the pair as stored, `signer` read off the path, then `op`, `src`, `tgt` — the verb the source declares and the endpoints' own records, where this repo holds them |
+| `link list` | the whole graph, one row per record: `edge_cid` and `link_cid` (both addresses), the pair as stored, `signer` read off the path, then `op`, `src`, `tgt`, `src_tree`, `tgt_tree` — the verb the source declares, the endpoints' own records as published, and the same read back at every depth, where this repo holds them |
 | `link touching <cid>` | which links name this CID, and **where**: `role` is `cid_from`, `cid_to`, `signer`, or a dotted path into an instruction's record (`cid_from.about`, `cid_to.cid_from`) |
 | `link tally <cid>` | one row per verb and position: how many links say it, and how many distinct signers signed them |
 | `link imported` | the same rows as `link list`, but for every link a landed bundle under `imported/` carries — one bundle at a time, each decoded against its own `particles/` and never this repo's |
@@ -462,7 +473,7 @@ Repeats and confirms are two signals
 so a reader reports two numbers,
 and bj002's formula keeps them apart as `f(repeats, confirms, denies, signer_weights, time_decay)`.
 Instructions force the distinction:
-several signers can propose an update from the one source `{"cid_from":A,"cid_to":B,"op":"update_edge"}`,
+several signers can propose an update from the one source `{"about":{"cid_from":A,"cid_to":B},"op":"update_edge"}`,
 and repetitions cannot pick between their versions,
 because repeating someone else's update claims you derived it yourself.
 Confirmations are what tell the proposals apart.
@@ -683,7 +694,8 @@ The binding says *who* signed;
 
 `bundle <edge-cid>` assembles the portable artifact set in the layout nu-multiproof pins under "Verifying without the origin repo":
 the record at its `<signer>/<edge>.json` path, the certificate, the birth seal's root statement + signatures, the signer pubkeys, the OTS bundles committing to that root,
-and — by default — a copy under `particles/` of whichever of the record's two ends this repo holds a file for.
+and — by default — a copy under `particles/` of whichever of the record's two ends this repo holds a file for,
+and of every operand an instruction preimage among them names, at any depth.
 When more than one signer holds the edge, `--signer` names whose act leaves
 — several candidates without it are refused, never guessed.
 Without those bytes an importer has the address of the instruction a link states (e.g. `{"op":"agree_particle"}`) but not its preimage,

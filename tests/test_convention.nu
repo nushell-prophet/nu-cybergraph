@@ -67,7 +67,7 @@ def "record-bytes emits alphabetical keys as compact JSON with one trailing newl
 
 @test
 def "record-bytes refuses non-string values" [] {
-    assert error { record-bytes {cid_to: $B cid_from: {about: $A op: "question"} op: "answer_edge"} }
+    assert error { record-bytes {about: {cid_from: $A cid_to: $B} op: "answer_edge"} }
 }
 
 # --- Each convention shapes the right edge -----------------------------------
@@ -171,10 +171,10 @@ def "deny-edge targets the edge address and deny-link the cyberlink CID" [] {
 }
 
 @test
-def "update-edge reissues from the record embedding the fields of the edge" [] {
+def "update-edge reissues from the record naming the address of the edge" [] {
     let r = convention update-edge $A $B $C --repo $in.tmp --signer $S --allow-missing | get record
 
-    assert equal $r.cid_from (derive {cid_from: $A cid_to: $B op: "update_edge"})
+    assert equal $r.cid_from (derive {about: $EDGE_AB op: "update_edge"})
     assert equal $r.cid_to $C
 }
 
@@ -186,9 +186,9 @@ def "update-particle states the same act about a particle at a distinct address"
     assert equal $r.cid_from (derive {about: $B op: "update_particle"})
     assert equal $r.cid_to $C
 
-    # Its own op word, so the two acts are apart in the op column and not only
-    # in the record shape a reader would have to parse.
-    assert not equal $r.cid_from (derive {cid_from: $A cid_to: $B op: "update_edge"})
+    # Its own op word, so the two acts are apart even where the subject is one
+    # CID: the record shape is the same, and only the word differs.
+    assert not equal $r.cid_from (derive {about: $B op: "update_edge"})
 
     # The source is the version being replaced, so a reader who holds B can
     # compute one hash and ask what replaced it. A chain is updates of updates.
@@ -272,7 +272,7 @@ def "answer attaches to the question in context and not the bare question" [] {
     let r = convention answer-edge $A $B $C --repo $in.tmp --signer $S --allow-missing | get record
     let q_src = derive {about: $A op: "question"}
 
-    assert equal $r.cid_from (derive {cid_from: $q_src cid_to: $B op: "answer_edge"})
+    assert equal $r.cid_from (derive {about: (derive {cid_from: $q_src cid_to: $B}) op: "answer_edge"})
     assert equal $r.cid_to $C
 }
 
@@ -317,10 +317,24 @@ def "every convention publishes its records as self-addressed files" [] {
     assert equal (open --raw (particle-path ($tmp | path join cybergraph) $DENY_EDGE)) "{\"op\":\"deny_edge\"}\n"
     # deny-edge publishes the address record it targets.
     assert ((particle-path ($tmp | path join cybergraph) $EDGE_AB) | path exists) $"missing address record ($EDGE_AB)"
-    # answer publishes the whole chain: the question record and the answer record.
+    # answer publishes the whole chain: the question record, the address of the
+    # question edge, and the answer record.
     let q_src = derive {about: $A op: "question"}
+    let q_edge = derive {cid_from: $q_src cid_to: $B}
 
-    for cid in [$q_src (derive {cid_from: $q_src cid_to: $B op: "answer_edge"})] {
+    for cid in [$q_src $q_edge (derive {about: $q_edge op: "answer_edge"})] {
+        assert ((particle-path ($tmp | path join cybergraph) $cid) | path exists) $"missing record ($cid)"
+    }
+}
+
+# Alone, with no deny-edge in the same repo to publish the edge address first.
+@test
+def "update-edge publishes the address of the edge and its update record" [] {
+    let tmp = $in.tmp
+
+    convention update-edge $A $B $C --repo $tmp --signer $S --allow-missing | ignore
+
+    for cid in [$EDGE_AB (derive {about: $EDGE_AB op: "update_edge"})] {
         assert ((particle-path ($tmp | path join cybergraph) $cid) | path exists) $"missing record ($cid)"
     }
 }

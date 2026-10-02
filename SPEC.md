@@ -605,8 +605,9 @@ Four verbs answer to no bj002 convention:
 An `op` word names its subject wherever the verb has one
 — `confirm_edge` / `confirm_link`, `deny_edge` / `deny_link`, `update_edge` / `update_particle`,
 and, with a single possible subject, `agree_particle`, `disagree_particle`, `quote_particle`, `author_particle`, `translation_particle`, `answer_edge`.
-The record shape carries the same fact,
-but only for a reader that parses the record,
+The record shape does not:
+`update_edge` and `update_particle` share `{about, op}`,
+so the subject shows only to a reader that dereferences `about`,
 and a CID is opaque:
 no tool can tell a particle CID from an edge address at write time unless the preimage already sits in the store.
 So the word is the one check that always works
@@ -630,16 +631,21 @@ so no address here has ever matched one there.
 | `translation-particle A B` | `{"about":A,"op":"translation_particle"} → B` |
 | `pro C B` / `con C B` | `{"about":C,"op":"pro"}` / `{"about":C,"op":"con"} → B` |
 | `question B Q` | `{"about":B,"op":"question"} → Q` |
-| `answer-edge B Q A` | `{"cid_from":{"about":B,"op":"question"},"cid_to":Q,"op":"answer_edge"} → A` |
+| `answer-edge B Q A` | `{"about":{"cid_from":{"about":B,"op":"question"},"cid_to":Q},"op":"answer_edge"} → A` |
 | `author-particle B P` | `{"about":B,"op":"author_particle"} → P` |
 | `same P1 P2` | `{"about":P1,"op":"same"} → P2` |
-| `update-edge A B C` | `{"cid_from":A,"cid_to":B,"op":"update_edge"} → C` |
+| `update-edge A B C` | `{"about":{"cid_from":A,"cid_to":B},"op":"update_edge"} → C` |
 | `update-particle B C` | `{"about":B,"op":"update_particle"} → C` |
 | `claimed-at X T` | `{"about":X,"op":"claimed_at"} → T`, T an RFC 3339 timestamp published as a file |
 
 A record shown in source or target position means the CID of its canonical bytes.
-`answer-edge`'s source nests:
-the inner question record resolves to its own CID first,
+Every source record has one of two shapes.
+A verdict (`confirm`, `deny`, `agree`, `disagree`) has a fixed source `{op}` and its subject in the target.
+A relation has its subject in `about` and points at the other file;
+when the subject is an edge, `about` holds the edge's address.
+`answer-edge`'s source nests twice:
+the question record resolves to its CID,
+then the pair naming it and Q resolves to the edge address,
 then the outer record is serialized.
 
 The edge address is `derive {cid_from: A, cid_to: B}` and the cyberlink's derived CID is `derive {cid_from: A, cid_to: B, signer: S}`
@@ -647,8 +653,9 @@ The edge address is `derive {cid_from: A, cid_to: B}` and the cyberlink's derive
 The first is byte-identical to the link file itself (3.1),
 which does not make it a store file:
 the link writer publishes neither address (3.1),
-and `confirm-edge A B` / `deny-edge A B` publish the pair because they mint it as their target.
-So the CID any of the four confirm and deny verbs targets is always a published preimage
+and `confirm-edge A B` / `deny-edge A B` publish the pair because they mint it as their target,
+`update-edge` / `answer-edge` because they mint it as their subject.
+So the edge or cyberlink address any of these verbs mints is always a published preimage
 — published by the act that names it.
 
 Reading these edges back means dereferencing the source CID in `particles/`.
@@ -778,7 +785,7 @@ Birth bundle for an authored link:
   <edge-cid>.cert.json                       # exactly one *.cert.json at the root
   order/<signer-cid>/<edge-cid>.order.json   # the act's number, at ITS leaf's filepath (+ .order.cert.json beside it)
   seals/<root-hex-12>/                       # the seal the number was frozen under
-  particles/<cid>[.ext]                      # the record's two ends, where held (default)
+  particles/<cid>[.ext]                      # the record's two ends and every operand they reach, where held (default)
   multiproofs/tree-root.txt                  # + tree-root.txt.<fingerprint>.sig
   multiproofs/pubkeys/*.pub                  # named <fingerprint>.pub by the reference; the name carries no authority (2.4)
   multiproofs/ots-timestamps/tree-root.<HASH8>/…   # optional; absent ⇒ timestamp reports absent

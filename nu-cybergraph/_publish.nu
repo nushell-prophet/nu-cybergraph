@@ -1,6 +1,7 @@
 # The two special-case records, published. `particle add-edge` / `add-link` are
 # the public face; `convention confirm-edge` / `confirm-link` / `deny-edge` /
-# `deny-link` mint the same records as their targets and come through here too,
+# `deny-link` mint the same records as their targets, `update-edge` /
+# `answer-edge` mint the pair as their subject, and all of them come through here too,
 # so one record has one construction site and one admission rule for its
 # operands. That is what the module is for.
 

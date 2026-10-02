@@ -68,6 +68,19 @@ export def deref [index: record cid: string]: nothing -> any {
     deref-file $file $cid
 }
 
+# A dereferenced record, all the way down: every operand that is itself an
+# instruction preimage is read back in place of its CID, so a relation about an
+# edge shows the edge — the record the verb was given, before `address`
+# flattened it. An operand with no preimage here stays a CID.
+export def unfold [index: record]: record -> record {
+    items {|k v|
+        let rec = if $v =~ $CID_V0_RE { deref $index $v }
+
+        {$k: (if $rec == null { $v } else { $rec | unfold $index })}
+    }
+    | into record
+}
+
 # Files that could name this CID: everything under the signer directories and
 # particles/, narrowed by a text search when `rg` is on PATH. bj002 names the search
 # itself — an operand's CID is a literal string in every record that mentions
@@ -192,20 +205,22 @@ def role-path [prefix: string path: string]: nothing -> string {
 # endpoint. Without the seeds a convention's own target
 # record would sweep up as an orphan, which `stageable` never stages, so it
 # would silently miss every root.
-#
-# Then the step `touches` walks upward, walked downward: an instruction preimage
-# names its operands as CIDs, so dereferencing a seed adds them, and the
-# expansion repeats until a round finds nothing new. The fixpoint is what ends
-# it, not a depth limit — a cycle would need a record containing the hash of
-# bytes that contain it, so it is not constructible.
 export def reachable-cids [root: path]: nothing -> list<string> {
-    let index = store-index $root
-    let seeds = read-links $root
-        | each {|l| [$l.cid_from $l.cid_to $l.signer $l.edge_cid $l.link_cid] }
-        | flatten
-        | uniq
+    read-links $root
+    | each {|l| [$l.cid_from $l.cid_to $l.signer $l.edge_cid $l.link_cid] }
+    | flatten
+    | operand-closure (store-index $root)
+}
+
+# The seeds and every CID they name through the store: the step `touches` walks
+# upward, walked downward. An instruction preimage names its operands as CIDs,
+# so dereferencing a seed adds them, and the expansion repeats until a round
+# finds nothing new. The fixpoint is what ends it, not a depth limit — a cycle
+# would need a record containing the hash of bytes that contain it, so it is
+# not constructible.
+export def operand-closure [index: record]: list<string> -> list<string> {
     mut seen = []
-    mut frontier = $seeds
+    mut frontier = $in | uniq
 
     while ($frontier | is-not-empty) {
         $seen = ($seen ++ $frontier | uniq)
