@@ -4,14 +4,10 @@
 # serialization breaks every derived CID — treat as a format version bump,
 # not an edit.
 #
-# Canonical records are THIS REPO'S EXPERIMENT, not journal canon. bj002's
-# appendix defines `hash(x, y, …)` as the CID of the arguments comma-joined;
-# the journal issue that proposed records instead (bj002-1) was withdrawn on
-# 2026-07-20 as a negative result — for the journal *text*, not for the code,
-# which keeps testing the record form. Here a derived CID is the CID v0 of a
-# *canonical record* — compact JSON, keys in alphabetical order, values
-# strings only (no nesting: a reference to another record is its CID),
-# exactly one trailing "\n". The appendix's two special cases are just
+# A derived CID is the CID v0 of a *canonical record* — compact JSON, keys in
+# alphabetical order, values strings only (no nesting: a reference to another
+# record is its CID), exactly one trailing "\n" — the rule of bj002's
+# appendix, byte for byte. The appendix's two special cases are just
 # records: the edge address is `derive {cid_from: A, cid_to: B}`, the
 # cyberlink's derived CID is `derive {cid_from: A, cid_to: B, signer: S}`.
 #

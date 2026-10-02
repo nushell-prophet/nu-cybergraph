@@ -615,9 +615,9 @@ So the word is the one check that always works
 Where a verb takes any CID on purpose the word stays bare
 — `pro`, `con`, `question`, `same`, `claimed_at` —
 so a bare word is the signal "any CID".
-bj002 spells the same words since 2026-09-02;
-the addresses still differ, because bj002 hashes a comma-join where this format derives from a record (2.2),
-so no address here has ever matched one there.
+bj002 spells the same words since 2026-09-02
+and derives from the same canonical record (2.2),
+so an address here is the address there.
 
 | verb | edge written |
 |---|---|
@@ -629,10 +629,10 @@ so no address here has ever matched one there.
 | `agree-particle B` / `disagree-particle B` | `{"op":"agree_particle"}` / `{"op":"disagree_particle"} → B` |
 | `quote-particle A B` | `{"about":A,"op":"quote_particle"} → B` |
 | `translation-particle A B` | `{"about":A,"op":"translation_particle"} → B` |
-| `pro C B` / `con C B` | `{"about":C,"op":"pro"}` / `{"about":C,"op":"con"} → B` |
-| `question B Q` | `{"about":B,"op":"question"} → Q` |
-| `answer-edge B Q A` | `{"about":{"cid_from":{"about":B,"op":"question"},"cid_to":Q},"op":"answer_edge"} → A` |
-| `author-particle B P` | `{"about":B,"op":"author_particle"} → P` |
+| `pro X B` / `con X B` | `{"about":X,"op":"pro"}` / `{"about":X,"op":"con"} → B` |
+| `question X Q` | `{"about":X,"op":"question"} → Q` |
+| `answer-edge X Q R` | `{"about":{"cid_from":{"about":X,"op":"question"},"cid_to":Q},"op":"answer_edge"} → R` |
+| `author-particle X P` | `{"about":X,"op":"author_particle"} → P` |
 | `same P1 P2` | `{"about":P1,"op":"same"} → P2` |
 | `update-edge A B C` | `{"about":{"cid_from":A,"cid_to":B},"op":"update_edge"} → C` |
 | `update-particle B C` | `{"about":B,"op":"update_particle"} → C` |

@@ -26,7 +26,7 @@
 # with the real operand CIDs (bj002 "Reading instructions"). This recursion
 # is homoiconicity made executable — an instruction is built of the same
 # fields as the cyberlink itself. It rests on the record form of `derive`,
-# this repo's experiment (see _derive.nu), not on bj002's comma-join. The
+# bj002's canon for every derived CID (see _derive.nu). The
 # whole layer, as expressions:
 #
 #   repeat              A                                             → B
@@ -38,13 +38,13 @@
 #   disagree-particle   {op: disagree_particle}                       → B
 #   quote-particle      {about: A, op: quote_particle}                → B
 #   translation-particle {about: A, op: translation_particle}         → B
-#   pro / con           {about: C, op: pro}                           → B
-#   question            {about: B, op: question}                      → Q
-#   author-particle     {about: B, op: author_particle}               → P
+#   pro / con           {about: X, op: pro}                           → B
+#   question            {about: X, op: question}                      → Q
+#   author-particle     {about: X, op: author_particle}               → P
 #   same                {about: P1, op: same}                         → P2
 #   update-edge         {about: {cid_from: A, cid_to: B}, op: update_edge} → C
 #   update-particle     {about: B, op: update_particle}               → C
-#   answer-edge         {about: {cid_from: {about: B, op: question}, cid_to: Q}, op: answer_edge} → A
+#   answer-edge         {about: {cid_from: {about: X, op: question}, cid_to: Q}, op: answer_edge} → R
 #   claimed-at          {about: X, op: claimed_at}                    → T
 #
 # Two shapes, and no third. A verdict (confirm, deny, agree, disagree) has a
@@ -78,9 +78,8 @@
 # Where a verb takes any CID on purpose the word stays bare — pro, con,
 # question, same, claimed_at — so bare is the signal "any CID". Only repeat
 # has no word at all, because it writes no source record. bj002 spells the
-# same words since 2026-09-02; the addresses still differ, because bj002
-# hashes a comma-join where this repo derives from a record, so no address
-# here has ever matched one there.
+# same words since 2026-09-02 and derives from the same canonical record,
+# so an address here is the address there.
 #
 # Reading these edges back is `link list` / `touching` / `tally` (link.nu,
 # _read.nu): the published preimage is what makes a derived CID readable, so
@@ -394,39 +393,39 @@ export def "disagree-particle" [
     edge {op: "disagree_particle"} $cid $signer $repo $allow_missing $literal
 }
 
-# Argument for: {about: C, op: pro} → B — "B is an argument for C". C is any
+# Argument for: {about: X, op: pro} → B — "B is an argument for X". X is any
 # CID: a particle, an edge, or a cyberlink; the level of argumentation is the
 # out-degree of the source (bj002 "Argument for and against").
-@example "B argues for C" { convention pro QmC… QmB… }
+@example "B argues for X" { convention pro QmX… QmB… }
 export def pro [
-    target: string # what the argument is for (any CID)
+    about: string # what the argument is for (any CID)
     argument: string # the argument content
     --signer: string
     --repo: path
     --allow-missing # skip the local-file check on a CID operand (see resolve-particle)
     --literal # treat a content operand as literal even if it names a path (see resolve-arg-bytes)
 ]: nothing -> record {
-    edge {about: $target op: "pro"} $argument $signer $repo $allow_missing $literal
+    edge {about: $about op: "pro"} $argument $signer $repo $allow_missing $literal
 }
 
-# Argument against: {about: C, op: con} → B — "B is an argument against C".
+# Argument against: {about: X, op: con} → B — "B is an argument against X".
 # The mirror of `pro` (bj002 "Argument for and against").
-@example "B argues against C" { convention con QmC… QmB… }
+@example "B argues against X" { convention con QmX… QmB… }
 export def con [
-    target: string # what the argument is against (any CID)
+    about: string # what the argument is against (any CID)
     argument: string # the argument content
     --signer: string
     --repo: path
     --allow-missing # skip the local-file check on a CID operand (see resolve-particle)
     --literal # treat a content operand as literal even if it names a path (see resolve-arg-bytes)
 ]: nothing -> record {
-    edge {about: $target op: "con"} $argument $signer $repo $allow_missing $literal
+    edge {about: $about op: "con"} $argument $signer $repo $allow_missing $literal
 }
 
-# Question: {about: B, op: question} → Q — "Q is a question about B". B is any
+# Question: {about: X, op: question} → Q — "Q is a question about X". X is any
 # CID; that Q is a question is visible from its content, so no separate mark
 # (bj002 "Question and answer").
-@example "Q is a question about B" { convention question QmB… QmQ… }
+@example "Q is a question about X" { convention question QmX… QmQ… }
 export def question [
     about: string # what the question is about (any CID)
     question: string # the question content
@@ -438,12 +437,12 @@ export def question [
     edge {about: $about op: "question"} $question $signer $repo $allow_missing $literal
 }
 
-# Answer: {about: {cid_from: {about: B, op: question}, cid_to: Q}, op: answer_edge}
-# → A — "A answers the question Q about B". The subject is the address of the
+# Answer: {about: {cid_from: {about: X, op: question}, cid_to: Q}, op: answer_edge}
+# → R — "R answers the question Q about X". The subject is the address of the
 # question edge (the same move as update), so the answer attaches to the
-# question-in-context, not the bare Q — one Q asked about different Bs does
+# question-in-context, not the bare Q — one Q asked about different Xs does
 # not glue answers together (bj002 "Question and answer").
-@example "A answers question Q about B" { convention answer-edge QmB… QmQ… QmA… }
+@example "R answers question Q about X" { convention answer-edge QmX… QmQ… QmR… }
 export def "answer-edge" [
     about: string # what the question is about
     question: string # the question content
@@ -460,11 +459,11 @@ export def "answer-edge" [
     edge {about: (publish-edge $root $asked $question $allow_missing $literal) op: "answer_edge"} $answer $signer_cid $repo $allow_missing $literal
 }
 
-# Authorship: {about: B, op: author_particle} → P — "the author of particle B is P". The
+# Authorship: {about: X, op: author_particle} → P — "the author of particle X is P". The
 # signer of the edge is the one who ports it (the archivist), which need not be
 # the author P; the signature certifies the porting, not the authorship
 # (bj002 "Authorship: porting from other mediums").
-@example "the author of B is P" { convention author-particle QmB… QmP… }
+@example "the author of X is P" { convention author-particle QmX… QmP… }
 export def "author-particle" [
     content: string # the ported particle
     author_id: string # CID of the author's identifier

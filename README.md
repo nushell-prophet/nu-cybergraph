@@ -335,24 +335,19 @@ redundant against the noun, and exactly what makes a mismatch visible without pa
 Where a verb takes any CID on purpose the word stays bare
 — `pro`, `con`, `question`, `same`, `claimed-at` —
 so a bare word is the signal "any CID".
-bj002 spells the same words since 2026-09-02;
-the addresses still differ, because bj002 hashes a comma-join where this repo derives from a record,
-so no address here has ever matched one there.
+bj002 spells the same words since 2026-09-02
+and derives from the same canonical record,
+so an address here is the address there.
 
 Every convention stands on one primitive, the canonical record:
 **`convention derive`** takes a flat record,
 serializes it canonically
 — compact JSON, keys in alphabetical order, values strings only (no nesting: a reference to another record is its CID), exactly one trailing `\n` —
 and returns the CID v0 of those bytes, a **derived CID** (reproduce any with `printf '<record>\n' | ipfs add --only-hash --cid-version=0`).
-The record form is **an encoding bj002 permits, in a canon that is this repo's own**:
-the appendix defines `hash(x, y, …)` as the CID of the arguments comma-joined,
-then says that comma-joining is one particular choice and "the arguments can be encoded otherwise — for example, by a canonical serialization of the record into JSON",
+The record form is **bj002's own canon**:
+its appendix defines a derived CID by these same bytes,
 under the one condition that the encoding be the same for everyone.
-So the alternative is sanctioned and the exact bytes below are ours to pin.
-bj002-1 proposed the same records for the journal *text* and was withdrawn as a negative result
-— meaning drifts under that conversion;
-in code, named fields and IPLD proximity are worth the price.
-The appendix's two special cases are just records here:
+The appendix's two special cases are just records:
 the edge address is `derive {cid_from: A, cid_to: B}`,
 the cyberlink's derived CID is `derive {cid_from: A, cid_to: B, signer: S}`.
 This byte format is pinned by `tests/test_convention.nu`, same discipline as the record format
@@ -400,10 +395,10 @@ if a shape ever changes, both move together.
 | `quote-particle A B` | `{"about":A,"op":"quote_particle"} → B` |
 | `translation-particle A B` | `{"about":A,"op":"translation_particle"} → B` (extension, not in bj002; B says in another language what A says, and the direction records which came first) |
 | `agree-particle B` / `disagree-particle B` | `{"op":"agree_particle"\|"disagree_particle"} → B` |
-| `pro C B` / `con C B` | `{"about":C,"op":"pro"\|"con"} → B` |
-| `question B Q` | `{"about":B,"op":"question"} → Q` |
-| `answer-edge B Q A` | `{"about":{"cid_from":{"about":B,"op":"question"},"cid_to":Q},"op":"answer_edge"} → A` |
-| `author-particle B P` | `{"about":B,"op":"author_particle"} → P` |
+| `pro X B` / `con X B` | `{"about":X,"op":"pro"\|"con"} → B` |
+| `question X Q` | `{"about":X,"op":"question"} → Q` |
+| `answer-edge X Q R` | `{"about":{"cid_from":{"about":X,"op":"question"},"cid_to":Q},"op":"answer_edge"} → R` |
+| `author-particle X P` | `{"about":X,"op":"author_particle"} → P` |
 | `same P1 P2` | `{"about":P1,"op":"same"} → P2` |
 | `claimed-at X T` | `{"about":X,"op":"claimed_at"} → T` (extension, not in bj002; T is an RFC 3339 timestamp published as a file) |
 

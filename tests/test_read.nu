@@ -85,7 +85,7 @@ def "touching names the position which is what tells the two ends apart" [] {
 def "touching reaches an operand three records deep" [] {
     let tmp = $in.tmp
 
-    # answer-edge: {about: {cid_from: {about: B, op: question}, cid_to: Q}, op: answer_edge} → A
+    # answer-edge: {about: {cid_from: {about: B, op: question}, cid_to: Q}, op: answer_edge} → R
     convention answer-edge $B "why?" "because" --signer $S --repo $tmp --allow-missing
     let hit = link touching $B --repo $tmp
 
