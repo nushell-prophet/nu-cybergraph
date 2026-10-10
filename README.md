@@ -10,35 +10,30 @@ Each link has an authorship proof and a birth-time proof, built on [nu-multiproo
 ## Origins
 
 @mastercyb and @cyborgshead first invented and implemented the concept of Cybergraph in the Bostrom blockchain.
-Cyberlink, Particle and Neuron are their terms too.
-At first I resisted these terms.
-But after very many iterations I concluded that they deserve their own names,
-because Cybergraph is unique and has real substance.
-
-Three of the four coined terms stay here
-— *cybergraph*, *cyberlink*, *particle*.
-A **particle** is a file whose CID stands in an edge (`bostrom-journal` bj001, «Частицы»; bj002, "Cyberlink and cybergraph").
-The word particle is one name for the **vertex** of the graph and for the bytes of the file under that CID.
-A particle carries meaning:
-the meaning occurs in the reader when the reader reads its content.
-Any file has a CID v0 of its bytes;
-the file becomes a particle when a link names that CID.
-The store and the `particle` commands use the word particle for any published file,
-because a file is published so that something can name it.
-
-*Neuron* is the one term that this repo drops:
-the one that signs a cyberlink is a **signer**.
-This word says what the signer does here, and it needs no gloss.
-`neuron` stays only where the text quotes Bostrom.
+Cyberlink and Particle are their terms too.
 
 ## Concept
 
-Everything published here is a file, and the CID v0 of its bytes is its address.
-The file becomes a **particle** at the moment when a link names that CID.
-The word particle is one name for the vertex of the graph and for the bytes under it.
-A **link** is a directed edge between two particles, and a **signer** asserts it.
-A signer is an identity, and that identity is only the CID of an SSH public key.
-So a signer is referenced like any other particle.
+For any file, a CID (IPFS hash) can be computed.
+The CID identifies the file uniquely,
+and the file can be retrieved by its CID from the IPFS network.
+A file becomes a **particle** of the cybergraph
+when its CID is used in an edge of a cyberlink.
+A particle is one name for two things:
+a **vertex** of the graph and the bytes of the file under its CID.
+
+A particle carries meaning:
+the meaning occurs in the reader when the reader reads the content of the particle.
+The store `particles/` and the `particle` commands hold any published file,
+also a file that no link names yet:
+a file is published so that a link can name it.
+
+A **link** is a cyberlink:
+a statement by a **signer**, "these two particles are connected".
+Its pair `cid_from → cid_to` is an edge, directed from `cid_from` to `cid_to`.
+A signer is an agent (for example, a human, an AI) that created and signed the cyberlink.
+The identity of a signer is only the CID of the SSH public key of the signer,
+so the signer can be referenced like any CID.
 The cybergraph of a signer is a git repository of link records.
 
 The design goal is cheap portability of each link:
@@ -118,8 +113,8 @@ so an independent implementation reproduces the same CIDs.
   This is because the store holds bytes that a writer decided to put there,
   not bytes that a command computed on the way.
   Also, the write of a link points only at its two endpoints.
-  So `link add` reports `edge_cid` (the name of the file that it wrote) and **not** the CID of the cyberlink.
-  That CID addresses nothing until someone publishes its preimage.
+  So `link add` reports `edge_cid` (the name of the file that it wrote) and **not** the derived CID of the cyberlink.
+  This repo holds no file for that CID until someone publishes its preimage.
   `particle add-link A B S` publishes it,
   and `particle add-edge A B` does the same for the pair.
   The four confirm and deny verbs publish it themselves, because they mint it as their target.
@@ -130,15 +125,15 @@ so an independent implementation reproduces the same CIDs.
   So a second signer of the same edge writes nothing new, and a convention that mints the same pair writes nothing new.
 - **Triple guard**: the path IS the triple
   — the signer in the directory, the edge in the filename.
-  So a repeat of the same act goes to the same path.
+  So the same act, written a second time, goes to the same path.
   Then `link add` returns the record that is already there, unchanged, and does not write a second file
   — one act, one file.
-  This mirrors the consensus of bostrom, which rejected a duplicate cyberlink.
-  Re-assertion over time is a statement *about* the act (for example `convention claimed-at`),
+  This mirrors the consensus of Bostrom, which rejected a duplicate cyberlink.
+  A later statement of the same act is a statement *about* the act (for example `convention claimed-at`),
   not a second copy of the act.
   The no-op still checks the self-addressing and the canonical form of the file on disk first.
   So a corrupted file at that path fails loud,
-  and the command does not report it as a successful repeat.
+  and the command does not report it as a successful no-op.
 
 Example
 — the golden pair, the exact bytes of a link file (one line + `\n`, CID `QmUiARbMPT9WNXqvgb2BB9gWFXRiCEqD96AF5xebwNTCTT`):
@@ -149,7 +144,7 @@ Example
 
 Below is the triple record of the same act.
 This record is not a file that `link add` writes.
-It is the preimage that an act *about* this cyberlink publishes (CID `QmRyRXXRM7ztFTPiyXjDtra9ND2oU64iE2jcydwubW17Ze` — the derived address of the cyberlink):
+It is the preimage that an act *about* this cyberlink publishes (CID `QmRyRXXRM7ztFTPiyXjDtra9ND2oU64iE2jcydwubW17Ze` — the derived CID of the cyberlink):
 
 ```json
 {"cid_from":"QmUQUHEmv651XCBhiWUQpx2zf4PDts1aXL324ZFyV4QZPF","cid_to":"QmW9519sfmW2MvDb4TU4dKtiFAXm1UPDvE7JrMaBjprVHp","signer":"QmddrVz92VH3LqT2i7uXeK4AVh6LyU7zjDiLbSdChPsULr"}
@@ -222,11 +217,11 @@ and `--allow-missing` is the escape hatch for the legitimate case.
 This is a write-time check only.
 The read side (`link list`/`touching`/`tally`, `particle cat --optional`) still treats local absence as ordinary.
 This is because a cyberlink names CIDs, and the bytes do not need to be local.
-A reader looks at a CID that someone else already asserted.
+A reader looks at a CID that someone else already stated.
 A writer is the one who types the CID in.
 That is why the two sides differ.
 
-`--signer` publishes content too, because a signer is referenced like any other particle.
+`--signer` publishes content too, because the signer can be referenced like any CID.
 The command takes a CID v0 as the identity.
 The command publishes any other string under `particles/` as its own bytes,
 and the CID of those bytes becomes the signer.
@@ -248,7 +243,7 @@ That file is in `multiproofs/pubkeys/` and never in the particle store
 — the identity of this repo would fail that check.
 What the convenience does not do:
 a signer minted from content has no key behind it.
-So links that this signer asserts are local statements.
+So links that this signer states are local statements.
 These links fail the signer binding at `verify`, `bundle` and `import`.
 
 ## Signer repo layout
@@ -331,7 +326,7 @@ Four more verbs are not in the twelve.
 `repeat` publishes the bare edge again.
 bj002 names the repetition of an edge next to the conventions, but not as one of them.
 The reason is that a repetition puts no special CID in the source
-— no string exists that would go into `hash()`.
+— no record exists that would go into the source.
 `claimed-at`, `update-particle` and `translation-particle` are extensions of this repo:
 `claimed-at` states a time as an edge.
 Outside a seal, that edge is the only place where this format holds a time (see time semantics).
@@ -347,7 +342,7 @@ There are eighteen verbs and twelve conventions:
 `confirm` and `deny` are one convention each and two verbs each.
 The reason is that the split removes a name that hides its subject behind an optional argument.
 
-The name of a verb and its `op` word name the subject wherever the verb has a subject.
+The name of a verb and its convention word name the subject wherever the verb has a subject.
 These verbs name their subject: `confirm-edge`/`confirm-link`, `deny-edge`/`deny-link`, `update-edge`/`update-particle`.
 The verbs with only one possible subject also name it: `agree-particle`, `disagree-particle`, `quote-particle`, `author-particle`, `translation-particle`, `answer-edge`.
 The shape of the record does not name the subject:
@@ -381,12 +376,12 @@ The appendix of bj002 defines a derived CID by these same bytes.
 The one condition is that the encoding is the same for everyone.
 The two special cases in the appendix are only records:
 the edge address is `derive {cid_from: A, cid_to: B}`,
-the cyberlink's derived CID is `derive {cid_from: A, cid_to: B, signer: S}`.
+the derived CID of the cyberlink is `derive {cid_from: A, cid_to: B, signer: S}`.
 `tests/test_convention.nu` pins this byte format, with the same discipline as the record format
 — a change to it breaks every derived CID.
 The link *file* above IS the pair record under the same rule,
 so its self-address and the edge address are one CID.
-Only the double and the triple address an act (bj002 "Fundamentals").
+In bj002 ("Cyberlink and cybergraph"), the pair addresses *what* is stated, and the triple addresses the act.
 **`particle add-edge A B`** and **`particle add-link A B S`** are the half that stores.
 These two commands serialize the same two special-case records canonically and store the bytes.
 These two commands return the same CID that `derive` returns.
@@ -396,7 +391,7 @@ That record gives an address that no derivation produces.
 Nothing reports the wrong address, because the file is self-addressed in both cases.
 
 An instruction is in the *source* of its edge
-— a derived CID such as the CID of `{"op":"deny_edge"}` —
+— a special CID such as `{"op":"deny_edge"}` —
 so the source is opaque.
 To make the source readable, every convention publishes each record that it mints
 as a self-addressed file under `particles/`.
@@ -447,16 +442,16 @@ and the act that names it publishes it in the same way.
 as their subject.
 
 A source record has one of two shapes.
-A verdict (`confirm`, `deny`, `agree`, `disagree`) has a fixed source `{op}` and its subject in the target.
+An evaluation (`confirm`, `deny`, `agree`, `disagree`) has a fixed source `{op}` and its subject in the target.
 A relation has its subject in `about` and points to the other file.
 When the subject is an edge, `about` holds the address of the edge.
-This address is the same CID that a verdict on that edge targets.
+This address is the same CID that an evaluation of that edge targets.
 The address ties the act to that one edge,
 so an update or an answer needs no copy of the fields of the edge.
 
 ## Reading the graph
 
-An edge is opaque on purpose: `X → Y` says nothing about what X is.
+A CID is opaque: `X → Y` says nothing about what X is.
 bj002 tells how to read it back, in "Reading instructions"
 — dereference the source.
 This works because every convention publishes the record that it minted,
@@ -500,17 +495,20 @@ so the fast path cannot become a second implementation.
 If `rg` is not installed, the `--scan` path runs in any case.
 
 Counts stay separate and are never summed.
-Repeats and confirms are two signals.
-A repeat of an edge claims that its signer did the work independently.
-A confirm relies on whoever did the work.
+Repetition and `confirm_edge` are different signals,
+and work distinguishes them.
+Repetition needs work:
+only then does the signer state the same thing.
+`confirm_edge` is support from a signer who did not do the work.
+It relies on the one who did the work.
 So a reader reports two numbers,
 and the formula of bj002 keeps them apart as `f(repeats, confirms, denies, signer_weights, time_decay)`.
-Instructions make the distinction necessary.
+Where a signer cannot do the work personally,
+only confirmation remains.
 Several signers can propose an update from the one source `{"about":{"cid_from":A,"cid_to":B},"op":"update_edge"}`.
-Repeats cannot choose between the versions of these signers.
-The reason is that a repeat of the update of another signer claims that the signer of the repeat derived it independently.
-Confirms tell the proposals apart.
-A sum is a reading policy, and it belongs to the reader.
+If a signer repeats the update of another signer, the signer claims that they independently invented the same replacement.
+Thus the reader uses confirmations, not repetitions, to distinguish the versions that compete.
+A sum is a read policy, and it belongs to the reader.
 
 The aggregate is not the last step
 — it is the next particle.
@@ -529,7 +527,7 @@ So `signers` reads 1 in a fresh repo.
 and it keeps the distinction instead of removing it.
 The rows arrive separately,
 and each row carries the `signer` whose claim it is.
-So a combination of the rows — consensus, cross-signer tallies, dedup — stays a reading policy that the caller writes.
+So a combination of the rows — consensus, cross-signer tallies, dedup — stays a read policy that the caller writes.
 In the same way, `tally` never sums across positions.
 Also, the reader hashes every file that it opens back to the CID that names it,
 and that is the cost that remains:
@@ -683,7 +681,7 @@ Also, that time would still prove nothing.
 The one time that can be proved is the OTS anchor of the birth seal over the *signature*.
 The result reports it as `signer.endorsed`:
 "the signer endorsed this no later than Bitcoin block N".
-A link is an assertion by a signer,
+A link is a statement by a signer,
 so that is the claim.
 That claim is the one that must survive a key compromise.
 The reason is that after a revocation at time R, only a signature datable before R still has a meaning.
@@ -698,7 +696,7 @@ it does not mean that the endorsement is missing.
 There is deliberately **no second anchor**.
 nu-multiproof can also stamp the root statement.
 That stamp dates the bytes of the record
-but does not say who asserted them.
+but does not say who stated them.
 `seal` here always passes `--no-content-anchor` to suppress it.
 With two anchors, nothing would say which one dates the statement
 — both are true, and neither comes from the other on disk.
@@ -783,7 +781,7 @@ By default, the set also holds a copy under `particles/` of each end of the reco
 By default, it also holds a copy of every operand that an instruction preimage among those ends names, at any depth.
 When more than one signer holds the edge, `--signer` names whose act leaves.
 Without it, `bundle` refuses several candidates and never guesses.
-Without those bytes, an importer has the address of the instruction that a link states (e.g. `{"op":"agree_particle"}`), but not its preimage.
+Without those bytes, an importer has the special CID of the instruction that a link states (e.g. `{"op":"agree_particle"}`), but not its preimage.
 The importer can then decode the meaning of the edge only by a scan of `particles/` across every repo that it can reach.
 `--links-only` reduces the birth bundle to the record + certificate alone.
 (`--links-only` is a no-op for the re-export of an imported link.
@@ -807,11 +805,11 @@ A valid bundle goes intact into `imported/<signer-cid>/<edge-cid>/`.
 The bundle stays the authority of the link for authorship and birth time forever.
 The copy is read-only: a re-export passes it along unchanged.
 Import also writes a **custody receipt** at `receipts/<author-cid>/<edge-cid>.receipt.json`, outside the read-only copy and in the same layout as the links.
-The author directory and the edge name together address the act as unambiguously as the cyberlink CID.
+The author directory and the edge name together address the act as unambiguously as the derived CID of the cyberlink.
 If the edge alone were the key, it would collide as soon as the copy of the same edge from a second author arrives.
 The receipt is `{cid_from, cid_to, signer, custodian, received_at, files, prev, handoff}`.
 The first three fields spell out the cyberlink and do not address it.
-So `convention derive` over them recovers the CID of the cyberlink,
+So `convention derive` over them recovers the derived CID of the cyberlink,
 while the receipt itself needs nothing external to say what it is about.
 A receipt is not content-addressed,
 so a lone derived CID here would name an act whose preimage is somewhere else.
