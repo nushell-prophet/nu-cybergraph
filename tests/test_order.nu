@@ -568,6 +568,33 @@ def "backfill refuses a link git has never seen and writes nothing" [] {
     assert not ((order-dir $s.home) | path exists) "a refused backfill still stamped the committed half"
 }
 
+# A graph one level below its git root — one project of a monorepo. git
+# names the files in history from the git root, the backfill names the links
+# from the repo, and the two have to meet.
+@test
+def "backfill reads the history of a graph below the git root" [] {
+    let tmp_dir = $in.tmp_dir
+    let outer = $tmp_dir | path join outer
+    let repo = $outer | path join project
+    let key = $tmp_dir | path join key
+
+    mkdir $repo
+    ^git init --object-format=sha256 -q $outer
+    ^git -C $outer config user.name t
+    ^git -C $outer config user.email t@t
+    ^ssh-keygen -t ed25519 -f $key -N "" -q
+    ^git -C $outer config user.signingKey $key
+    init --repo $repo
+    let home = $repo | path join cybergraph
+    let added = link add $P1 $P2 --repo $repo --allow-missing
+
+    rm --recursive (order-dir $home)
+    ^git -C $outer add -- (link-path $home $added.record.signer $added.edge_cid)
+    ^git -C $outer commit -q -m "add one link"
+
+    assert equal (order backfill --repo $repo | get edge) [$added.edge_cid]
+}
+
 # Run once, never a migration path the format carries: a half-stamped graph is
 # a question about which half, and only its owner can answer it.
 @test

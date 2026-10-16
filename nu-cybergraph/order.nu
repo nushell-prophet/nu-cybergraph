@@ -87,8 +87,11 @@ export def list [
 # apart with nothing to configure (no path under the graph home can match it;
 # every one of them carries a `/`). `uniq-by` keeps the first, so a file added,
 # deleted and added again arrives when it first arrived.
+#
+# Why --relative: git names a file from the git root, and the links are named
+# from the repo, which can sit below it — one project of a monorepo.
 def arrival-times [repo_root: path graph: path]: nothing -> table {
-    let result = ^git -C $repo_root log --reverse --diff-filter=A --format=%cI --name-only -- ($graph | path relative-to $repo_root)
+    let result = ^git -C $repo_root log --reverse --diff-filter=A --relative --format=%cI --name-only -- ($graph | path relative-to $repo_root)
         | complete
 
     if $result.exit_code != 0 {
