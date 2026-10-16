@@ -63,7 +63,7 @@ use _validate.nu [ RFC3339_RE ]
 @example "the run, numbered and provisional" { nu-cybergraph order list }
 @example "what is not numbered yet" { nu-cybergraph order list | where provisional }
 export def list [
-    --repo: path # Repo root (default: git root of current directory)
+    --repo: path # Repo root (default: the nearest dir holding cybergraph/, up to the git root)
 ]: nothing -> table {
     let root = graph-root $repo
 
@@ -125,7 +125,7 @@ def arrival-times [repo_root: path graph: path]: nothing -> table {
 # refusal above gives: a half-stamped graph is a question about which half.
 @example "stamp a graph written before positions existed" { nu-cybergraph order backfill }
 export def backfill [
-    --repo: path # Repo root (default: git root of current directory)
+    --repo: path # Repo root (default: the nearest dir holding cybergraph/, up to the git root)
 ]: nothing -> table {
     let root = graph-root $repo
     let repo_root = $root | path dirname

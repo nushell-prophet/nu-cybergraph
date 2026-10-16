@@ -23,7 +23,7 @@ use _layout.nu [ strays ]
 # signs whatever is committed under the graph home, so a file the layout cannot
 # describe is one the signer would be attesting without having checked it.
 export def main [
-    --repo: path # Repo root (default: git root of current directory)
+    --repo: path # Repo root (default: the nearest dir holding cybergraph/, up to the git root)
 ]: nothing -> table {
     strays (graph-home $repo)
 }

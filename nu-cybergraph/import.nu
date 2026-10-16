@@ -22,7 +22,7 @@ use _verify-helpers.nu [ verify-bundle ]
 # verification failure and on a handoff addressed to another signer.
 export def main [
     bundle: path # Portable bundle directory to import
-    --repo: path # Destination repo root (default: git root of current directory)
+    --repo: path # Destination repo root (default: the nearest dir holding cybergraph/, up to the git root)
 ]: nothing -> record {
     let root = graph-root $repo
     let v = verify-bundle $bundle

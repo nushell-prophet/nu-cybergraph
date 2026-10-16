@@ -63,7 +63,7 @@ def assert-frozen-proof [proof: path leaf: string]: nothing -> nothing {
 # and run — it only fixes the wording, so a seal does not land under "wip" or
 # split over three commits.
 export def main [
-    --repo: path # Target git repo root (default: git root of current directory)
+    --repo: path # Target repo root (default: the nearest dir holding cybergraph/, up to the git root)
     --no-stamp # Skip OTS timestamping (stamping is the point — tests only)
     --response-file: path # TESTS ONLY: take the calendar's answer from this file instead of posting the digest
     --propose-commit # Leave a `git commit` for this seal in the prompt, unrun
@@ -464,7 +464,7 @@ export def main [
 # about the repo, not about the row it is discovered on.
 @example "list the seal chain" { nu-cybergraph seal chain }
 export def chain [
-    --repo: path # Repo root (default: git root of current directory)
+    --repo: path # Repo root (default: the nearest dir holding cybergraph/, up to the git root)
 ]: nothing -> table {
     let root = graph-root $repo
     let dir = seals-dir $root

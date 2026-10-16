@@ -273,8 +273,14 @@ Note that GitHub does not host sha256 repos
 This repo is on GitHub,
 so its own history is sha1.
 
-**Graph home.** The graph home is always `<git-root>/cybergraph/`
+**Graph home.** The graph home is always `<repo>/cybergraph/`
 — `init` creates it, and every command finds it.
+Without `--repo`, a command takes the nearest directory that holds `cybergraph/`,
+from the current directory up to the git root,
+so one git repo can hold several graphs, one per project.
+With none, it takes the git root.
+`init` always takes the current directory,
+and refuses to run inside a graph home.
 Particles are referenced by CID, not by path.
 So their bytes never need to be under the graph home
 — or in the repo at all.

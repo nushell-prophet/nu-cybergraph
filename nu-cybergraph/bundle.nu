@@ -326,7 +326,7 @@ def assemble-bundle [root: path out: path edge_cid: string resolved: record act:
 # signed handoff.
 export def main [
     edge_cid: string # Edge CID: authored here (certs/) or imported (imported/*/)
-    --repo: path # Source repo root (default: git root of current directory)
+    --repo: path # Source repo root (default: the nearest dir holding cybergraph/, up to the git root)
     --out: path # Bundle destination (default: exports/<signer>/<edge-cid>)
     --to: string # Recipient signer CID — adds a signed handoff (default: none, an open export)
     --signer: string # Whose act to export, when more than one signer holds this edge

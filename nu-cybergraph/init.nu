@@ -8,7 +8,7 @@ use _deps/init.nu [ init ]
 # `init` here is nu-multiproof's init (pubkey registration in
 # multiproofs/pubkeys/); this wrapper adds the cybergraph layout on top.
 export def main [
-    --repo: path # Target git repo root (default: git root of current directory)
+    --repo: path # Target repo root (default: the current directory; with --co-signer, the nearest dir holding cybergraph/, up to the git root)
     --pubkey: path # SSH public key to register (default: signing key from git config)
     --co-signer: path # SSH public key to add BESIDE the identity, without establishing one
 ]: nothing -> nothing {
@@ -18,7 +18,7 @@ export def main [
     # The graph always lives in <repo>/cybergraph/ — one service dir in an
     # arbitrary-shaped repo (see graph-root).
     if $co_signer == null {
-        mkdir ((repo-root $repo) | path join cybergraph)
+        mkdir ((repo-root $repo --init) | path join cybergraph)
     }
     let root = graph-root $repo
     let pubkeys_dir = $root | path join multiproofs pubkeys

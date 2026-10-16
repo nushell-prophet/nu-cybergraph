@@ -22,7 +22,7 @@ use _verify-helpers.nu [ verify-bundle ]
 export def main [
     edge_cid: string # Edge CID — the address of the pair, the filename of every copy
     --signer: string # Only this signer's act (default: every copy held)
-    --repo: path # Repo root (default: git root of current directory)
+    --repo: path # Repo root (default: the nearest dir holding cybergraph/, up to the git root)
 ]: nothing -> table {
     let root = graph-root $repo
     let held = signer-dirs $root

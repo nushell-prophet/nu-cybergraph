@@ -31,7 +31,7 @@ export def add [
     cid_to: string # target vertex: a CID v0, a path to publish, or content to publish as a particle
     --signer: string # signer key: a CID v0, or a registered key file (default: this repo's own identity, the key it signs with)
     --keyless-signer: string # signer for a graph with no key pairs: this name, published as a particle (instead of --signer)
-    --repo: path # Target repo root (default: git root of current directory)
+    --repo: path # Target repo root (default: the nearest dir holding cybergraph/, up to the git root)
     --allow-missing # skip the local-file check on a CID endpoint (see resolve-particle)
     --literal # treat a text endpoint as literal content even if it names a path
 ]: nothing -> record {
@@ -163,7 +163,7 @@ def statement [index: record l: record]: nothing -> record {
 # distinction aggregation rests on.
 @example "every edge update with the record that states it" { link list | where op == "update_edge" | select link_cid src cid_to }
 export def list [
-    --repo: path # Repo root (default: git root of current directory)
+    --repo: path # Repo root (default: the nearest dir holding cybergraph/, up to the git root)
 ]: nothing -> table {
     let root = graph-root $repo
     let index = store-index $root
@@ -187,7 +187,7 @@ export def list [
 @example "every link a landed bundle carries" { link imported }
 @example "what one signer said, decoded" { link imported | where signer == QmddrVz92VH3LqT2i7uXeK4AVh6LyU7zjDiLbSdChPsULr }
 export def imported [
-    --repo: path # Repo root (default: git root of current directory)
+    --repo: path # Repo root (default: the nearest dir holding cybergraph/, up to the git root)
 ]: nothing -> table {
     let root = graph-root $repo
 
@@ -221,7 +221,7 @@ export def imported [
 @example "everything said about a particle" { link touching QmQXupHE6VPzpoBTivNXAAGwigJE68n4TeVUSxYnFL78GV }
 export def touching [
     cid: string # CID v0 of the particle or record the statements are about
-    --repo: path # Repo root (default: git root of current directory)
+    --repo: path # Repo root (default: the nearest dir holding cybergraph/, up to the git root)
     --scan # read every record instead of narrowing with rg (same answer, slower)
 ]: nothing -> table {
     if $cid !~ $CID_V0_RE {
@@ -261,7 +261,7 @@ export def touching [
 @example "how the graph speaks about a particle" { link tally QmQXupHE6VPzpoBTivNXAAGwigJE68n4TeVUSxYnFL78GV }
 export def tally [
     cid: string # CID v0 of the particle or record the statements are about
-    --repo: path # Repo root (default: git root of current directory)
+    --repo: path # Repo root (default: the nearest dir holding cybergraph/, up to the git root)
     --scan # read every record instead of narrowing with rg (same answer, slower)
 ]: nothing -> table {
     touching $cid --repo $repo --scan=$scan

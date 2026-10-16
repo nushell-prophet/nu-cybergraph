@@ -27,7 +27,7 @@ This document uses MUST, MUST NOT, SHOULD and MAY as RFC 2119 defines them.
 | edge | the pair `{cid_from, cid_to}`: the unit of the operational layer. All signers that assert the edge share its one address |
 | link, cyberlink | an edge that one signer asserts: the triple. Its file holds the pair, and the path holds the signer |
 | signer | an identity: the CID v0 of an SSH public key file in canonical form |
-| graph home | `<git-root>/cybergraph/`: the whole graph of one signer |
+| graph home | `<repo>/cybergraph/`: the whole graph of one signer |
 | seal | one moment when the signer signs: manifest → merkle root → SSH signature → OTS stamp |
 | birth certificate | the inclusion proof from the first seal that catalogued a link, frozen |
 | bundle | a directory that holds all that is necessary to verify one link without the origin repo |
@@ -275,7 +275,11 @@ one line per key: `<fingerprint> namespaces="file" <type> <base64>`.
 
 ## 3. Repository layout
 
-The graph home is always `<git-root>/cybergraph/`.
+The graph home is always `<repo>/cybergraph/`.
+`<repo>` is a directory inside a git repo, often its root.
+The reference implementation takes `--repo`,
+and by default it takes the nearest directory that holds `cybergraph/`,
+from the current directory up to the git root.
 A link names a particle.
 But the bytes of that particle do not have to be there, or in the repo at all.
 Links name CIDs, not paths.

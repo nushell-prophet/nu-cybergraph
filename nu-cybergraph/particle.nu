@@ -30,7 +30,7 @@ use _validate.nu [ CID_V0_RE ]
 @example "publish markdown, keep the extension" { particle add path/to/doc.md --ext md }
 export def add [
     content?: string # content to publish, or a path to open and publish; omit to pipe content in
-    --repo: path # Target repo root (default: git root of current directory)
+    --repo: path # Target repo root (default: the nearest dir holding cybergraph/, up to the git root)
     --ext: string # filename extension for the store file (e.g. md); the address stays the bare CID
     --literal # treat the argument as literal content even if it names a path
 ]: [nothing -> string string -> string binary -> string] {
@@ -79,7 +79,7 @@ export def add [
 export def "add-edge" [
     cid_from: string # source vertex: a CID v0, a path to publish, or content to publish as a particle
     cid_to: string # target vertex: a CID v0, a path to publish, or content to publish as a particle
-    --repo: path # Target repo root (default: git root of current directory)
+    --repo: path # Target repo root (default: the nearest dir holding cybergraph/, up to the git root)
     --allow-missing # skip the local-file check on a CID operand (see resolve-particle)
     --literal # treat a text operand as literal content even if it names a path
 ]: nothing -> string {
@@ -100,7 +100,7 @@ export def "add-link" [
     cid_from: string # source vertex: a CID v0, a path to publish, or content to publish as a particle
     cid_to: string # target vertex: a CID v0, a path to publish, or content to publish as a particle
     signer: string # signer whose cyberlink this is: a CID v0, a key file, or a keyless name published as a particle
-    --repo: path # Target repo root (default: git root of current directory)
+    --repo: path # Target repo root (default: the nearest dir holding cybergraph/, up to the git root)
     --allow-missing # skip the local-file check on a CID operand (see resolve-particle)
     --literal # treat a text operand as literal content even if it names a path
 ]: nothing -> string {
@@ -127,7 +127,7 @@ export def "add-link" [
 @example "read it, or null if this repo does not hold it" { particle cat QmQXup… --optional }
 export def cat [
     cid: string # CID v0 of the file (Qm + 44 chars)
-    --repo: path # Target repo root (default: git root of current directory)
+    --repo: path # Target repo root (default: the nearest dir holding cybergraph/, up to the git root)
     --optional # return null when the store holds no file for this CID, instead of failing
 ]: nothing -> any {
     if $cid !~ $CID_V0_RE {
@@ -160,7 +160,7 @@ export def cat [
 @example "what the store holds that git does not" { particle uncommitted }
 @example "leave the commit for the reachable ones in the prompt" { particle uncommitted --propose-commit }
 export def uncommitted [
-    --repo: path # Target repo root (default: git root of current directory)
+    --repo: path # Target repo root (default: the nearest dir holding cybergraph/, up to the git root)
     --propose-commit # Leave a `git add` + `git commit` for these files in the prompt, unrun
 ]: nothing -> table {
     let root = graph-root $repo
