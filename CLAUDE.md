@@ -56,7 +56,7 @@ so a check is never what gets dropped for simplicity.
 
 ## nu-multiproof lives inside this repo
 
-`_deps/` is the single resolution point for nu-multiproof (`nu-multiproof/`)
+`nu-cybergraph/_deps/` is the single resolution point for nu-multiproof (`nu-multiproof/`)
 — one shim file per dependency,
 so a `use` site parses only the subtree it needs (nushell re-parses a module at every use site; a single-file facade charged every importer for all six deps).
 One clone carries the exact nu-multiproof this repo was tested with,
