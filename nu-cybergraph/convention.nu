@@ -141,7 +141,8 @@ def address [root: path index: record expr: any allow_missing: bool literal: boo
 def edge [
     src: any # source address expression
     tgt: any # target address expression
-    signer: any # signer override or null
+    signer: any # signer key override or null
+    keyless_signer: any # keyless signer name or null
     repo: any # target repo or null
     allow_missing: bool # skip the local-file check on a CID operand
     literal: bool # treat a content operand as literal even if it names a path
@@ -150,10 +151,10 @@ def edge [
     # Same order as `link add`, for the same reason: `address` publishes every
     # record it mints, so a signer resolved after it would leave those files
     # behind when the repo cannot name one. Through `resolve-signer` and not an
-    # inline own-signer call, so a bare-string signer means the same thing on
-    # both write paths. Resolved here and passed down as a CID, so `link add`
+    # inline own-signer call, so a --keyless-signer name means the same thing
+    # on both write paths. Resolved here and passed down as a CID, so `link add`
     # takes it as given rather than asking a second time.
-    let signer_cid = resolve-signer $root $signer
+    let signer_cid = resolve-signer $root $signer $keyless_signer
     let index = store-index $root
 
     link add (address $root $index $src $allow_missing $literal) (address $root $index $tgt $allow_missing $literal) --signer $signer_cid --repo $repo --allow-missing
@@ -169,12 +170,13 @@ def edge [
 export def repeat [
     cid_from: string # source vertex of the edge being repeated
     cid_to: string # target vertex of the edge being repeated
-    --signer: string
+    --signer: string # signer key: a CID v0, or a registered key file
+    --keyless-signer: string # signer with no key behind it, published as a particle
     --repo: path
     --allow-missing # skip the local-file check on a CID operand (see resolve-particle)
     --literal # treat a content operand as literal even if it names a path (see resolve-arg-bytes)
 ]: nothing -> record {
-    edge $cid_from $cid_to $signer $repo $allow_missing $literal
+    edge $cid_from $cid_to $signer $keyless_signer $repo $allow_missing $literal
 }
 
 # What the four verbs below speak about — the edge, or one signer's cyberlink —
@@ -206,15 +208,16 @@ export def repeat [
 export def "confirm-edge" [
     cid_from: string # source of the edge being confirmed
     cid_to: string # target of the edge being confirmed
-    --signer: string
+    --signer: string # signer key: a CID v0, or a registered key file
+    --keyless-signer: string # signer with no key behind it, published as a particle
     --repo: path
     --allow-missing # skip the local-file check on a CID operand (see resolve-particle)
     --literal # treat a content operand as literal even if it names a path (see resolve-arg-bytes)
 ]: nothing -> record {
     let root = graph-root $repo
-    let signer_cid = resolve-signer $root $signer
+    let signer_cid = resolve-signer $root $signer $keyless_signer
 
-    edge {op: "confirm_edge"} (publish-edge $root $cid_from $cid_to $allow_missing $literal) $signer_cid $repo $allow_missing $literal
+    edge {op: "confirm_edge"} (publish-edge $root $cid_from $cid_to $allow_missing $literal) $signer_cid null $repo $allow_missing $literal
 }
 
 # Confirm a cyberlink: {op: confirm_link} → {cid_from: A, cid_to: B, signer: S}
@@ -226,15 +229,16 @@ export def "confirm-link" [
     cid_from: string # source of the edge the cyberlink asserts
     cid_to: string # target of the edge the cyberlink asserts
     confirmed_signer: string # signer of the cyberlink being confirmed
-    --signer: string
+    --signer: string # signer key: a CID v0, or a registered key file
+    --keyless-signer: string # signer with no key behind it, published as a particle
     --repo: path
     --allow-missing # skip the local-file check on a CID operand (see resolve-particle)
     --literal # treat a content operand as literal even if it names a path (see resolve-arg-bytes)
 ]: nothing -> record {
     let root = graph-root $repo
-    let signer_cid = resolve-signer $root $signer
+    let signer_cid = resolve-signer $root $signer $keyless_signer
 
-    edge {op: "confirm_link"} (publish-link $root $cid_from $cid_to $confirmed_signer $allow_missing $literal) $signer_cid $repo $allow_missing $literal
+    edge {op: "confirm_link"} (publish-link $root $cid_from $cid_to $confirmed_signer $allow_missing $literal) $signer_cid null $repo $allow_missing $literal
 }
 
 # Deny an edge: {op: deny_edge} → {cid_from: A, cid_to: B} disputes the
@@ -244,15 +248,16 @@ export def "confirm-link" [
 export def "deny-edge" [
     cid_from: string # source of the disputed edge
     cid_to: string # target of the disputed edge
-    --signer: string
+    --signer: string # signer key: a CID v0, or a registered key file
+    --keyless-signer: string # signer with no key behind it, published as a particle
     --repo: path
     --allow-missing # skip the local-file check on a CID operand (see resolve-particle)
     --literal # treat a content operand as literal even if it names a path (see resolve-arg-bytes)
 ]: nothing -> record {
     let root = graph-root $repo
-    let signer_cid = resolve-signer $root $signer
+    let signer_cid = resolve-signer $root $signer $keyless_signer
 
-    edge {op: "deny_edge"} (publish-edge $root $cid_from $cid_to $allow_missing $literal) $signer_cid $repo $allow_missing $literal
+    edge {op: "deny_edge"} (publish-edge $root $cid_from $cid_to $allow_missing $literal) $signer_cid null $repo $allow_missing $literal
 }
 
 # Deny a cyberlink: {op: deny_link} → {cid_from: A, cid_to: B, signer: S}
@@ -264,15 +269,16 @@ export def "deny-link" [
     cid_from: string # source of the edge the disputed cyberlink asserts
     cid_to: string # target of the edge the disputed cyberlink asserts
     disputed_signer: string # signer of the disputed cyberlink
-    --signer: string
+    --signer: string # signer key: a CID v0, or a registered key file
+    --keyless-signer: string # signer with no key behind it, published as a particle
     --repo: path
     --allow-missing # skip the local-file check on a CID operand (see resolve-particle)
     --literal # treat a content operand as literal even if it names a path (see resolve-arg-bytes)
 ]: nothing -> record {
     let root = graph-root $repo
-    let signer_cid = resolve-signer $root $signer
+    let signer_cid = resolve-signer $root $signer $keyless_signer
 
-    edge {op: "deny_link"} (publish-link $root $cid_from $cid_to $disputed_signer $allow_missing $literal) $signer_cid $repo $allow_missing $literal
+    edge {op: "deny_link"} (publish-link $root $cid_from $cid_to $disputed_signer $allow_missing $literal) $signer_cid null $repo $allow_missing $literal
 }
 
 # Update an edge: {about: {cid_from: A, cid_to: B}, op: update_edge} → C marks
@@ -285,15 +291,16 @@ export def "update-edge" [
     cid_from: string # source of the original edge
     cid_to: string # original target being replaced
     cid_new: string # the new target
-    --signer: string
+    --signer: string # signer key: a CID v0, or a registered key file
+    --keyless-signer: string # signer with no key behind it, published as a particle
     --repo: path
     --allow-missing # skip the local-file check on a CID operand (see resolve-particle)
     --literal # treat a content operand as literal even if it names a path (see resolve-arg-bytes)
 ]: nothing -> record {
     let root = graph-root $repo
-    let signer_cid = resolve-signer $root $signer
+    let signer_cid = resolve-signer $root $signer $keyless_signer
 
-    edge {about: (publish-edge $root $cid_from $cid_to $allow_missing $literal) op: "update_edge"} $cid_new $signer_cid $repo $allow_missing $literal
+    edge {about: (publish-edge $root $cid_from $cid_to $allow_missing $literal) op: "update_edge"} $cid_new $signer_cid null $repo $allow_missing $literal
 }
 
 # Update a particle: {about: B, op: update_particle} → C — "C is the version
@@ -320,12 +327,13 @@ export def "update-edge" [
 export def "update-particle" [
     superseded: string # the version being replaced
     replacement: string # the version replacing it
-    --signer: string
+    --signer: string # signer key: a CID v0, or a registered key file
+    --keyless-signer: string # signer with no key behind it, published as a particle
     --repo: path
     --allow-missing # skip the local-file check on a CID operand (see resolve-particle)
     --literal # treat a content operand as literal even if it names a path (see resolve-arg-bytes)
 ]: nothing -> record {
-    edge {about: $superseded op: "update_particle"} $replacement $signer $repo $allow_missing $literal
+    edge {about: $superseded op: "update_particle"} $replacement $signer $keyless_signer $repo $allow_missing $literal
 }
 
 # Quote: {about: A, op: quote_particle} → B states that B is a faithful excerpt of A
@@ -335,12 +343,13 @@ export def "update-particle" [
 export def "quote-particle" [
     about: string # the quoted source
     excerpt: string # the excerpt
-    --signer: string
+    --signer: string # signer key: a CID v0, or a registered key file
+    --keyless-signer: string # signer with no key behind it, published as a particle
     --repo: path
     --allow-missing # skip the local-file check on a CID operand (see resolve-particle)
     --literal # treat a content operand as literal even if it names a path (see resolve-arg-bytes)
 ]: nothing -> record {
-    edge {about: $about op: "quote_particle"} $excerpt $signer $repo $allow_missing $literal
+    edge {about: $about op: "quote_particle"} $excerpt $signer $keyless_signer $repo $allow_missing $literal
 }
 
 # Translation: {about: A, op: translation_particle} → B states that B says in another
@@ -357,12 +366,13 @@ export def "quote-particle" [
 export def "translation-particle" [
     original: string # the text translated from
     translated: string # the text translated into another language
-    --signer: string
+    --signer: string # signer key: a CID v0, or a registered key file
+    --keyless-signer: string # signer with no key behind it, published as a particle
     --repo: path
     --allow-missing # skip the local-file check on a CID operand (see resolve-particle)
     --literal # treat a content operand as literal even if it names a path (see resolve-arg-bytes)
 ]: nothing -> record {
-    edge {about: $original op: "translation_particle"} $translated $signer $repo $allow_missing $literal
+    edge {about: $original op: "translation_particle"} $translated $signer $keyless_signer $repo $allow_missing $literal
 }
 
 # Agree: {op: agree_particle} → B — "claim B is true". Gives an opinion about a
@@ -371,12 +381,13 @@ export def "translation-particle" [
 @example "agree with claim B" { convention agree-particle QmB… }
 export def "agree-particle" [
     cid: string # the particle being agreed with
-    --signer: string
+    --signer: string # signer key: a CID v0, or a registered key file
+    --keyless-signer: string # signer with no key behind it, published as a particle
     --repo: path
     --allow-missing # skip the local-file check on a CID operand (see resolve-particle)
     --literal # treat a content operand as literal even if it names a path (see resolve-arg-bytes)
 ]: nothing -> record {
-    edge {op: "agree_particle"} $cid $signer $repo $allow_missing $literal
+    edge {op: "agree_particle"} $cid $signer $keyless_signer $repo $allow_missing $literal
 }
 
 # Disagree: {op: disagree_particle} → B — "claim B is false". The other axis from
@@ -385,12 +396,13 @@ export def "agree-particle" [
 @example "disagree with claim B" { convention disagree-particle QmB… }
 export def "disagree-particle" [
     cid: string # the particle being disagreed with
-    --signer: string
+    --signer: string # signer key: a CID v0, or a registered key file
+    --keyless-signer: string # signer with no key behind it, published as a particle
     --repo: path
     --allow-missing # skip the local-file check on a CID operand (see resolve-particle)
     --literal # treat a content operand as literal even if it names a path (see resolve-arg-bytes)
 ]: nothing -> record {
-    edge {op: "disagree_particle"} $cid $signer $repo $allow_missing $literal
+    edge {op: "disagree_particle"} $cid $signer $keyless_signer $repo $allow_missing $literal
 }
 
 # Argument for: {about: X, op: pro} → B — "B is an argument for X". X is any
@@ -400,12 +412,13 @@ export def "disagree-particle" [
 export def pro [
     about: string # what the argument is for (any CID)
     argument: string # the argument content
-    --signer: string
+    --signer: string # signer key: a CID v0, or a registered key file
+    --keyless-signer: string # signer with no key behind it, published as a particle
     --repo: path
     --allow-missing # skip the local-file check on a CID operand (see resolve-particle)
     --literal # treat a content operand as literal even if it names a path (see resolve-arg-bytes)
 ]: nothing -> record {
-    edge {about: $about op: "pro"} $argument $signer $repo $allow_missing $literal
+    edge {about: $about op: "pro"} $argument $signer $keyless_signer $repo $allow_missing $literal
 }
 
 # Argument against: {about: X, op: con} → B — "B is an argument against X".
@@ -414,12 +427,13 @@ export def pro [
 export def con [
     about: string # what the argument is against (any CID)
     argument: string # the argument content
-    --signer: string
+    --signer: string # signer key: a CID v0, or a registered key file
+    --keyless-signer: string # signer with no key behind it, published as a particle
     --repo: path
     --allow-missing # skip the local-file check on a CID operand (see resolve-particle)
     --literal # treat a content operand as literal even if it names a path (see resolve-arg-bytes)
 ]: nothing -> record {
-    edge {about: $about op: "con"} $argument $signer $repo $allow_missing $literal
+    edge {about: $about op: "con"} $argument $signer $keyless_signer $repo $allow_missing $literal
 }
 
 # Question: {about: X, op: question} → Q — "Q is a question about X". X is any
@@ -429,12 +443,13 @@ export def con [
 export def question [
     about: string # what the question is about (any CID)
     question: string # the question content
-    --signer: string
+    --signer: string # signer key: a CID v0, or a registered key file
+    --keyless-signer: string # signer with no key behind it, published as a particle
     --repo: path
     --allow-missing # skip the local-file check on a CID operand (see resolve-particle)
     --literal # treat a content operand as literal even if it names a path (see resolve-arg-bytes)
 ]: nothing -> record {
-    edge {about: $about op: "question"} $question $signer $repo $allow_missing $literal
+    edge {about: $about op: "question"} $question $signer $keyless_signer $repo $allow_missing $literal
 }
 
 # Answer: {about: {cid_from: {about: X, op: question}, cid_to: Q}, op: answer_edge}
@@ -447,16 +462,17 @@ export def "answer-edge" [
     about: string # what the question is about
     question: string # the question content
     answer: string # the answer content
-    --signer: string
+    --signer: string # signer key: a CID v0, or a registered key file
+    --keyless-signer: string # signer with no key behind it, published as a particle
     --repo: path
     --allow-missing # skip the local-file check on a CID operand (see resolve-particle)
     --literal # treat a content operand as literal even if it names a path (see resolve-arg-bytes)
 ]: nothing -> record {
     let root = graph-root $repo
-    let signer_cid = resolve-signer $root $signer
+    let signer_cid = resolve-signer $root $signer $keyless_signer
     let asked = address $root (store-index $root) {about: $about op: "question"} $allow_missing $literal
 
-    edge {about: (publish-edge $root $asked $question $allow_missing $literal) op: "answer_edge"} $answer $signer_cid $repo $allow_missing $literal
+    edge {about: (publish-edge $root $asked $question $allow_missing $literal) op: "answer_edge"} $answer $signer_cid null $repo $allow_missing $literal
 }
 
 # Authorship: {about: X, op: author_particle} → P — "the author of particle X is P". The
@@ -467,12 +483,13 @@ export def "answer-edge" [
 export def "author-particle" [
     content: string # the ported particle
     author_id: string # CID of the author's identifier
-    --signer: string
+    --signer: string # signer key: a CID v0, or a registered key file
+    --keyless-signer: string # signer with no key behind it, published as a particle
     --repo: path
     --allow-missing # skip the local-file check on a CID operand (see resolve-particle)
     --literal # treat a content operand as literal even if it names a path (see resolve-arg-bytes)
 ]: nothing -> record {
-    edge {about: $content op: "author_particle"} $author_id $signer $repo $allow_missing $literal
+    edge {about: $content op: "author_particle"} $author_id $signer $keyless_signer $repo $allow_missing $literal
 }
 
 # Identity: {about: P1, op: same} → P2 — "P1 and P2 name one entity" (the
@@ -483,12 +500,13 @@ export def "author-particle" [
 export def same [
     name_from: string # one name of the entity
     name_to: string # another name of the same entity
-    --signer: string
+    --signer: string # signer key: a CID v0, or a registered key file
+    --keyless-signer: string # signer with no key behind it, published as a particle
     --repo: path
     --allow-missing # skip the local-file check on a CID operand (see resolve-particle)
     --literal # treat a content operand as literal even if it names a path (see resolve-arg-bytes)
 ]: nothing -> record {
-    edge {about: $name_from op: "same"} $name_to $signer $repo $allow_missing $literal
+    edge {about: $name_from op: "same"} $name_to $signer $keyless_signer $repo $allow_missing $literal
 }
 
 # Claimed time: {about: X, op: claimed_at} → T — "I claim X's time is T". X is
@@ -501,7 +519,8 @@ export def same [
 export def claimed-at [
     about: string # the CID whose time is claimed
     timestamp?: string # RFC 3339 claimed time (default: now, UTC)
-    --signer: string
+    --signer: string # signer key: a CID v0, or a registered key file
+    --keyless-signer: string # signer with no key behind it, published as a particle
     --repo: path
     --allow-missing # skip the local-file check on a CID operand (see resolve-particle)
     --literal # treat a content operand as literal even if it names a path (see resolve-arg-bytes)
@@ -519,5 +538,5 @@ export def claimed-at [
     try { $t | into datetime | ignore } catch {
         error make {msg: $"claimed time is not a real calendar date: ($t | to json)"}
     }
-    edge {about: $about op: "claimed_at"} $t $signer $repo $allow_missing $literal
+    edge {about: $about op: "claimed_at"} $t $signer $keyless_signer $repo $allow_missing $literal
 }

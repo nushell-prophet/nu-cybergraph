@@ -7,6 +7,7 @@ use ../nu-cybergraph/convention.nu
 use ../nu-cybergraph/_derive.nu [ derive ]
 use ../nu-cybergraph/_layout.nu [ particles-dir particle-path ]
 use ../nu-cybergraph/_deps/cid-v0.nu [ cid-v0 ]
+use ../nu-cybergraph/_deps/pubkey.nu [ pubkey ]
 
 # Same fixture CIDs as test_convention.nu; plain --repo dir, fixed signer,
 # so everything runs offline with no git/ssh/init.
@@ -281,43 +282,106 @@ def "link add publishes nothing when the repo has no signer identity" [] {
     assert not ((particles-dir $in.root) | path exists)
 }
 
-# --signer publishes content, so an identity can be named by its bytes and not
-# only by an address the operator computed elsewhere. What it is for: several
-# signers in one repo, which `init` cannot give — it registers exactly one key.
+# A key registered the way `init` registers one: its canonical public line in
+# multiproofs/pubkeys/. Returns the key path and the identity CID it signs as.
+def registered-key [tmp: path root: path]: nothing -> record {
+    let key = $tmp | path join "signer-key"
+    let pubkeys = $root | path join multiproofs pubkeys
+
+    ^ssh-keygen -t ed25519 -f $key -N "" -q
+    mkdir $pubkeys
+    open --raw $"($key).pub" | pubkey canonical | save --raw ($pubkeys | path join "signer.pub")
+    {key: $key identity: (open --raw ($pubkeys | path join "signer.pub") | into binary | cid-v0)}
+}
+
+# --keyless-signer publishes a keyless name, so an identity can be named by its
+# bytes and not only by an address the operator computed elsewhere. What it is
+# for: several signers in one repo, which `init` cannot give — it registers
+# exactly one key.
 @test
-def "link add publishes a bare-string signer as a particle" [] {
+def "link add publishes a keyless signer name as a particle" [] {
     let tmp = $in.tmp
-    let r = link add "cyber" "bostrom" --repo $tmp --signer "alice" | get record
+    let r = link add "cyber" "bostrom" --repo $tmp --keyless-signer "alice" | get record
 
     assert equal $r.signer ("alice" | into binary | cid-v0)
     assert equal (open --raw (particle-path $in.root $r.signer)) "alice"
 }
 
 # The convention path resolves the signer itself, before `address` publishes
-# the operand records, so a bare-string signer means the same thing there.
+# the operand records, so a --keyless-signer name means the same thing there.
 @test
-def "convention verbs publish a bare-string signer as a particle" [] {
+def "convention verbs publish a keyless signer name as a particle" [] {
     let tmp = $in.tmp
-    let r = convention agree-particle "cyber" --repo $tmp --signer "alice" | get record
+    let r = convention agree-particle "cyber" --repo $tmp --keyless-signer "alice" | get record
 
     assert equal $r.signer ("alice" | into binary | cid-v0)
 }
 
-# A signer names an identity, never a file: a name is published as its own
-# bytes whatever shape it has, so an ad-hoc one carrying a dot or a slash needs
-# no flag and cannot be mistaken for a mistyped path.
+# A name is published as its own bytes whatever shape it has, so one carrying a
+# dot or a slash needs no flag and is never read as a path.
 @test
-def "link add publishes a path-shaped signer as its own bytes" [] {
+def "a keyless signer name with a dot or a slash is published as its own bytes" [] {
+    let named = link add "cyber" "prophet" --repo $in.tmp --keyless-signer "agent-1.v2/x" | get record
+
+    assert equal $named.signer ("agent-1.v2/x" | into binary | cid-v0)
+}
+
+# The case that made the split: a key file given by its absolute path
+# must sign as the key and not as the text of that path.
+@test
+def "a registered key file given to --signer signs as its identity" [] {
+    let k = registered-key $in.tmp $in.root
+    let by_path = link add "cyber" "bostrom" --repo $in.tmp --signer $"($k.key).pub" | get record
+
+    assert equal $by_path.signer $k.identity
+    assert not ((particle-path $in.root ($"($k.key).pub" | into binary | cid-v0)) | path exists) "the path was published as text"
+}
+
+@test
+def "a key file that is not registered is refused by --signer" [] {
     let tmp = $in.tmp
-    let key = $tmp | path join "other.pub"
+    registered-key $tmp $in.root | ignore
+    let other = $tmp | path join "other-key"
 
-    "ssh-ed25519 AAAA\n" | save --raw $key
-    let r = link add "cyber" "bostrom" --repo $tmp --signer $key | get record
+    ^ssh-keygen -t ed25519 -f $other -N "" -q
+    let err = try { link add "cyber" "bostrom" --repo $tmp --signer $"($other).pub"; null } catch {|e| $e.msg }
 
-    assert equal $r.signer ($key | into binary | cid-v0)
-    let named = link add "cyber" "prophet" --repo $tmp --signer "agent-1.v2" | get record
+    assert ($err | str contains $"the key ($other).pub is not registered")
+}
 
-    assert equal $named.signer ("agent-1.v2" | into binary | cid-v0)
+# A plain string is not a key: a link signed under it as a name never binds,
+# so --signer refuses it, and the refusal names the flag for a keyless name.
+@test
+def "a name that is not a key is refused by --signer and the refusal names keyless-signer" [] {
+    let err = try { link add "cyber" "bostrom" --repo $in.tmp --signer "alice"; null } catch {|e| $e.msg }
+
+    assert ($err | str contains "--keyless-signer alice")
+    assert not ((particles-dir $in.root) | path exists) "a refused signer left particles behind"
+}
+
+@test
+def "signer and keyless-signer together are refused before anything is published" [] {
+    let err = try { link add "cyber" "bostrom" --repo $in.tmp --signer $N --keyless-signer "alice"; null } catch {|e| $e.msg }
+
+    assert ($err | str contains "alternatives")
+    assert not ((particles-dir $in.root) | path exists) "a refused pair left particles behind"
+}
+
+# The pointing side of the same trap: a key file names that key, registered
+# here or not — confirming another signer's link needs no key of theirs here.
+@test
+def "a key file names its key when a record points at a cyberlink" [] {
+    let tmp = $in.tmp
+    let other = $tmp | path join "foreign-key"
+
+    ^ssh-keygen -t ed25519 -f $other -N "" -q
+    let identity = open --raw $"($other).pub" | pubkey canonical | into binary | cid-v0
+
+    assert equal (
+        particle add-link $A $B $"($other).pub" --repo $tmp --allow-missing
+    ) (
+        particle add-link $A $B $identity --repo $tmp --allow-missing
+    ) "a key path was published as text"
 }
 
 # A signer CID skips the local-file check an endpoint CID gets, and needs no

@@ -113,7 +113,7 @@ def "a repeat writes no second position and leaves the first alone" [] {
 def "each signer directory carries its own run" [] {
     let s = make-signer $in.tmp_dir
     let mine = link add $P1 $P2 --repo $s.repo --allow-missing
-    let adhoc = link add $P1 $P2 --repo $s.repo --allow-missing --signer alice
+    let adhoc = link add $P1 $P2 --repo $s.repo --allow-missing --keyless-signer alice
 
     seal --repo $s.repo --no-stamp --allow-untracked-particles | ignore
 
@@ -327,7 +327,7 @@ def "order list states the minted number and the one a provisional position will
     write-added-at (order-path $s.home $signer $late.edge_cid) ("2026-02-02T00:00:00Z" | into datetime)
     write-added-at (order-path $s.home $signer $early.edge_cid) ("2026-01-01T00:00:00Z" | into datetime)
     # A second run under its own signer directory, numbered from 0 of its own.
-    let adhoc = link add $P1 $P2 --repo $s.repo --allow-missing --signer alice
+    let adhoc = link add $P1 $P2 --repo $s.repo --allow-missing --keyless-signer alice
 
     let run = order list --repo $s.repo
 

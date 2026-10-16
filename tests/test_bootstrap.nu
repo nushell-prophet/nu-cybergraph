@@ -819,7 +819,7 @@ def "a sealed edge file moved to another signer directory earns no credit" [] {
 
     init --repo $r.repo
     let own = link add $P1 $P2 --repo $r.repo --allow-missing
-    let adhoc = link add $P1 $P2 --repo $r.repo --allow-missing --signer alice
+    let adhoc = link add $P1 $P2 --repo $r.repo --allow-missing --keyless-signer alice
 
     seal --repo $r.repo --no-stamp --allow-untracked-particles | ignore
     assert equal (verify $own.edge_cid --repo $r.repo | length) 2

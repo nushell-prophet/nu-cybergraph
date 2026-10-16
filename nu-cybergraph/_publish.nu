@@ -7,7 +7,7 @@
 
 use _particle.nu [ particle-store resolve-particle store-index ]
 use _record.nu [ edge-bytes link-bytes ]
-use _signer.nu [ resolve-signer ]
+use _signer.nu [ reference-signer ]
 
 # Publish the preimage of an edge address — the pair record — and return that
 # address. Operands go through `resolve-particle`, the rule every write command
@@ -29,7 +29,7 @@ export def publish-edge [
 }
 
 # The same for a cyberlink address — the triple. The signer goes through
-# `resolve-signer` and NOT `resolve-particle`: a signer CID names a pubkey file,
+# `reference-signer` and NOT `resolve-particle`: a signer CID names a pubkey file,
 # which lives in multiproofs/pubkeys/, so checking it against particles/ would
 # reject `own-signer`'s own answer (_signer.nu states the rule).
 export def publish-link [
@@ -45,6 +45,6 @@ export def publish-link [
     link-bytes {
         cid_from: (resolve-particle $root $index $cid_from --allow-missing=$allow_missing --literal=$literal)
         cid_to: (resolve-particle $root $index $cid_to --allow-missing=$allow_missing --literal=$literal)
-        signer: (resolve-signer $root $signer)
+        signer: (reference-signer $root $signer)
     } | particle-store $root
 }

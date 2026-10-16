@@ -90,15 +90,16 @@ export def "add-edge" [
 # targets. Its bytes exist nowhere else: the link file holds the pair and the
 # signer lives in the path, so nothing on disk is this record until this
 # command writes it.
-# The signer goes through `resolve-signer`, not `resolve-particle`: a signer
-# names an identity, so a bare string is published as its own bytes and never
-# opened as a path — the same rule `link add --signer` and every convention
-# verb apply.
+# The signer goes through `reference-signer`, not `resolve-particle`: it names
+# whose cyberlink this is, often someone else's, so a CID is taken as given, a
+# key file is its key's identity with no registration check, and any other
+# string is a keyless name published as its own bytes — the name
+# `--keyless-signer` publishes.
 @example "publish a cyberlink address so a later act can name it" { particle add-link QmA… QmB… QmS… }
 export def "add-link" [
     cid_from: string # source vertex: a CID v0, a path to publish, or content to publish as a particle
     cid_to: string # target vertex: a CID v0, a path to publish, or content to publish as a particle
-    signer: string # signer whose cyberlink this is: a CID v0, or content published as a particle
+    signer: string # signer whose cyberlink this is: a CID v0, a key file, or a keyless name published as a particle
     --repo: path # Target repo root (default: git root of current directory)
     --allow-missing # skip the local-file check on a CID operand (see resolve-particle)
     --literal # treat a text operand as literal content even if it names a path

@@ -1552,7 +1552,7 @@ def "verify returns one row per own signer and --signer narrows to one act" [] {
     let tmp_dir = $in.tmp_dir
     let a = make-signer $tmp_dir "a"
     let own = link add $P1 $P2 --repo $a.repo --allow-missing
-    let adhoc = link add $P1 $P2 --repo $a.repo --allow-missing --signer alice
+    let adhoc = link add $P1 $P2 --repo $a.repo --allow-missing --keyless-signer alice
 
     assert equal $own.edge_cid $adhoc.edge_cid "one pair, one edge address, whoever signs"
     let sealed = seal --repo $a.repo --no-stamp --allow-untracked-particles

@@ -96,32 +96,53 @@ export def own-signer [root: path --key: path]: nothing -> string {
     # the trust list holds no key for fails the binding at `verify`, `bundle`
     # and `import`. Refuse before writing it, not three commands later.
     if ($registered | is-empty) {
-        error make {msg: "the key this checkout signs with is not registered in multiproofs/pubkeys/ — register it with `nu-cybergraph init --pubkey <path-to-key>.pub`"}
+        let which = if $key == null { "the key this checkout signs with" } else { $"the key ($key)" }
+        error make {msg: $"($which) is not registered in multiproofs/pubkeys/ — register it with `nu-cybergraph init --pubkey <path-to-key>.pub`"}
     }
     open --raw ($registered | first) | into binary | cid-v0
 }
 
-# What a write command's `--signer` resolves to. Null falls back to this repo's
-# own identity above; a CID v0 is taken as given; any other string is published
-# under particles/ as its own bytes, and its CID is the signer. Ad-hoc names
-# are what that is for — several identities in one repo, which `init` cannot
-# give, since it registers exactly one key.
+# The signer a write command authors under: `--signer` names a key,
+# `--keyless-signer` a name with no key behind it, and neither means this
+# repo's own identity.
 #
-# Two rules an endpoint has that the signer deliberately does not:
+# `--signer` is a CID v0, taken as given, or a key file on this machine, which
+# must be registered — the same match `own-signer` makes for user.signingKey.
+# Any other string is refused rather than published: the flag reads as "which
+# key", and a string published as its own bytes names a signer no key can bind,
+# so `verify` reports it NOT BOUND long after the link was written.
 #
-# A string is NEVER opened as a path. `--signer other.pub` publishes the eight
-# characters, not the key file. An endpoint reads a path because a bare
-# argument there all but always means "publish this file"; a signer names an
-# identity, so a path branch bought nothing and cost the plain case — a name
-# carrying a dot or a slash (`agent-1.v2`) would be refused as a probable typo,
-# and the escape hatch was a flag shared with the endpoints. Publishing a key
-# file composes instead: `particle add other.pub`, then pass the CID.
+# `--keyless-signer` is that keyless name on purpose — several identities in
+# one repo, which `init` cannot give, since it registers exactly one key. It is
+# published under particles/ as its own bytes, whatever its shape, so a name
+# with a dot or a slash (`agent-1.v2`) is never read as a path. Checked first,
+# before anything is published: `--keyless-signer` writes a particle, and a
+# refused pair must leave none behind.
 #
 # A CID is never checked against particles/. A signer identity is the CID of a
 # pubkey FILE, and those live in multiproofs/pubkeys/ — `own-signer`'s own
 # answer would fail that check.
-export def resolve-signer [root: path signer: any]: nothing -> string {
+export def resolve-signer [root: path signer: any keyless_signer: any]: nothing -> string {
+    if $signer != null and $keyless_signer != null {
+        error make {msg: "--signer and --keyless-signer are alternatives: --signer names a key, --keyless-signer a name with no key behind it"}
+    }
+    if $keyless_signer != null { return ($keyless_signer | into binary | particle-store $root) }
     if $signer == null { return (own-signer $root) }
     if $signer =~ $CID_V0_RE { return $signer }
+    if not ($signer | path expand | path exists) {
+        error make {msg: $"--signer ($signer) is neither a CID v0 nor a key file on this machine — for a name with no key behind it, use --keyless-signer ($signer)"}
+    }
+    own-signer $root --key $signer
+}
+
+# The signer of a cyberlink a record points at — someone else's, as often as
+# not. A CID v0 is taken as given; a key file on this machine is that key's
+# identity, the CID of its canonical public line; any other string is a keyless
+# name and is published as its own bytes, as `--keyless-signer` publishes it. No
+# registration check: confirming another signer's link must not need their key
+# in this trust list.
+export def reference-signer [root: path signer: string]: nothing -> string {
+    if $signer =~ $CID_V0_RE { return $signer }
+    if ($signer | path expand | path exists) { return (key-pubkey $signer | into binary | cid-v0) }
     $signer | into binary | particle-store $root
 }

@@ -16,8 +16,8 @@ use _fs.nu [ list-dirs cwd-relative ]
 # Both endpoints accept a CID or content: a non-CID argument is resolved to
 # bytes (a path is opened, anything else is literal — see resolve-arg-bytes)
 # and published as a file under particles/, its CID linked (see _particle.nu).
-# `--signer` publishes content too, but by a narrower rule (see resolve-signer):
-# it never opens a path, and a CID there is never checked against particles/.
+# `--signer` names a registered key, by CID or by its file; `--keyless-signer`
+# names a keyless signer, published as a particle (see resolve-signer).
 # Idempotent: asserting the same triple again returns the existing record,
 # not an error. A CID endpoint must resolve to a file this repo holds — see
 # resolve-particle for why, and --allow-missing for the escape hatch to name a
@@ -25,11 +25,12 @@ use _fs.nu [ list-dirs cwd-relative ]
 @example "link two particles by the CIDs of their bytes" { link add QmUQUHEmv651XCBhiWUQpx2zf4PDts1aXL324ZFyV4QZPF QmW9519sfmW2MvDb4TU4dKtiFAXm1UPDvE7JrMaBjprVHp --allow-missing }
 @example "publish two texts as particles and link them" { link add "cyber" "bostrom" }
 @example "link a file to text, by its path" { link add path/to/doc.md "reviewed" }
-@example "sign under an ad-hoc identity, published as a particle" { link add "cyber" "bostrom" --signer alice }
+@example "sign under an ad-hoc identity, published as a particle" { link add "cyber" "bostrom" --keyless-signer alice }
 export def add [
     cid_from: string # source vertex: a CID v0, a path to publish, or content to publish as a particle
     cid_to: string # target vertex: a CID v0, a path to publish, or content to publish as a particle
-    --signer: string # signer: a CID v0, or content published as a particle — never a path (default: this repo's own identity, the key it signs with)
+    --signer: string # signer key: a CID v0, or a registered key file (default: this repo's own identity, the key it signs with)
+    --keyless-signer: string # signer for a graph with no key pairs: this name, published as a particle (instead of --signer)
     --repo: path # Target repo root (default: git root of current directory)
     --allow-missing # skip the local-file check on a CID endpoint (see resolve-particle)
     --literal # treat a text endpoint as literal content even if it names a path
@@ -41,7 +42,7 @@ export def add [
     # already written files by the time it raised — side effects before the
     # check that forbids them, and the operator was left with orphan particles
     # for a link that was never written.
-    let signer_cid = resolve-signer $root $signer
+    let signer_cid = resolve-signer $root $signer $keyless_signer
     let index = store-index $root
     let pair = {
         cid_from: (resolve-particle $root $index $cid_from --allow-missing=$allow_missing --literal=$literal)

@@ -222,27 +222,29 @@ A reader looks at a CID that someone else already stated.
 A writer is the one who types the CID in.
 That is why the two sides differ.
 
-`--signer` publishes content too, because the signer can be referenced like any CID.
-The command takes a CID v0 as the identity.
-The command publishes any other string under `particles/` as its own bytes,
+Two flags choose the signer, and the default is the identity of this repo.
+`--signer` names a key:
+a CID v0, taken as given,
+or a key file on this machine, which must be registered in `multiproofs/pubkeys/`.
+The command refuses any other string,
+because a link under a signer with no key never binds at `verify`.
+A key is necessary for a link to bind, but not sufficient:
+the link binds only when that key also signs the seal root,
+and a CID under `--signer` is taken as given,
+so the CID of a keyless name binds no more than `--keyless-signer` does.
+`--keyless-signer` names a signer with no key behind it, for a graph that uses no key pairs.
+The command publishes that name under `particles/` as its own bytes,
 and the CID of those bytes becomes the signer.
-Without the flag, the signer stays the identity of this repo.
+A name with a dot or a slash (`agent-1.v2`) is still a name, never a path.
 This is what gives one repo several signers.
 `init` registers exactly one key.
 So ad-hoc named identities are the only way to try a multi-signer reading without new keypairs.
 Examples of that reading are `tally`'s `signers` column and a `confirm-edge` from someone other than the author.
-An endpoint has two rules that the signer deliberately does not have.
-A signer string is **never** opened as a path:
-`--signer other.pub` publishes those eight characters, not the key file.
-This is because a signer names an identity, not a file.
-A second reason is that a path branch would refuse an ad-hoc name that has a dot or a slash (`agent-1.v2`) as a probable typo.
-To publish a key file, compose two commands instead
-— `particle add other.pub`, then pass the CID.
-And here a CID is **not** checked against `particles/` and needs no `--allow-missing`,
+A CID under `--signer` is **not** checked against `particles/` and needs no `--allow-missing`,
 because a signer addresses a pubkey file.
 That file is in `multiproofs/pubkeys/` and never in the particle store
 — the identity of this repo would fail that check.
-What the convenience does not do:
+What `--keyless-signer` does not do:
 a signer minted from content has no key behind it.
 So links that this signer states are local statements.
 These links fail the signer binding at `verify`, `bundle` and `import`.
@@ -322,7 +324,7 @@ The conventions encode the instruction as an ordinary edge.
 bj002 holds the concept and the reasons for it;
 this section gives the mechanics.
 `nu-cybergraph convention <verb>` writes the edge through the same record path as `link add` (triple guard, self-addressing, signer resolution),
-so it takes the same `--signer`/`--repo` controls.
+so it takes the same `--signer`/`--keyless-signer`/`--repo` controls.
 Four more verbs are not in the twelve.
 `repeat` publishes the bare edge again.
 bj002 names the repetition of an edge next to the conventions, but not as one of them.
