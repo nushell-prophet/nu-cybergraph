@@ -855,3 +855,50 @@ def "a sealed edge file moved to another signer directory earns no credit" [] {
     assert ($sealed != null) "seal certified a relocated link file"
     assert ($sealed | str contains $"($adhoc.record.signer)/($adhoc.edge_cid).json") $"the refusal should name the vacated path: ($sealed)"
 }
+
+# --external-signer: the first run stops before anything cybergraph-specific is
+# written, so the second run computes the same root and the signature made over
+# the first run's statement still stands. ssh-keygen stands in for the device.
+@test
+def "an external signer seal freezes nothing until the signature arrives" [] {
+    let r = make-bare-repo $in.tmp_dir
+
+    init --repo $r.repo
+    link add $P1 $P2 --repo $r.repo --allow-missing | ignore
+    seal --repo $r.repo --no-stamp --allow-untracked-particles
+    link add $P2 $P3 --repo $r.repo --allow-missing | ignore
+
+    let graph = $r.repo | path join cybergraph
+    let statement = $graph | path join multiproofs tree-root.txt
+    let sig = $"($statement).(open --raw $"($r.key).pub" | pubkey fingerprint).sig"
+    let seals_before = list-dirs ($graph | path join seals)
+
+    let waiting = seal --repo $r.repo --no-stamp --allow-untracked-particles --external-signer
+
+    assert ("awaiting_signature" in $waiting.sealed)
+    assert equal (list-dirs ($graph | path join seals)) $seals_before "a snapshot was written for a root nobody signed"
+    assert equal (list-files ($graph | path join certs) --recursive --suffix ".json" | length) 1 "a certificate was frozen under an unsigned root"
+
+    open --raw $statement | ^ssh-keygen -Y sign -q -f $r.key -n file | save --raw $sig
+    let signed = open --raw $statement
+    let sealed = seal --repo $r.repo --no-stamp --allow-untracked-particles --external-signer
+
+    assert equal (open --raw $statement) $signed "the second run computed another root, so the signature went stale"
+    assert equal $sealed.newborn 1
+    assert ($sealed.snapshot | path join ($sig | path basename) | path exists) "the snapshot misses the outside signature"
+}
+
+# The case met in a linked worktree: the inherited user.signingKey names a key
+# that exists only on another machine, and the refusal has to say where to fix it.
+@test
+def "a signing key that is not on this machine names the config to fix" [] {
+    let r = make-bare-repo $in.tmp_dir
+
+    init --repo $r.repo --pubkey $"($r.key).pub"
+    ^git -C $r.repo config user.signingKey ($in.tmp_dir | path join elsewhere.pub)
+    let err = try { link add $P1 $P2 --repo $r.repo --allow-missing; null } catch {|e| $e.msg }
+
+    assert ($err | str contains "signing key not on this machine")
+    assert ($err | str contains "git config user.signingKey")
+    assert ($err | str contains "--worktree")
+}

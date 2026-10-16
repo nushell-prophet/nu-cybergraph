@@ -65,6 +65,7 @@ nu-cybergraph link tally Qm…             # per verb and position: how many lin
 nu-cybergraph link imported              # the same reading over every link a landed bundle carries
 nu-cybergraph seal                       # sign the root + stamp that signature, freeze new certificates
 nu-cybergraph seal --propose-commit      # …and leave the git commit for that seal in the prompt, unrun
+nu-cybergraph seal --external-signer     # the root is signed on another device: run, sign there, run again
 nu-cybergraph seal chain                 # the run of seals, oldest first — refuses a gap
 nu-cybergraph bundle Qm…edge             # portable bundle → exports/<signer>/<edge>/, particles the ends reach included (imported act: re-export + custody layer)
 nu-cybergraph bundle Qm…edge --links-only # own act: …without particles, the record + certificate alone (no-op re-exporting an import)

@@ -89,6 +89,11 @@ or park a note in `todo/`.
   `seal` refuses while the graph reaches an untracked store file (`--allow-untracked-particles` seals without those bytes, but never past a name under `particles/` that is no address);
   `particle uncommitted` is the reading,
   `--propose-commit` writes the commit.
+- A seal waiting for an outside signature writes nothing of its own:
+  `seal --external-signer` returns before the `seals/<root12>/` snapshot and before any certificate,
+  because `seals/` is staged into the manifest,
+  and a snapshot written then would change the root the device signs.
+  Pinned by "an external signer seal freezes nothing until the signature arrives".
 - A certificate in `certs/` is frozen at birth:
   never regenerate it on later seals
   — its OTS anchor is the link's earliest provable time bound.

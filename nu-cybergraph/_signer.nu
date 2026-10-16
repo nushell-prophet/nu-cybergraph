@@ -39,7 +39,10 @@ def key-pubkey [named: path]: nothing -> string {
     let pub = if ($"($expanded).pub" | path exists) { $"($expanded).pub" } else { $expanded }
 
     if not ($pub | path exists) {
-        error make {msg: $"signing key not on this machine: ($named)"}
+        # Why the fix is named: a linked worktree reads the main checkout's
+        # config, so the path can be right on another machine — the same
+        # message upstream's seal gives (nu-multiproof _key-helpers.nu).
+        error make {msg: $"signing key not on this machine: ($named) — set user.signingKey to the key this graph writes under \(`git config user.signingKey <key>.pub`; in a linked worktree add --worktree, or the main checkout changes too\); the public half alone is enough with `seal --external-signer`"}
     }
     open --raw $pub | pubkey canonical
 }

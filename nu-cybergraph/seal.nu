@@ -68,6 +68,7 @@ export def main [
     --response-file: path # TESTS ONLY: take the calendar's answer from this file instead of posting the digest
     --propose-commit # Leave a `git commit` for this seal in the prompt, unrun
     --allow-untracked-particles # Seal without the store files the graph names (see the guard below)
+    --external-signer # The root is signed on another device: run, sign there, run again (upstream's flag)
 ]: nothing -> record {
     let root = graph-root $repo
 
@@ -288,7 +289,17 @@ export def main [
     # seam, and without it nothing here could reach a real stamp offline — every
     # test seals --no-stamp, so every anchor read `absent`. It must never appear
     # in a real seal: the anchor would attest a fixture, not a calendar's answer.
-    let sealed = seal --repo $root --no-stamp=$no_stamp --no-content-anchor=(not $no_stamp) --response-file $response_file
+    let sealed = seal --repo $root --no-stamp=$no_stamp --no-content-anchor=(not $no_stamp) --response-file $response_file --external-signer=$external_signer
+
+    # Why return before the snapshot: `seals/` is staged into the manifest, so a
+    # snapshot written now — with no signature in it — would change the root the
+    # second run computes, and the signature made over this run's statement would
+    # be cleared as stale. Freezing certificates under a root nobody signed yet
+    # would be worse. Pinned by "an external signer seal freezes nothing until
+    # the signature arrives".
+    if "awaiting_signature" in $sealed {
+        return {sealed: $sealed}
+    }
     let root_hex = $sealed.merkle_root
 
     # Snapshot this seal's root statement + signatures. multiproofs/tree-root.txt
