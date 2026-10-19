@@ -71,11 +71,10 @@ export def particle-path [root: path cid: string --ext: string]: nothing -> path
 # so the index and a reader sorting search hits cannot disagree about what
 # belongs to the store.
 #
-# It lives here and not in `_particle.nu`, where it was written, because it is
-# the read half of `particle-path` directly above: one rule, both directions,
-# in the module that owns every other path under the graph home. The move is
-# also what lets `strays` apply it — `_particle.nu` imports this module, so
-# reaching the other way would close an import cycle.
+# It lives here because it is the read half of `particle-path` directly above:
+# one rule, both directions, in the module that owns every other path under the
+# graph home. It also lets `strays` apply it — `_particle.nu` imports this
+# module, so reaching the other way would close an import cycle.
 export def store-cid [file: path]: nothing -> any {
     let base = $file | path basename
     let cid = $base | split row "." | first
@@ -492,13 +491,7 @@ export def strays [root: path]: nothing -> table {
 # Refuse a graph home this layout does not recognise, before a reader reports
 # its emptiness as an answer.
 #
-# The failure this exists for: the link layout moved to
-# `<signer-cid>/<edge-cid>.json`, and against a graph still in the old
-# `links/<link-cid>.json` shape the readers answered `[]` at exit 0 — 301
-# records read as none, with every count and tally built on that silently
-# wrong. Worse, `seal` succeeded, signing a merkle root for a graph whose links
-# it could not see and certifying none of them. A reader that finds nothing
-# must fail rather than call it an empty graph.
+# A reader that finds nothing must fail rather than call it an empty graph.
 #
 # Only the top level, and that is the whole point: it is the level that says
 # WHICH layout this is, and it costs one directory listing, so `graph-root` can

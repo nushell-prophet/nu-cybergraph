@@ -5,8 +5,7 @@
 # What the number is for is not indexing: it is bostrom's account sequence
 # (bj002ru line 88). A run with no gaps makes a signer's record provably
 # complete, so a replica cannot be silently thinned — the property Secure
-# Scuttlebutt's per-feed counter and Certificate Transparency's log have and
-# this repo did not: a signer could withhold a link and nothing said so.
+# Scuttlebutt's per-feed counter and Certificate Transparency's log have.
 #
 # Why a file per link and not one CSV: an inclusion proof carries sibling
 # HASHES, never sibling contents (RFC 6962), so the merkle tree already gives

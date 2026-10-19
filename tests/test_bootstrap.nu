@@ -72,7 +72,7 @@ def "init refuses to register a second key and undoes what it added" [] {
     assert ($err != null) "a re-run under another signing key grew the trust list silently"
     assert equal (glob ($r.repo | path join cybergraph multiproofs pubkeys *.pub) | length) 1
     # The route out is named, because a second key IS legal — just never by
-    # accident, which is the whole difference this refusal now draws.
+    # accident, which is the whole difference this refusal draws.
     assert ($err | str contains "--co-signer")
 }
 
@@ -756,7 +756,7 @@ def "copy-tree refuses a tree holding something that is not a regular file" [] {
 
     mkdir $src
     "x\n" | save --raw ($src | path join a.txt)
-    # Dangling on purpose: `open --raw` follows a link, so this used to come
+    # Dangling on purpose: `open --raw` follows a link, so this would come
     # back as the two words `Not found` with nothing naming the bundle.
     ^ln -s /nonexistent/nowhere ($src | path join dangling)
 

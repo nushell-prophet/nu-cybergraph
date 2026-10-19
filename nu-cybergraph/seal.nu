@@ -81,13 +81,11 @@ export def main [
         error make {msg: "--no-stamp and --response-file are alternatives: --no-stamp skips stamping entirely, so the calendar answer would be read by no one"}
     }
 
-    # Upstream's seal now asks its registration question before rewriting
-    # anything (nu-multiproof's seal.nu), so the fingerprint pre-check that
-    # lived here — with its own copy of the signing-key resolution — is gone
-    # with it. What stays is the bootstrap case upstream cannot name: an empty
-    # pubkeys/ means `nu-cybergraph init` has not run, and registration is
-    # deliberate — it establishes the signer identity — so seal points there
-    # instead of registering as a side effect.
+    # Upstream's seal asks its registration question before rewriting
+    # anything (nu-multiproof's seal.nu). What stays here is the bootstrap
+    # case upstream cannot name: an empty pubkeys/ means `nu-cybergraph init`
+    # has not run, and registration is deliberate — it establishes the signer
+    # identity — so seal points there instead of registering as a side effect.
     let registered = list-files ($root | path join multiproofs pubkeys) --suffix ".pub"
 
     if ($registered | is-empty) {
@@ -217,9 +215,7 @@ export def main [
     # still mints a new root".
     # A store file the graph names but git does not track is bytes no root
     # covers: the manifest walks `git ls-files`, so the link naming it gets
-    # signed and frozen while its endpoint is catalogued by nothing. Nothing
-    # said so before — the seal succeeded, and only a reader coming back later
-    # found the certificate proving an edge whose bytes were never attested.
+    # signed and frozen while its endpoint is catalogued by nothing.
     #
     # Refused, not staged: publishing the bytes a link names is the operator's
     # act, and `particle uncommitted` is where they read what is about to be

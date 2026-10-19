@@ -368,7 +368,7 @@ If a writer puts a particle verb on an edge address, the result does not read ri
 Where a verb takes any CID on purpose, the word stays bare:
 `pro`, `con`, `question`, `same`, `claimed-at`.
 So a bare word is the signal "any CID".
-Since 2026-09-02, bj002 uses the same words
+bj002 uses the same words
 and derives addresses from the same canonical record,
 so an address here is the same address in bj002.
 
