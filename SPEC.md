@@ -530,6 +530,9 @@ A statement names its own `seq` and the root that it supersedes (7),
 while `multiproofs/` keeps only the live one.
 An implementation MUST read the snapshots in order, refuse a gap, and not report a shorter chain.
 A run has no gap when `seq` runs from 0 to N and each `prev` is the root before it.
+A new seal supersedes the newest snapshot, not the live statement:
+the live statement can be a draft that no seal finished,
+and a draft has no snapshot.
 The reason is that a missing snapshot means that every certificate born under that root verifies against nothing.
 
 ### 3.5 Link position — `order/<signer-cid>/<edge-cid>.order.json`

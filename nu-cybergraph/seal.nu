@@ -307,7 +307,21 @@ export def main [
     # seam, and without it nothing here could reach a real stamp offline — every
     # test seals --no-stamp, so every anchor read `absent`. It must never appear
     # in a real seal: the anchor would attest a fixture, not a calendar's answer.
-    let sealed = seal --repo $root --no-stamp=$no_stamp --no-content-anchor=(not $no_stamp) --response-file $response_file --external-signer=$external_signer
+    # A seal is finished here only once its snapshot exists, so the root the new
+    # one supersedes is the newest snapshot, never the live statement: that can
+    # be a draft an --external-signer run left waiting, or one a failed run left
+    # behind. Superseding a draft would make it the `prev` of the next root with
+    # no snapshot under it, and `seal chain` would refuse the graph for good.
+    # Pinned by "a root replaced while it waits for its signature leaves the
+    # seal chain whole".
+    let snapshots = if (seals-dir $root | path exists) {
+        ls (seals-dir $root) | where type == dir | get name | each { path join tree-root.txt }
+    } else { [] }
+    let supersedes = if ($snapshots | is-empty) { "genesis" } else {
+        $snapshots | sort-by { merkle read-root $in | get seq } | last
+    }
+
+    let sealed = seal --repo $root --no-stamp=$no_stamp --no-content-anchor=(not $no_stamp) --response-file $response_file --external-signer=$external_signer --supersedes $supersedes
 
     # Why return before the snapshot: `seals/` is staged into the manifest, so a
     # snapshot written now — with no signature in it — would change the root the

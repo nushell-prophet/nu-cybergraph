@@ -888,6 +888,36 @@ def "an external signer seal freezes nothing until the signature arrives" [] {
     assert ($sealed.snapshot | path join ($sig | path basename) | path exists) "the snapshot misses the outside signature"
 }
 
+# The draft a waiting seal leaves is no seal: a link added before the signature
+# arrives must not make it the `prev` of the next root. Signed or not, the draft
+# has no snapshot, so `seal chain` would break under it for good.
+@test
+def "a root replaced while it waits for its signature leaves the seal chain whole" [] {
+    let tmp_dir = $in.tmp_dir
+
+    for sign_draft in [false true] {
+        let r = make-bare-repo ($tmp_dir | path join $"($sign_draft)")
+
+        init --repo $r.repo
+        link add $P1 $P2 --repo $r.repo --allow-missing | ignore
+        seal --repo $r.repo --no-stamp --allow-untracked-particles
+        link add $P2 $P3 --repo $r.repo --allow-missing | ignore
+
+        let statement = $r.repo | path join cybergraph multiproofs tree-root.txt
+        let sig = $"($statement).(open --raw $"($r.key).pub" | pubkey fingerprint).sig"
+
+        seal --repo $r.repo --no-stamp --allow-untracked-particles --external-signer | ignore
+        if $sign_draft { open --raw $statement | ^ssh-keygen -Y sign -q -f $r.key -n file | save --raw $sig }
+        link add $P1 $P3 --repo $r.repo --allow-missing | ignore
+        seal --repo $r.repo --no-stamp --allow-untracked-particles --external-signer | ignore
+
+        open --raw $statement | ^ssh-keygen -Y sign -q -f $r.key -n file | save --raw $sig
+        seal --repo $r.repo --no-stamp --allow-untracked-particles --external-signer | ignore
+
+        assert equal (seal chain --repo $r.repo | get seq) [0 1] $"draft signed: ($sign_draft)"
+    }
+}
+
 # The case met in a linked worktree: the inherited user.signingKey names a key
 # that exists only on another machine, and the refusal has to say where to fix it.
 @test

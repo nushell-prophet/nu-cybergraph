@@ -590,6 +590,8 @@ but never which seal it was.
 So the root statement carries a counter: `multiproof-merkle-v3 <root> <seq> <prev>`.
 `seq` starts at 0.
 `prev` is the root that this seal replaced (the literal `genesis` for the first seal, and `genesis` pairs with `seq 0` and with nothing else).
+`seal` takes that root from the newest snapshot under `seals/`, not from the live statement:
+a run of `seal --external-signer` that still waits for its signature leaves a draft there, and a draft has no snapshot.
 `seal chain` reads every `seals/<root12>/tree-root.txt` in order.
 It requires that `seq` runs 0..N with no gap,
 and that each `prev` is the root before it.
