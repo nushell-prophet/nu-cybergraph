@@ -166,6 +166,28 @@ export def main [
         error make {msg: $"not the graph layout: ($named) — a seal signs whatever is committed under the graph home, so it refuses while it reaches a file the layout does not describe. Remove it and seal again, or move it beside the graph home rather than inside it. `nu-cybergraph strays` lists them without sealing"}
     }
 
+    # A file git marks `export-ignore` enters no root: nu-multiproof leaves it
+    # out of the manifest (`_tracked.nu` EXPORT_IGNORED), tracked or not. Under
+    # the graph home that is a link or a particle the seal signs around — the
+    # link frozen, its bytes attested by nothing. Refused with no override, like
+    # a stray, and before staging: the rule reaches files `$stage` would add.
+    # Untracked files count, ignored ones do not, because `git add` skips those.
+    #
+    # Not the pathspec `:(attr:export-ignore)` on `ls-files --others`: git tests
+    # it on an untracked directory before it descends, and `particles/**` sets
+    # the attribute on the files, not on the directory, so a wholly untracked
+    # store lists nothing. `check-attr` asks about each file.
+    let unsealable = ^git -C $root ls-files --cached --others --exclude-standard -z
+        | ^git -C $root check-attr --stdin -z export-ignore
+        | split row (char --integer 0)
+        | chunks 3
+        | where {|r| ($r | length) == 3 and $r.2 == "set" }
+        | each { first }
+
+    if ($unsealable | is-not-empty) {
+        error make {msg: $"marked export-ignore under the graph home: ($unsealable | each {|f| $root | path join $f | cwd-relative } | str join ', ') — the seal manifest leaves such files out, so the links naming them would be frozen over bytes no root covers. Remove the attribute for these paths in .gitattributes and seal again"}
+    }
+
     # Stage the cybergraph dirs — the signer directories holding the link
     # files, plus the fixed set: the manifest walks `git ls-files`, so an
     # untracked newborn link would silently miss its own seal. certs/ and
