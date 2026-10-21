@@ -803,9 +803,11 @@ A fixpoint would need a directory with the name of a root computed from a tree t
 
 The manifest covers this:
 every git-tracked file under the graph home except `multiproofs/`, which the proof layer excludes as derived output.
-The proof layer also leaves out a file that git marks `export-ignore`,
-so `seal` refuses a graph home that holds one, with no override:
+The proof layer also leaves out the paths that `.multiproofignore` at the seal root names.
+The graph home is the seal root, and section 3 does not name that file,
+so every reading and `seal` refuse a graph home that holds it, with no override:
 a link would be frozen over bytes that no root covers.
+A rule file above the graph home is not read.
 These consequences are important.
 A file that the list of step 4 never names is still sealed after the signer commits it.
 The registered pubkey is **not** under the seal.

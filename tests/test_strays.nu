@@ -102,28 +102,26 @@ def "a hand-written file at the graph root is refused" [] {
     assert str contains $err "README.md"
 }
 
-# nu-multiproof drops export-ignored files from the manifest, so a store file
-# under such a rule would leave the seal signing a link over bytes no root
-# covers. Committed first: the untracked-particle guard does not see a tracked
-# file, so this is the case only this refusal stands in front of. The rule sits
-# above the graph home, as a monorepo would write it.
+# nu-multiproof leaves the paths named in .multiproofignore at the seal root
+# out of the manifest, and the graph home is that root, so a rule file there
+# would leave the seal signing a link over bytes no root covers. Committed
+# first: the untracked-particle guard does not see a tracked file, so this is
+# the case only the layout check stands in front of — graph-root, which every
+# reading and the seal pass through.
 @test
-def "a seal refuses a graph home that holds export-ignored files" [] {
+def "a seal refuses a graph home that holds a rule file" [] {
     let g = empty-graph $in.tmp_dir
 
     link add "cyber" "bostrom" --repo $g.repo
-    let particles = $g.root | path join particles
-
-    assert ((ls --all $particles | length) > 0) "the fixture stored no particle"
+    "particles\n" | save --force ($g.root | path join .multiproofignore)
     ^git -C $g.repo add -- cybergraph
     ^git -C $g.repo commit -q -m link
-    "cybergraph/particles/** export-ignore\n" | save --force ($g.repo | path join .gitattributes)
 
     let err = try { seal --repo $g.repo --no-stamp; null } catch {|e| $e.msg }
 
     assert ($err != null) "a seal signed a graph whose particles enter no root"
-    assert str contains $err "export-ignore"
-    assert str contains $err "particles"
+    assert str contains $err "unknown graph home"
+    assert str contains $err ".multiproofignore"
     assert not (($g.root | path join multiproofs tree-root.txt) | path exists)
 }
 
