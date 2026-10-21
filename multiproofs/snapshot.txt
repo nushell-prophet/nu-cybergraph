@@ -1,1 +1,1 @@
-multiproof-snapshot-v1 52e421a96d06db988f96e76acb6d8636cbe6a9f54d36c64ceffed1ff33ef7ff7
+multiproof-snapshot-v1 d2339fc9ab6d025b4c9b498f4dc82dd5adacca156397932d5c936f04a756752a
