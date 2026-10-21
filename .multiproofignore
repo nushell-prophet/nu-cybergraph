@@ -1,4 +1,6 @@
 todo
 .claude/settings.json
 .claude/memory
-nu-multiproof
+nu-multiproof/todo
+nu-multiproof/multiproofs
+nu-multiproof/.claude/memory
