@@ -198,7 +198,7 @@ export def copy-tree [src: path dst: path]: nothing -> nothing {
 }
 
 # The comparison half, split out so the cleanup above wraps nothing else.
-def assert-same-tree [source: path target: path]: nothing -> nothing {
+export def assert-same-tree [source: path target: path]: nothing -> nothing {
     # Names before bytes, deliberately: an unreadable source file is listed by
     # `ls` but absent from the destination, so it is named here as lost — no
     # read of it is attempted, and the operator gets "the copy is short"

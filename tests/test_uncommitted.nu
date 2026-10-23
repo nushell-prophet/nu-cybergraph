@@ -32,7 +32,7 @@ def empty-graph [tmp_dir: path]: nothing -> record {
     let repo = $tmp_dir | path join repo
 
     mkdir $repo
-    ^git init --object-format=sha256 -q $repo
+    ^git init --object-format=sha256 --quiet $repo
     ^git -C $repo config user.name t
     ^git -C $repo config user.email t@t
     let key = $tmp_dir | path join key
@@ -41,7 +41,7 @@ def empty-graph [tmp_dir: path]: nothing -> record {
     ^git -C $repo config user.signingKey $key
     init --repo $repo
     ^git -C $repo add -- cybergraph
-    ^git -C $repo commit -q -m init
+    ^git -C $repo commit --quiet --message init
     {repo: $repo root: ($repo | path join cybergraph) key: $key}
 }
 
@@ -143,10 +143,10 @@ def "seal refuses while the graph names bytes git does not track" [] {
 
     link add "cyber" "bostrom" --repo $g.repo
 
-    let err = try { seal --repo $g.repo --no-stamp; null } catch {|e| $e.msg }
+    let err = try { seal --repo $g.repo --no-stamp; null } catch {|e| $e }
 
-    assert str contains $err "the graph names bytes git does not track"
-    assert str contains $err "particle uncommitted --propose-commit"
+    assert str contains $err.msg "the graph names bytes git does not track"
+    assert str contains $err.details.help "particle uncommitted --propose-commit"
     # Refused before anything was staged or signed: no root was minted.
     assert not (($g.root | path join multiproofs tree-root.txt) | path exists)
 }
@@ -190,7 +190,7 @@ def "the proposal names the files it stages and the addresses they carry" [] {
 
     assert str contains $line "particles: publish 2 files the graph names"
     assert str contains $line $out.record.cid_from
-    assert str contains $line $"git -C $repo add -- "
+    assert str contains $line 'git -C $repo add -- '
     assert str contains $line $"particles/($out.record.cid_to)"
 }
 

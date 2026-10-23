@@ -34,7 +34,7 @@ use _deps/pubkey.nu [ pubkey ]
 # The canonical public bytes of a key named by a path. The `.pub` sibling wins:
 # the path usually names the private half (it is what one signs with), while an
 # identity is public material.
-def key-pubkey [named: path]: nothing -> string {
+export def key-pubkey [named: path]: nothing -> string {
     let expanded = $named | path expand
     let pub = if ($"($expanded).pub" | path exists) { $"($expanded).pub" } else { $expanded }
 
@@ -42,7 +42,7 @@ def key-pubkey [named: path]: nothing -> string {
         # Why the fix is named: a linked worktree reads the main checkout's
         # config, so the path can be right on another machine — the same
         # message upstream's seal gives (nu-multiproof _key-helpers.nu).
-        error make {msg: $"signing key not on this machine: ($named) — set user.signingKey to the key this graph writes under \(`git config user.signingKey <key>.pub`; in a linked worktree add --worktree, or the main checkout changes too\); the public half alone is enough with `seal --external-signer`"}
+        error make {msg: $"signing key not on this machine: ($named)" help: "set user.signingKey to the key this graph writes under (`git config user.signingKey <key>.pub`; in a linked worktree add --worktree, or the main checkout changes too); the public half alone is enough with `seal --external-signer`"}
     }
     open --raw $pub | pubkey canonical
 }
@@ -50,9 +50,9 @@ def key-pubkey [named: path]: nothing -> string {
 # The canonical public bytes of the key this call writes under.
 #
 # Duplicated from nu-multiproof's `init.nu` rather than imported: its
-# `resolve-key` is private, and cross-repo imports of another project's
-# _-internals carry no compatibility promise — the same call `_repo.nu` makes
-# for repo-root. Both config forms, with upstream's own rule for each: a path,
+# `resolve-key` is not public — nu-multiproof's mod.nu does not name it, so it
+# carries no compatibility promise — the same call `_repo.nu` makes for
+# repo-root. Both config forms, with upstream's own rule for each: a path,
 # resolved above; and the inline `key::` form, which already is that material.
 #
 # Never a fallback, in either direction. A missing key file raises instead of
@@ -63,14 +63,14 @@ def key-pubkey [named: path]: nothing -> string {
 # list is where a foreign key belongs (upstream invites `alice.pub` into it),
 # so counting one file would author under whoever happens to be listed, with no
 # error until `verify` reports the binding false.
-def signing-pubkey [root: path key: any]: nothing -> string {
+export def signing-pubkey [root: path key: oneof<path, nothing>]: nothing -> string {
     # An explicit key answers before git config is read: `bundle --key` names
     # the identity outright, and must not depend on a config it bypassed.
     if $key != null { return (key-pubkey $key) }
     let git = do { ^git -C $root config user.signingKey } | complete
 
     if $git.exit_code != 0 or ($git.stdout | str trim | is-empty) {
-        error make {msg: "no git `user.signingKey` in this checkout, so nothing says which registered key writes here — set it with: git config user.signingKey <path-to-key>"}
+        error make {msg: "no git `user.signingKey` in this checkout, so nothing says which registered key writes here" help: "set it with: git config user.signingKey <path-to-key>"}
     }
     let raw = $git.stdout | str trim
 
@@ -87,7 +87,7 @@ export def own-signer [root: path --key: path]: nothing -> string {
     let pubs = list-files ($root | path join multiproofs pubkeys) --suffix ".pub"
 
     if ($pubs | is-empty) {
-        error make {msg: "no pubkey registered in multiproofs/pubkeys/ — run `nu-cybergraph init` first"}
+        error make {msg: "no pubkey registered in multiproofs/pubkeys/" help: "run `nu-cybergraph init` first"}
     }
     let mine = signing-pubkey $root $key
     let registered = $pubs | where (open --raw $it) == $mine
@@ -97,7 +97,8 @@ export def own-signer [root: path --key: path]: nothing -> string {
     # and `import`. Refuse before writing it, not three commands later.
     if ($registered | is-empty) {
         let which = if $key == null { "the key this checkout signs with" } else { $"the key ($key)" }
-        error make {msg: $"($which) is not registered in multiproofs/pubkeys/ — register it with `nu-cybergraph init --pubkey <path-to-key>.pub`"}
+
+        error make {msg: $"($which) is not registered in multiproofs/pubkeys/" help: "register it with `nu-cybergraph init --pubkey <path-to-key>.pub`"}
     }
     open --raw ($registered | first) | into binary | cid-v0
 }
@@ -122,7 +123,7 @@ export def own-signer [root: path --key: path]: nothing -> string {
 # A CID is never checked against particles/. A signer identity is the CID of a
 # pubkey FILE, and those live in multiproofs/pubkeys/ — `own-signer`'s own
 # answer would fail that check.
-export def resolve-signer [root: path signer: any keyless_signer: any]: nothing -> string {
+export def resolve-signer [root: path signer: oneof<string, nothing> keyless_signer: oneof<string, nothing>]: nothing -> string {
     if $signer != null and $keyless_signer != null {
         error make {msg: "--signer and --keyless-signer are alternatives: --signer names a key, --keyless-signer a name with no key behind it"}
     }
@@ -130,7 +131,7 @@ export def resolve-signer [root: path signer: any keyless_signer: any]: nothing 
     if $signer == null { return (own-signer $root) }
     if $signer =~ $CID_V0_RE { return $signer }
     if not ($signer | path expand | path exists) {
-        error make {msg: $"--signer ($signer) is neither a CID v0 nor a key file on this machine — for a name with no key behind it, use --keyless-signer ($signer)"}
+        error make {msg: $"--signer ($signer) is neither a CID v0 nor a key file on this machine" help: $"for a name with no key behind it, use --keyless-signer ($signer)"}
     }
     own-signer $root --key $signer
 }

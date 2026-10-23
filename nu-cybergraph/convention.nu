@@ -119,7 +119,7 @@ export use _derive.nu [ derive ]
 # one call resolves every operand of the source and the target, and
 # rebuilding it per operand is the scan-per-lookup cost
 # `resolve-particle`'s own doc comment measures against.
-def address [root: path index: record expr: any allow_missing: bool literal: bool]: nothing -> string {
+export def address [root: path index: record expr: any allow_missing: bool literal: bool]: nothing -> string {
     if ($expr | describe) == "string" { return (resolve-particle $root $index $expr --allow-missing=$allow_missing --literal=$literal) }
     let resolved = $expr | columns | reduce --fold {} {|key acc|
             $acc | insert $key (if $key == "op" { $expr.op } else { address $root $index ($expr | get $key) $allow_missing $literal })
@@ -138,12 +138,12 @@ def address [root: path index: record expr: any allow_missing: bool literal: boo
 # local (freshly published, or already checked against $allow_missing) — a
 # second check on the same values in `link add` would be dead weight (another
 # full index build) enforcing nothing the first check did not already settle.
-def edge [
+export def edge [
     src: any # source address expression
     tgt: any # target address expression
-    signer: any # signer key override or null
-    keyless_signer: any # keyless signer name or null
-    repo: any # target repo or null
+    signer: oneof<string, nothing> # signer key override or null
+    keyless_signer: oneof<string, nothing> # keyless signer name or null
+    repo: oneof<path, nothing> # target repo or null
     allow_missing: bool # skip the local-file check on a CID operand
     literal: bool # treat a content operand as literal even if it names a path
 ]: nothing -> record {
@@ -166,13 +166,14 @@ def edge [
 # collated the source, re-ran the computation, checked the quote — only then
 # is repeating it honest, where `confirm` leans on whoever did that work
 # (bj002 "Confirming an edge and a cyberlink").
+@category cybergraph
 @example "repeat the edge A → B" { convention repeat QmA… QmB… }
 export def repeat [
     cid_from: string # source vertex of the edge being repeated
     cid_to: string # target vertex of the edge being repeated
     --signer: string # signer key: a CID v0, or a registered key file
     --keyless-signer: string # signer with no key behind it, published as a particle
-    --repo: path
+    --repo: path # Target repo root (default: the nearest dir holding cybergraph/, up to the git root)
     --allow-missing # skip the local-file check on a CID operand (see resolve-particle)
     --literal # treat a content operand as literal even if it names a path (see resolve-arg-bytes)
 ]: nothing -> record {
@@ -210,7 +211,7 @@ export def "confirm-edge" [
     cid_to: string # target of the edge being confirmed
     --signer: string # signer key: a CID v0, or a registered key file
     --keyless-signer: string # signer with no key behind it, published as a particle
-    --repo: path
+    --repo: path # Target repo root (default: the nearest dir holding cybergraph/, up to the git root)
     --allow-missing # skip the local-file check on a CID operand (see resolve-particle)
     --literal # treat a content operand as literal even if it names a path (see resolve-arg-bytes)
 ]: nothing -> record {
@@ -231,7 +232,7 @@ export def "confirm-link" [
     confirmed_signer: string # signer of the cyberlink being confirmed
     --signer: string # signer key: a CID v0, or a registered key file
     --keyless-signer: string # signer with no key behind it, published as a particle
-    --repo: path
+    --repo: path # Target repo root (default: the nearest dir holding cybergraph/, up to the git root)
     --allow-missing # skip the local-file check on a CID operand (see resolve-particle)
     --literal # treat a content operand as literal even if it names a path (see resolve-arg-bytes)
 ]: nothing -> record {
@@ -250,7 +251,7 @@ export def "deny-edge" [
     cid_to: string # target of the disputed edge
     --signer: string # signer key: a CID v0, or a registered key file
     --keyless-signer: string # signer with no key behind it, published as a particle
-    --repo: path
+    --repo: path # Target repo root (default: the nearest dir holding cybergraph/, up to the git root)
     --allow-missing # skip the local-file check on a CID operand (see resolve-particle)
     --literal # treat a content operand as literal even if it names a path (see resolve-arg-bytes)
 ]: nothing -> record {
@@ -271,7 +272,7 @@ export def "deny-link" [
     disputed_signer: string # signer of the disputed cyberlink
     --signer: string # signer key: a CID v0, or a registered key file
     --keyless-signer: string # signer with no key behind it, published as a particle
-    --repo: path
+    --repo: path # Target repo root (default: the nearest dir holding cybergraph/, up to the git root)
     --allow-missing # skip the local-file check on a CID operand (see resolve-particle)
     --literal # treat a content operand as literal even if it names a path (see resolve-arg-bytes)
 ]: nothing -> record {
@@ -293,7 +294,7 @@ export def "update-edge" [
     cid_new: string # the new target
     --signer: string # signer key: a CID v0, or a registered key file
     --keyless-signer: string # signer with no key behind it, published as a particle
-    --repo: path
+    --repo: path # Target repo root (default: the nearest dir holding cybergraph/, up to the git root)
     --allow-missing # skip the local-file check on a CID operand (see resolve-particle)
     --literal # treat a content operand as literal even if it names a path (see resolve-arg-bytes)
 ]: nothing -> record {
@@ -329,7 +330,7 @@ export def "update-particle" [
     replacement: string # the version replacing it
     --signer: string # signer key: a CID v0, or a registered key file
     --keyless-signer: string # signer with no key behind it, published as a particle
-    --repo: path
+    --repo: path # Target repo root (default: the nearest dir holding cybergraph/, up to the git root)
     --allow-missing # skip the local-file check on a CID operand (see resolve-particle)
     --literal # treat a content operand as literal even if it names a path (see resolve-arg-bytes)
 ]: nothing -> record {
@@ -345,7 +346,7 @@ export def "quote-particle" [
     excerpt: string # the excerpt
     --signer: string # signer key: a CID v0, or a registered key file
     --keyless-signer: string # signer with no key behind it, published as a particle
-    --repo: path
+    --repo: path # Target repo root (default: the nearest dir holding cybergraph/, up to the git root)
     --allow-missing # skip the local-file check on a CID operand (see resolve-particle)
     --literal # treat a content operand as literal even if it names a path (see resolve-arg-bytes)
 ]: nothing -> record {
@@ -368,7 +369,7 @@ export def "translation-particle" [
     translated: string # the text translated into another language
     --signer: string # signer key: a CID v0, or a registered key file
     --keyless-signer: string # signer with no key behind it, published as a particle
-    --repo: path
+    --repo: path # Target repo root (default: the nearest dir holding cybergraph/, up to the git root)
     --allow-missing # skip the local-file check on a CID operand (see resolve-particle)
     --literal # treat a content operand as literal even if it names a path (see resolve-arg-bytes)
 ]: nothing -> record {
@@ -383,7 +384,7 @@ export def "agree-particle" [
     cid: string # the particle being agreed with
     --signer: string # signer key: a CID v0, or a registered key file
     --keyless-signer: string # signer with no key behind it, published as a particle
-    --repo: path
+    --repo: path # Target repo root (default: the nearest dir holding cybergraph/, up to the git root)
     --allow-missing # skip the local-file check on a CID operand (see resolve-particle)
     --literal # treat a content operand as literal even if it names a path (see resolve-arg-bytes)
 ]: nothing -> record {
@@ -398,7 +399,7 @@ export def "disagree-particle" [
     cid: string # the particle being disagreed with
     --signer: string # signer key: a CID v0, or a registered key file
     --keyless-signer: string # signer with no key behind it, published as a particle
-    --repo: path
+    --repo: path # Target repo root (default: the nearest dir holding cybergraph/, up to the git root)
     --allow-missing # skip the local-file check on a CID operand (see resolve-particle)
     --literal # treat a content operand as literal even if it names a path (see resolve-arg-bytes)
 ]: nothing -> record {
@@ -414,7 +415,7 @@ export def pro [
     argument: string # the argument content
     --signer: string # signer key: a CID v0, or a registered key file
     --keyless-signer: string # signer with no key behind it, published as a particle
-    --repo: path
+    --repo: path # Target repo root (default: the nearest dir holding cybergraph/, up to the git root)
     --allow-missing # skip the local-file check on a CID operand (see resolve-particle)
     --literal # treat a content operand as literal even if it names a path (see resolve-arg-bytes)
 ]: nothing -> record {
@@ -429,7 +430,7 @@ export def con [
     argument: string # the argument content
     --signer: string # signer key: a CID v0, or a registered key file
     --keyless-signer: string # signer with no key behind it, published as a particle
-    --repo: path
+    --repo: path # Target repo root (default: the nearest dir holding cybergraph/, up to the git root)
     --allow-missing # skip the local-file check on a CID operand (see resolve-particle)
     --literal # treat a content operand as literal even if it names a path (see resolve-arg-bytes)
 ]: nothing -> record {
@@ -445,7 +446,7 @@ export def question [
     question: string # the question content
     --signer: string # signer key: a CID v0, or a registered key file
     --keyless-signer: string # signer with no key behind it, published as a particle
-    --repo: path
+    --repo: path # Target repo root (default: the nearest dir holding cybergraph/, up to the git root)
     --allow-missing # skip the local-file check on a CID operand (see resolve-particle)
     --literal # treat a content operand as literal even if it names a path (see resolve-arg-bytes)
 ]: nothing -> record {
@@ -464,7 +465,7 @@ export def "answer-edge" [
     answer: string # the answer content
     --signer: string # signer key: a CID v0, or a registered key file
     --keyless-signer: string # signer with no key behind it, published as a particle
-    --repo: path
+    --repo: path # Target repo root (default: the nearest dir holding cybergraph/, up to the git root)
     --allow-missing # skip the local-file check on a CID operand (see resolve-particle)
     --literal # treat a content operand as literal even if it names a path (see resolve-arg-bytes)
 ]: nothing -> record {
@@ -485,7 +486,7 @@ export def "author-particle" [
     author_id: string # CID of the author's identifier
     --signer: string # signer key: a CID v0, or a registered key file
     --keyless-signer: string # signer with no key behind it, published as a particle
-    --repo: path
+    --repo: path # Target repo root (default: the nearest dir holding cybergraph/, up to the git root)
     --allow-missing # skip the local-file check on a CID operand (see resolve-particle)
     --literal # treat a content operand as literal even if it names a path (see resolve-arg-bytes)
 ]: nothing -> record {
@@ -502,7 +503,7 @@ export def same [
     name_to: string # another name of the same entity
     --signer: string # signer key: a CID v0, or a registered key file
     --keyless-signer: string # signer with no key behind it, published as a particle
-    --repo: path
+    --repo: path # Target repo root (default: the nearest dir holding cybergraph/, up to the git root)
     --allow-missing # skip the local-file check on a CID operand (see resolve-particle)
     --literal # treat a content operand as literal even if it names a path (see resolve-arg-bytes)
 ]: nothing -> record {
@@ -521,11 +522,11 @@ export def claimed-at [
     timestamp?: string # RFC 3339 claimed time (default: now, UTC)
     --signer: string # signer key: a CID v0, or a registered key file
     --keyless-signer: string # signer with no key behind it, published as a particle
-    --repo: path
+    --repo: path # Target repo root (default: the nearest dir holding cybergraph/, up to the git root)
     --allow-missing # skip the local-file check on a CID operand (see resolve-particle)
     --literal # treat a content operand as literal even if it names a path (see resolve-arg-bytes)
 ]: nothing -> record {
-    let t = if $timestamp != null { $timestamp } else {
+    let t = $timestamp | default {
         date now | date to-timezone UTC | format date "%+"
     }
 

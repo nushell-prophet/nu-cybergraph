@@ -7,6 +7,16 @@ use ../nu-cybergraph/_derive.nu [ derive record-bytes ]
 use ../nu-cybergraph/_layout.nu [ particles-dir particle-path ]
 use ../nu-cybergraph/_deps/cid-v0.nu [ cid-v0 ]
 
+@before-each
+def setup []: nothing -> record {
+    {tmp: (mktemp --directory)}
+}
+
+@after-each
+def cleanup [] {
+    rm --recursive --force $in.tmp
+}
+
 # File/signer CIDs of the bj003 smoke run; S is the record golden's signer.
 const A = "QmQXupHE6VPzpoBTivNXAAGwigJE68n4TeVUSxYnFL78GV"
 const B = "Qmc9pm5gQqDwJMiFTmFEuTxRhSy5Cn2yt7NZh1LrxmMhSi"
@@ -75,15 +85,6 @@ def "record-bytes refuses non-string values" [] {
 # (link add mkdirs links/). The signer is fixed so the run is offline and
 # deterministic; the assertions are on cid_from/cid_to — the shape of the edge,
 # independent of who signs it.
-@before-each
-def setup []: nothing -> record {
-    {tmp: (mktemp --directory)}
-}
-
-@after-each
-def cleanup [] {
-    rm --recursive --force $in.tmp
-}
 
 # The subject signer of `confirm-link A B S` is an identity, not a stored particle.
 # `confirm-link` and `particle add-link` both come through

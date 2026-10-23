@@ -24,6 +24,7 @@ use _validate.nu [ CID_V0_RE ]
 # string meant as content. Piping is unaffected either way: piped content is
 # always literal, even when it happens to be path-shaped — the pipe is
 # itself the deliberate-intent signal.
+@category cybergraph
 @example "publish text as a particle" { particle add "cyber" }
 @example "publish a file's bytes" { particle add path/to/doc.md }
 @example "publish a path string itself, not the file it names" { particle add path/to/doc.md --literal }
@@ -38,14 +39,14 @@ export def add [
     let root = graph-root $repo
 
     if $content != null and $piped != null {
-        error make {msg: "content given both as an argument and by pipeline — pass one"}
+        error make {msg: "content given both as an argument and by pipeline" help: "pass one"}
     }
     let bytes = if $content != null {
         resolve-arg-bytes $content --literal=$literal
     } else if $piped != null {
         $piped | into binary
     } else {
-        error make {msg: "nothing to publish — pass a string argument or pipe content in"}
+        error make {msg: "nothing to publish" help: "pass a string argument or pipe content in"}
     }
 
     $bytes | particle-store $root --ext $ext
@@ -129,9 +130,12 @@ export def cat [
     cid: string # CID v0 of the file (Qm + 44 chars)
     --repo: path # Target repo root (default: the nearest dir holding cybergraph/, up to the git root)
     --optional # return null when the store holds no file for this CID, instead of failing
-]: nothing -> any {
+]: nothing -> oneof<string, binary, nothing> {
     if $cid !~ $CID_V0_RE {
-        error make {msg: $"not a CID v0: ($cid) — particle cat takes the bare 46-char CID, not a filename"}
+        error make {
+            msg: $"not a CID v0: ($cid) — particle cat takes the bare 46-char CID, not a filename"
+            label: {text: "not a CID v0" span: (metadata $cid).span}
+        }
     }
     particle-read (graph-root $repo) $cid --optional=$optional
 }

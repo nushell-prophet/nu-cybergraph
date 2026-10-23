@@ -19,6 +19,7 @@ use _verify-helpers.nu [ verify-bundle ]
 
 # Verify every copy of an edge against its birth seal, never the current
 # root. `--signer` narrows to a single act.
+@category cybergraph
 export def main [
     edge_cid: string # Edge CID — the address of the pair, the filename of every copy
     --signer: string # Only this signer's act (default: every copy held)
@@ -36,7 +37,7 @@ export def main [
     # input", the trap seal.nu documents), hiding imported copies that still
     # verify. So a pending copy is set aside; it becomes the error only when
     # nothing verifiable is left — the is-empty branch below.
-    let pending = $held | where {|s| not ((cert-path $root $s $edge_cid) | path exists) }
+    let pending = $held | where not ((cert-path $root $it $edge_cid) | path exists)
     let own = $held
         | where ((cert-path $root $it $edge_cid) | path exists)
         | each {|s|
@@ -68,9 +69,12 @@ export def main [
 
     if ($rows | is-empty) {
         if ($pending | is-not-empty) {
-            error make {msg: $"($pending | first)/($edge_cid).json has no birth certificate yet — run `nu-cybergraph seal` first"}
+            error make {msg: $"($pending | first)/($edge_cid).json has no birth certificate yet" help: "run `nu-cybergraph seal` first"}
         }
-        error make {msg: $"unknown edge: ($edge_cid) — no signer directory holds it and nothing in imported/"}
+        error make {
+            msg: $"unknown edge: ($edge_cid) — no signer directory holds it and nothing in imported/"
+            label: {text: "unknown edge" span: (metadata $edge_cid).span}
+        }
     }
     $rows
 }

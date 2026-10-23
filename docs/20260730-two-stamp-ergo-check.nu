@@ -108,7 +108,7 @@ print ok" | save --force ($tmp | path join collide.nu)
 # Only the diagnostic and the flagged text are shown: the rest of the error is
 # absolute paths, which would churn the diff on every refresh.
 do { ^nu ($tmp | path join collide.nu) } | complete
-| $"exit ($in.exit_code): ($in.stderr | lines | where (($it | str contains 'nu::parser') or ($it | str contains 'seal status')) | str trim | str join ' | ')"
+| $"exit ($in.exit_code): ($in.stderr | lines | where $it =~ 'nu::parser|seal status' | str trim | str join ' | ')"
 | print $in
 # => exit 0: 
 
@@ -226,7 +226,7 @@ def make-signer [tmp: path name: string]: nothing -> record {
     let repo = $tmp | path join $name
 
     mkdir $repo
-    ^git init --object-format=sha256 -q $repo
+    ^git init --object-format=sha256 --quiet $repo
     ^git -C $repo config user.name $name
     ^git -C $repo config user.email $"($name)@test"
     let key = $tmp | path join $"key-($name)"
@@ -350,7 +350,7 @@ let vb = nu-cybergraph verify $plain.edge_cid --repo $b.repo | first
 # The signer fingerprint that `bundle.nu:47` recovers by parsing a filename —
 # `^tree-root\.txt\.(?<fp>.+)\.sig$` — still matches what a real seal writes.
 ls ($h1 | path join multiproofs) | get name | path basename
-| where ($it | str ends-with ".sig")
+| where $it ends-with ".sig"
 | all { parse --regex '^tree-root\.txt\.(?<fp>.+)\.sig$' | get --optional 0.fp | is-not-empty }
 | $"every snapshot signature name parses into a fingerprint: ($in)"
 | print $in

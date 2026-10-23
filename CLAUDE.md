@@ -46,8 +46,12 @@ so a check is never what gets dropped for simplicity.
 
 ## Conventions (shared with nu-multiproof)
 
-- `nu-cybergraph/mod.nu` re-exports the non-`_` submodules wholesale;
-  `_*.nu` files are internal, imported by explicit named lists (`use _record.nu [link-bytes link-cid]`).
+- Every submodule file exports every command, helpers included, so tests can import any of them;
+  `nu-cybergraph/mod.nu` names the public commands of the non-`_` files, and nothing else is public.
+  A file's subcommands go through an inline module of the same name (`module link { export use link.nu [ add list ] }`, then `export use link`),
+  and its `main` is imported outside that module (`export use seal.nu [ main ]`).
+  `_*.nu` files are internal;
+  other files import them by explicit named lists (`use _record.nu [link-bytes link-cid]`).
   Never `use foo *`.
 - Spec-critical byte formats (link record canonicalization, self-addressing) live in `_record.nu`
   and are pinned by golden tests in `tests/test_record.nu`.

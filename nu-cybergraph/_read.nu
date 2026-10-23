@@ -43,7 +43,7 @@ export def read-links [root: path]: nothing -> table {
 # timestamp file parses as a JSON scalar, and without the flatness rule a
 # nested JSON document would come back as a fake instruction with fake
 # operands.
-def deref-file [file: path cid: string]: nothing -> any {
+export def deref-file [file: path cid: string]: nothing -> oneof<record, nothing> {
     # Verified outside the `try`: the catch is for "these bytes are not JSON",
     # and a tampered file must not reach a reader disguised as that.
     let bytes = particle-verify $file $cid
@@ -53,7 +53,7 @@ def deref-file [file: path cid: string]: nothing -> any {
     # because particle-verify hashed those same bytes back to this CID first.
     let parsed = try { $bytes | into binary | decode utf-8 | from json } catch { null }
 
-    if not ($parsed | describe | str starts-with "record") { return null }
+    if ($parsed | describe) not-starts-with "record" { return null }
     if not ($parsed | values | all {|v| ($v | describe) == "string" }) { return null }
     $parsed
 }
@@ -61,7 +61,7 @@ def deref-file [file: path cid: string]: nothing -> any {
 # The same, addressed by CID through the store index the reader built once
 # (_particle.nu store-index). Null also when this repo holds no file for the
 # CID — legitimate, a cyberlink names CIDs and the bytes need not be local.
-export def deref [index: record cid: string]: nothing -> any {
+export def deref [index: record cid: string]: nothing -> oneof<record, nothing> {
     let file = index-find $index $cid --optional
 
     if $file == null { return null }
@@ -108,7 +108,7 @@ export def candidates [root: path cid: string --scan]: nothing -> list<path> {
     let found = ^rg --no-config --no-ignore --fixed-strings --files-with-matches -- $cid ...$dirs | complete
 
     match $found.exit_code {
-        0 => { $found.stdout | lines | where $it != "" }
+        0 => { $found.stdout | lines --skip-empty }
         1 => { [] } # rg's "no matches", not a failure
         _ => { error make {msg: $"rg failed over the graph home: ($found.stderr | str trim)"} }
     }
@@ -140,7 +140,7 @@ export def candidates [root: path cid: string --scan]: nothing -> list<path> {
 # reconstructing the act needs the signer half of the path too.
 export def touches [root: path cid: string --scan]: nothing -> table {
     let links = link-files $root
-    let signed = $links | where signer == $cid | each {|l| {file: $l.file role: "signer"} }
+    let signed = $links | where signer == $cid | select file | insert role "signer"
 
     let seeds = candidates $root $cid --scan=$scan
     let link_paths = $links | get file
@@ -185,7 +185,7 @@ export def touches [root: path cid: string --scan]: nothing -> table {
 
 # Where a CID sits, as one dotted string: the endpoint's own key, then the
 # fields walked to reach it.
-def role-path [prefix: string path: string]: nothing -> string {
+export def role-path [prefix: string path: string]: nothing -> string {
     if $path == "" { $prefix } else { $"($prefix).($path)" }
 }
 

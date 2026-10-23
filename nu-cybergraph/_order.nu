@@ -67,7 +67,7 @@ const SEQ_RE = '^(0|[1-9][0-9]*)$'
 # `{"seq": "2026-08-31T…"}` are both refused — a file that states two states at
 # once, or one key holding the other's value, is not a position in either
 # state.
-def validate-position [rec: record]: nothing -> nothing {
+export def validate-position [rec: record]: nothing -> nothing {
     let cols = $rec | columns | sort
 
     if $cols == $PROVISIONAL_KEYS {
@@ -85,7 +85,7 @@ def validate-position [rec: record]: nothing -> nothing {
 # certificate's own formatting, and free to choose for the same reason: the
 # bytes are not self-addressed, so nothing derives an address from them. What
 # proves them is the seal.
-def save-position [file: path rec: record]: nothing -> nothing {
+export def save-position [file: path rec: record]: nothing -> nothing {
     validate-position $rec
     $rec | to json --indent 2 | save --raw --force $file
 }
@@ -103,7 +103,7 @@ export def write-added-at [file: path when: datetime]: nothing -> nothing {
 }
 
 # The numbered position, written by the seal and never moved again.
-def write-seq [file: path seq: int]: nothing -> nothing {
+export def write-seq [file: path seq: int]: nothing -> nothing {
     save-position $file {seq: ($seq | into string)}
 }
 
@@ -129,7 +129,7 @@ export def read-position [file: path]: nothing -> record {
 #
 # A file states exactly one key (validate-position), so laying it over a
 # template of nulls fills the column that key names and leaves the other empty.
-def positions [root: path]: nothing -> table {
+export def positions [root: path]: nothing -> table {
     order-files $root
     | each {|r|
         let state = {seq: null added_at: null} | merge (read-position $r.file)
@@ -153,17 +153,17 @@ def positions [root: path]: nothing -> table {
 # signer and edge address one file, so the two sets are compared and that is
 # the whole check.
 export def assert-bijection [root: path]: nothing -> nothing {
-    let links = link-files $root | each {|l| $"($l.signer)/($l.edge)" }
-    let numbered = order-files $root | each {|p| $"($p.signer)/($p.edge)" }
+    let links = link-files $root | format pattern '{signer}/{edge}'
+    let numbered = order-files $root | format pattern '{signer}/{edge}'
     let unnumbered = $links | where $it not-in $numbered
 
     if ($unnumbered | is-not-empty) {
-        error make {msg: $"link records with no position: ($unnumbered | str join ', ') — every link a seal catalogues carries its number in the signer's run, or a withheld link is indistinguishable from one that was never made. A record written by hand is not numbered by anything: remove it and re-run `nu-cybergraph link add`, or `nu-cybergraph order backfill` on a graph that predates the run"}
+        error make {msg: $"link records with no position: ($unnumbered | str join ', ') — every link a seal catalogues carries its number in the signer's run, or a withheld link is indistinguishable from one that was never made. A record written by hand is not numbered by anything" help: "remove it and re-run `nu-cybergraph link add`, or `nu-cybergraph order backfill` on a graph that predates the run"}
     }
     let orphans = $numbered | where $it not-in $links
 
     if ($orphans | is-not-empty) {
-        error make {msg: $"positions naming no link record: ($orphans | str join ', ') — a number in the run without the act it counts. Remove the position, or restore the record it belongs to"}
+        error make {msg: $"positions naming no link record: ($orphans | str join ', ') — a number in the run without the act it counts" help: "remove the position, or restore the record it belongs to"}
     }
 }
 
@@ -183,7 +183,7 @@ export def assert-bijection [root: path]: nothing -> nothing {
 # The empty run passes: a graph before its first seal has nothing numbered, and
 # that is the ordinary state, not a gap.
 export def assert-numbered-run [root: path]: nothing -> nothing {
-    for signer in (positions $root | where not provisional | group-by signer --to-table) {
+    for signer in (positions $root | where not $it.provisional | group-by signer --to-table) {
         let seqs = $signer.items | get seq | sort
 
         # The rule read directly: a run of 0..N with no gap and no repeat is a
@@ -230,11 +230,11 @@ export def project-run [root: path]: nothing -> table {
 # a string: every claimed time is UTC (validate-position), but `Z`, `+00:00`
 # and fractional seconds still put one instant in several byte orders, and only
 # the parse compares those correctly.
-def project-signer-run [rows: table]: nothing -> table {
-    let assigned = $rows | where not provisional
+export def project-signer-run [rows: table]: nothing -> table {
+    let assigned = $rows | where not $it.provisional
     let next = if ($assigned | is-empty) { 0 } else { ($assigned | get seq | math max) + 1 }
     let waiting = $rows
-        | where provisional
+        | where $it.provisional
         | insert arrived {|r| $r.added_at | into datetime }
         | sort-by arrived edge
         | reject arrived
@@ -253,7 +253,7 @@ def project-signer-run [rows: table]: nothing -> table {
 # number is where the new numbering starts, and over a run with a hole that
 # number is one the graph has already signed.
 export def number-provisional [root: path]: nothing -> int {
-    let minted = project-run $root | where provisional
+    let minted = project-run $root | where $it.provisional
 
     # `for`, not `each`: a raise inside an `each` closure comes back as "Eval
     # block failed with pipeline input", and a half-numbered run is what the

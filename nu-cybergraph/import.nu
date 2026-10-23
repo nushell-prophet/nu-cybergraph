@@ -20,6 +20,7 @@ use _verify-helpers.nu [ verify-bundle ]
 # Verify a foreign bundle and land it read-only under imported/, writing this
 # repo's custody receipt for the next seal to freeze. Refuses on any
 # verification failure and on a handoff addressed to another signer.
+@category cybergraph
 export def main [
     bundle: path # Portable bundle directory to import
     --repo: path # Destination repo root (default: the nearest dir holding cybergraph/, up to the git root)

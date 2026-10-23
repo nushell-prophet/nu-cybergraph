@@ -42,7 +42,7 @@ def make-signer [tmp_dir: path]: nothing -> record {
     let repo = $tmp_dir | path join repo
 
     mkdir $repo
-    ^git init --object-format=sha256 -q $repo
+    ^git init --object-format=sha256 --quiet $repo
     ^git -C $repo config user.name t
     ^git -C $repo config user.email t@t
     let key = $tmp_dir | path join key
@@ -67,12 +67,13 @@ def "link add stamps each act with the time it arrived" [] {
     let first = link add $P1 $P2 --repo $s.repo --allow-missing
     let second = link add $P1 $P3 --repo $s.repo --allow-missing
 
-    let stamps = [$first $second] | each {|l|
-        let file = order-path $s.home $l.record.signer $l.edge_cid
+    let stamps = [$first $second]
+        | each {|l|
+            let file = order-path $s.home $l.record.signer $l.edge_cid
 
-        assert ($file | path exists) $"no position beside ($l.edge_cid)"
-        read-position $file | get added_at
-    }
+            assert ($file | path exists) $"no position beside ($l.edge_cid)"
+            read-position $file | get added_at
+        }
 
     for at in $stamps { assert ($at =~ $RFC3339_UTC_RE) $"stamped ($at)" }
     assert ((($stamps | first) | into datetime) <= (($stamps | last) | into datetime))
@@ -520,7 +521,7 @@ def "backfill stamps the graph in the order git recorded" [] {
     ] {
         ^git -C $s.repo add -- (link-path $s.home $c.link.record.signer $c.link.edge_cid)
         with-env {GIT_AUTHOR_DATE: $c.at GIT_COMMITTER_DATE: $c.at} {
-            ^git -C $s.repo commit -q -m $"add ($c.link.edge_cid)"
+            ^git -C $s.repo commit --quiet --message $"add ($c.link.edge_cid)"
         }
     }
 
@@ -558,7 +559,7 @@ def "backfill refuses a link git has never seen and writes nothing" [] {
 
     rm --recursive (order-dir $s.home)
     ^git -C $s.repo add -- (link-path $s.home $committed.record.signer $committed.edge_cid)
-    ^git -C $s.repo commit -q -m "add one link"
+    ^git -C $s.repo commit --quiet --message "add one link"
 
     let err = try { order backfill --repo $s.repo; null } catch {|e| $e.msg }
 
@@ -579,7 +580,7 @@ def "backfill reads the history of a graph below the git root" [] {
     let key = $tmp_dir | path join key
 
     mkdir $repo
-    ^git init --object-format=sha256 -q $outer
+    ^git init --object-format=sha256 --quiet $outer
     ^git -C $outer config user.name t
     ^git -C $outer config user.email t@t
     ^ssh-keygen -t ed25519 -f $key -N "" -q
@@ -590,7 +591,7 @@ def "backfill reads the history of a graph below the git root" [] {
 
     rm --recursive (order-dir $home)
     ^git -C $outer add -- (link-path $home $added.record.signer $added.edge_cid)
-    ^git -C $outer commit -q -m "add one link"
+    ^git -C $outer commit --quiet --message "add one link"
 
     assert equal (order backfill --repo $repo | get edge) [$added.edge_cid]
 }

@@ -36,18 +36,18 @@ use _deps/merkle.nu [ merkle ]
 # not raise in `open`, it returns nothing (measured), and `get --optional`
 # turns both that and a well-formed file of the wrong shape into null — which is
 # a verdict this function can phrase, naming the link that went uncertified.
-def assert-frozen-proof [proof: path leaf: string]: nothing -> nothing {
+export def assert-frozen-proof [proof: path leaf: string]: nothing -> nothing {
     if ($proof | path type) == null { return }
     if ($proof | path type) != "file" {
-        error make {msg: $"($proof) is a ($proof | path type), not the frozen proof for ($leaf) — remove it and seal again"}
+        error make {msg: $"($proof) is a ($proof | path type), not the frozen proof for ($leaf)" help: "remove it and seal again"}
     }
     let named = open $proof | get --optional leaf.filepath
 
     if $named == null {
-        error make {msg: $"($proof) carries no leaf.filepath, so it is not a frozen proof for ($leaf) — remove it and seal again"}
+        error make {msg: $"($proof) carries no leaf.filepath, so it is not a frozen proof for ($leaf)" help: "remove it and seal again"}
     }
     if $named != $leaf {
-        error make {msg: $"($proof) is the frozen proof for ($named), not for ($leaf) — a proof under the wrong name certifies the wrong record; remove it and seal again"}
+        error make {msg: $"($proof) is the frozen proof for ($named), not for ($leaf) — a proof under the wrong name certifies the wrong record" help: "remove it and seal again"}
     }
 }
 
@@ -62,6 +62,7 @@ def assert-frozen-proof [proof: path leaf: string]: nothing -> nothing {
 # does not weaken that — it writes the command into the prompt to be read, edited
 # and run — it only fixes the wording, so a seal does not land under "wip" or
 # split over three commits.
+@category cybergraph
 export def main [
     --repo: path # Target repo root (default: the nearest dir holding cybergraph/, up to the git root)
     --no-stamp # Skip OTS timestamping (stamping is the point — tests only)
@@ -78,7 +79,10 @@ export def main [
     # asserting nothing. Upstream refuses its own contradictory pair with the
     # same argument (nu-multiproof/seal.nu, --no-stamp vs --no-content-anchor).
     if $no_stamp and $response_file != null {
-        error make {msg: "--no-stamp and --response-file are alternatives: --no-stamp skips stamping entirely, so the calendar answer would be read by no one"}
+        error make {
+            msg: "--no-stamp and --response-file are alternatives: --no-stamp skips stamping entirely, so the calendar answer would be read by no one"
+            label: {text: "drop this or --no-stamp" span: (metadata $response_file).span}
+        }
     }
 
     # Upstream's seal asks its registration question before rewriting
@@ -89,7 +93,7 @@ export def main [
     let registered = list-files ($root | path join multiproofs pubkeys) --suffix ".pub"
 
     if ($registered | is-empty) {
-        error make {msg: "no pubkey registered in multiproofs/pubkeys/ — run `nu-cybergraph init` first"}
+        error make {msg: "no pubkey registered in multiproofs/pubkeys/" help: "run `nu-cybergraph init` first"}
     }
 
     # Self-addressing is the format's contract for every reader, but until now
@@ -163,7 +167,7 @@ export def main [
     if ($stray | is-not-empty) {
         let named = $stray | each {|r| $"($r.path | cwd-relative) \(($r.under | path basename) holds ($r.allowed))" } | str join ', '
 
-        error make {msg: $"not the graph layout: ($named) — a seal signs whatever is committed under the graph home, so it refuses while it reaches a file the layout does not describe. Remove it and seal again, or move it beside the graph home rather than inside it. `nu-cybergraph strays` lists them without sealing"}
+        error make {msg: $"not the graph layout: ($named) — a seal signs whatever is committed under the graph home, so it refuses while it reaches a file the layout does not describe" help: "remove it and seal again, or move it beside the graph home rather than inside it. `nu-cybergraph strays` lists them without sealing"}
     }
 
     # Stage the cybergraph dirs — the signer directories holding the link
@@ -237,7 +241,7 @@ export def main [
     let loose = stageable (uncommitted-files $root)
 
     if ($loose | is-not-empty) and not $allow_untracked_particles {
-        error make --unspanned {msg: $"the graph names bytes git does not track: ($loose | each {|r| $r.file | cwd-relative } | str join ', ') — the seal manifest walks `git ls-files`, so these would enter no root and the links naming them would be frozen pointing at nothing attested. Run `nu-cybergraph particle uncommitted --propose-commit` first, or seal with --allow-untracked-particles"}
+        error make --unspanned {msg: $"the graph names bytes git does not track: ($loose | each {|r| $r.file | cwd-relative } | str join ', ') — the seal manifest walks `git ls-files`, so these would enter no root and the links naming them would be frozen pointing at nothing attested" help: "run `nu-cybergraph particle uncommitted --propose-commit` first, or seal with --allow-untracked-particles"}
     }
 
     # Number the provisional positions BEFORE the merkle run, so a position

@@ -60,8 +60,9 @@ use _validate.nu [ RFC3339_RE ]
 # Refuses over a numbered run with a hole, the refusal `seal` makes: the
 # projection numbers from the highest already assigned, so over a broken run it
 # would print numbers no seal will ever mint.
+@category cybergraph
 @example "the run, numbered and provisional" { nu-cybergraph order list }
-@example "what is not numbered yet" { nu-cybergraph order list | where provisional }
+@example "what is not numbered yet" { nu-cybergraph order list | where $it.provisional }
 export def list [
     --repo: path # Repo root (default: the nearest dir holding cybergraph/, up to the git root)
 ]: nothing -> table {
@@ -90,7 +91,7 @@ export def list [
 #
 # Why --relative: git names a file from the git root, and the links are named
 # from the repo, which can sit below it — one project of a monorepo.
-def arrival-times [repo_root: path graph: path]: nothing -> table {
+export def arrival-times [repo_root: path graph: path]: nothing -> table {
     let result = ^git -C $repo_root log --reverse --diff-filter=A --relative --format=%cI --name-only -- ($graph | path relative-to $repo_root)
         | complete
 
@@ -98,8 +99,7 @@ def arrival-times [repo_root: path graph: path]: nothing -> table {
         error make {msg: $"git log failed over ($graph): ($result.stderr | str trim) — backfill reads arrival order out of history, so it needs the graph to be in a git repo"}
     }
     $result.stdout
-    | lines
-    | where ($it | str trim | is-not-empty)
+    | lines --skip-empty
     | reduce --fold {at: null rows: []} {|line acc|
         if $line =~ $RFC3339_RE {
             {at: $line rows: $acc.rows}
@@ -143,7 +143,7 @@ export def backfill [
     let unseen = $stamps | where added_at == null
 
     if ($unseen | is-not-empty) {
-        error make {msg: $"link records git has never seen: ($unseen | get rel | str join ', ') — a backfill takes the time the repo recorded, and history holds no arrival time for a file that was never committed. Commit them, then run the backfill again"}
+        error make {msg: $"link records git has never seen: ($unseen | get rel | str join ', ') — a backfill takes the time the repo recorded, and history holds no arrival time for a file that was never committed" help: "commit them, then run the backfill again"}
     }
 
     # `for`, not `each`: a raise inside an `each` closure comes back as "Eval

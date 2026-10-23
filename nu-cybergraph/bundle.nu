@@ -52,7 +52,7 @@ use _handoff.nu [ handoff-bytes HANDOFF_SCHEMA ]
 # Copy one seal's verification artifacts into a proof dir: the snapshot's
 # root statement + signatures, the signer pubkeys, and the OTS bundles
 # committing to that root. Shared by the birth bundle and custody layers.
-def assemble-seal-artifacts [root: path out: path root_hex: string]: nothing -> nothing {
+export def assemble-seal-artifacts [root: path out: path root_hex: string]: nothing -> nothing {
     let snap = snapshot-dir $root $root_hex
 
     if not ($snap | path exists) {
@@ -104,7 +104,7 @@ def assemble-seal-artifacts [root: path out: path root_hex: string]: nothing -> 
 # One directory per seal, named after the root it stamped, so a bundle carrying
 # two roots (a birth certificate and a position frozen under a later seal)
 # keeps both here without a collision.
-def assemble-ots [root: path out: path root_hex: string]: nothing -> nothing {
+export def assemble-ots [root: path out: path root_hex: string]: nothing -> nothing {
     let ots_bundles = list-dirs ($root | path join multiproofs ots-timestamps)
         | where ($it | path basename | str starts-with "tree-root.")
         | where {|d|
@@ -140,11 +140,11 @@ def assemble-ots [root: path out: path root_hex: string]: nothing -> nothing {
 # lets verification look it up by one rule instead of branching on whether the
 # two roots happen to coincide. What it costs when they do is a second copy of
 # two small files.
-def assemble-position [root: path out: path signer: string edge_cid: string birth_root: string]: nothing -> nothing {
+export def assemble-position [root: path out: path signer: string edge_cid: string birth_root: string]: nothing -> nothing {
     let cert = order-cert-path $root $signer $edge_cid
 
     if not ($cert | path exists) {
-        error make {msg: $"no frozen position proof for ($signer)'s ($edge_cid) — run `nu-cybergraph seal` first, then export: a number no seal has catalogued is provable to nobody"}
+        error make {msg: $"no frozen position proof for ($signer)'s ($edge_cid) — a number no seal has catalogued is provable to nobody" help: "run `nu-cybergraph seal` first, then export"}
     }
     let relpath = order-relpath $signer $edge_cid
 
@@ -179,7 +179,7 @@ def assemble-position [root: path out: path signer: string edge_cid: string birt
 # the pair behind it is what says which edge. A CID with no local file is
 # skipped, the same at every depth — trying every CID uniformly is simpler
 # than asking each verb which of its fields is which.
-def assemble-particles [root: path out: path rec: record]: nothing -> nothing {
+export def assemble-particles [root: path out: path rec: record]: nothing -> nothing {
     let index = store-index $root
 
     for cid in ([$rec.cid_from $rec.cid_to] | operand-closure $index) {
@@ -205,12 +205,12 @@ def assemble-particles [root: path out: path rec: record]: nothing -> nothing {
 # principal is not the signer's to choose" — and a copy here would enforce one
 # invariant in two places, drifting the moment upstream narrows it again (it
 # just did). main's cleanup is what makes their refusal survivable.
-def resolve-handoff-key [root: path key: any]: nothing -> path {
+export def resolve-handoff-key [root: path key: oneof<path, nothing>]: nothing -> path {
     if $key != null { return $key }
     let k = ^git -C $root config user.signingKey | complete
 
     if $k.exit_code != 0 or ($k.stdout | str trim | is-empty) {
-        error make {msg: "handoff needs a signing key: set git config user.signingKey or pass --key"}
+        error make {msg: "handoff needs a signing key" help: "set git config user.signingKey or pass --key"}
     }
     let raw = $k.stdout | str trim
 
@@ -220,7 +220,7 @@ def resolve-handoff-key [root: path key: any]: nothing -> path {
     # someone else's cleanup rule, so the handoff names the gap instead of
     # failing later as "signing key not found: key::ssh-ed25519 AAAA…".
     if ($raw | str starts-with "key::") {
-        error make {msg: "handoff cannot sign with an inline `key::` user.signingKey — pass --key with the key file"}
+        error make {msg: "handoff cannot sign with an inline `key::` user.signingKey" help: "pass --key with the key file"}
     }
     $raw | path expand
 }
@@ -229,7 +229,7 @@ def resolve-handoff-key [root: path key: any]: nothing -> path {
 # the repo's key, not through a seal: the bundle leaves at export time,
 # before any later seal could catalogue the handoff — a detached signature
 # is the only immediate, local authentication available.
-def write-handoff [root: path dir: path edge_cid: string act: record to: string receipt_hash: any key: path]: nothing -> nothing {
+export def write-handoff [root: path dir: path edge_cid: string act: record to: string receipt_hash: oneof<string, nothing> key: path]: nothing -> nothing {
     let handoff = {
         schema: $HANDOFF_SCHEMA
         cid_from: $act.cid_from
@@ -256,11 +256,11 @@ def write-handoff [root: path dir: path edge_cid: string act: record to: string 
 # Whatever the cause, a partial bundle must not leave the repo with exit 0.
 # Removing it is main's job, not this one's: every failure below the "already
 # exists" check leaves the same debris, so one cleanup covers them all.
-def assert-complete-bundle [out: path]: nothing -> nothing {
+export def assert-complete-bundle [out: path]: nothing -> nothing {
     let certs = list-files $out --suffix ".cert.json"
 
     if ($certs | length) != 1 {
-        error make {msg: $"bundle came out incomplete: ($certs | length) *.cert.json at the root instead of 1 — partial bundle removed, re-run the export"}
+        error make {msg: $"bundle came out incomplete: ($certs | length) *.cert.json at the root instead of 1 — partial bundle removed" help: "re-run the export"}
     }
 }
 
@@ -268,7 +268,7 @@ def assert-complete-bundle [out: path]: nothing -> nothing {
 # whole of it sits under one cleanup: from here down, any raise leaves debris.
 # `resolved` is main's answer to which copy of the edge leaves: {own: bool,
 # signer: cid, dir: the imported bundle for a foreign act, null for an own one}.
-def assemble-bundle [root: path out: path edge_cid: string resolved: record act: record to: any key: any links_only: bool]: nothing -> nothing {
+export def assemble-bundle [root: path out: path edge_cid: string resolved: record act: record to: oneof<string, nothing> key: oneof<path, nothing> links_only: bool]: nothing -> nothing {
     if $resolved.own {
         # Own act: the birth bundle, mirroring the graph's own layout — the
         # leaf path `<signer>/<edge>.json` is what the certificate proves.
@@ -298,7 +298,7 @@ def assemble-bundle [root: path out: path edge_cid: string resolved: record act:
     let rcert = receipt-cert-path $root $author $edge_cid
 
     if not ($rcert | path exists) {
-        error make {msg: $"no frozen receipt proof for ($author)'s ($edge_cid) — run `nu-cybergraph seal` after import, then re-export"}
+        error make {msg: $"no frozen receipt proof for ($author)'s ($edge_cid)" help: "run `nu-cybergraph seal` after import, then re-export"}
     }
     copy-tree $resolved.dir $out
 
@@ -324,6 +324,7 @@ def assemble-bundle [root: path out: path edge_cid: string resolved: record act:
 # birth bundle for an own act; for an imported one, the foreign bundle
 # unchanged plus this repo's custody layer. --to names the recipient in a
 # signed handoff.
+@category cybergraph
 export def main [
     edge_cid: string # Edge CID: authored here (certs/) or imported (imported/*/)
     --repo: path # Source repo root (default: the nearest dir holding cybergraph/, up to the git root)
@@ -336,7 +337,10 @@ export def main [
     let root = graph-root $repo
 
     if $to != null and $to !~ $CID_V0_RE {
-        error make {msg: $"--to must be a signer CID \(base58btc CID v0\): ($to)"}
+        error make {
+            msg: $"--to must be a signer CID \(base58btc CID v0\): ($to)"
+            label: {text: "not a CID v0" span: (metadata $to).span}
+        }
     }
     let key = if $to == null { null } else { resolve-handoff-key $root $key }
 
@@ -353,13 +357,16 @@ export def main [
     } else { [] }
 
     if ($own_hits | is-empty) and ($imported_hits | is-empty) {
-        error make {msg: $"unknown edge: ($edge_cid) — no birth certificate in certs/ and nothing in imported/"}
+        error make {
+            msg: $"unknown edge: ($edge_cid) — no birth certificate in certs/ and nothing in imported/"
+            label: {text: "unknown edge" span: (metadata $edge_cid).span}
+        }
     }
     if ($own_hits | length) > 1 {
-        error make {msg: $"several signers hold a birth certificate for ($edge_cid): ($own_hits | str join ', ') — pass --signer"}
+        error make {msg: $"several signers hold a birth certificate for ($edge_cid): ($own_hits | str join ', ')" help: "pass --signer"}
     }
     if ($imported_hits | length) > 1 {
-        error make {msg: $"several imported signers hold ($edge_cid): ($imported_hits | get signer | str join ', ') — pass --signer"}
+        error make {msg: $"several imported signers hold ($edge_cid): ($imported_hits | get signer | str join ', ')" help: "pass --signer"}
     }
     let resolved = if ($own_hits | is-not-empty) {
         {own: true signer: ($own_hits | first) dir: null}

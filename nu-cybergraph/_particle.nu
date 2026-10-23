@@ -17,21 +17,18 @@ use _deps/cid-v0.nu [ cid-v0 ]
 # quadratic in the store (43s over 567 links). A single lookup still costs one
 # listing, exactly what it cost before.
 export def store-index [root: path]: nothing -> record {
-    list-files (particles-dir $root) | reduce --fold {} {|p acc|
-        let cid = store-cid $p
-
-        if $cid == null {
-            $acc
-        } else {
-            $acc | upsert $cid (($acc | get --optional $cid | default []) ++ [$p])
-        }
-    }
+    list-files (particles-dir $root)
+    | wrap path
+    | insert cid {|r| store-cid $r.path }
+    | where cid != null
+    | group-by cid
+    | update cells { get path }
 }
 
 # All store files addressing a CID: `<cid>` bare or `<cid>.<ext>`. The store
 # invariant is at most one such file (`particle-store` keeps it); readers
 # fail fast on a violation instead of picking one copy silently.
-def particle-files [root: path cid: string]: nothing -> list<string> {
+export def particle-files [root: path cid: string]: nothing -> list<string> {
     store-index $root | get --optional $cid | default []
 }
 
@@ -40,9 +37,9 @@ def particle-files [root: path cid: string]: nothing -> list<string> {
 # absence a reader may legitimately meet, because a cyberlink names CIDs and
 # the bytes need not be local. An ambiguous store still fails under it: two
 # files for one CID is a broken store, not an absence.
-# Why `nothing -> any` and not `path`: nushell rejects a null return against a
+# Why `nothing -> oneof<path, nothing>` and not `path`: nushell rejects a null return against a
 # declared `path` at parse time.
-export def index-find [index: record cid: string --optional]: nothing -> any {
+export def index-find [index: record cid: string --optional]: nothing -> oneof<path, nothing> {
     let files = $index | get --optional $cid | default []
 
     match ($files | length) {
@@ -53,7 +50,7 @@ export def index-find [index: record cid: string --optional]: nothing -> any {
 }
 
 # The same resolution for a caller holding no index — one lookup, one listing.
-export def particle-find [root: path cid: string --optional]: nothing -> any {
+export def particle-find [root: path cid: string --optional]: nothing -> oneof<path, nothing> {
     index-find (store-index $root) $cid --optional=$optional
 }
 
@@ -72,7 +69,7 @@ export def particle-verify [file: path cid: string]: nothing -> any {
 
 # Find and read in one call, for a caller holding no index. `--optional`
 # forwards to particle-find — absence returns null, tampering still raises.
-export def particle-read [root: path cid: string --optional]: nothing -> any {
+export def particle-read [root: path cid: string --optional]: nothing -> oneof<string, binary, nothing> {
     let file = particle-find $root $cid --optional=$optional
 
     if $file == null { return null }
@@ -109,7 +106,7 @@ export def particle-store [root: path --ext: string]: binary -> string {
 # Whether a string names something on disk right now — `--no-symlink` so a
 # broken symlink (a real file on disk, however dead its target) still counts;
 # opening it below is what turns the missing target into a loud error.
-def path-exists-here [arg: string]: nothing -> bool {
+export def path-exists-here [arg: string]: nothing -> bool {
     $arg | path exists --no-symlink
 }
 
@@ -120,7 +117,7 @@ def path-exists-here [arg: string]: nothing -> bool {
 # certainly meant a file and mistyped it, not that the string is meant as
 # content — literal cyberlink content (a thesis, an argument, a question)
 # all but never starts with a dot or contains a separator.
-def looks-path-shaped [arg: string]: nothing -> bool {
+export def looks-path-shaped [arg: string]: nothing -> bool {
     ($arg =~ '[/\\]') or (($arg | path parse | get extension) != "") or ($arg | str starts-with '.')
 }
 
@@ -144,7 +141,7 @@ export def resolve-arg-bytes [arg: string --literal]: nothing -> binary {
     if (path-exists-here $arg) {
         open --raw $arg | into binary
     } else if (looks-path-shaped $arg) {
-        error make {msg: $"($arg) looks like a path, but nothing exists there — check the path, or pass --literal to publish the string itself as content"}
+        error make {msg: $"($arg) looks like a path, but nothing exists there" help: "check the path, or pass --literal to publish the string itself as content"}
     } else {
         $arg | into binary
     }
@@ -179,7 +176,7 @@ export def resolve-arg-bytes [arg: string --literal]: nothing -> binary {
 export def resolve-particle [root: path index: record arg: string --allow-missing --literal]: nothing -> string {
     if $arg =~ $CID_V0_RE {
         if not $allow_missing and (index-find $index $arg --optional) == null {
-            error make {msg: $"no local file for ($arg) — pass --allow-missing to reference a CID this repo does not hold bytes for"}
+            error make {msg: $"no local file for ($arg)" help: "pass --allow-missing to reference a CID this repo does not hold bytes for"}
         }
         return $arg
     }

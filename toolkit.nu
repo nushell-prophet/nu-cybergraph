@@ -15,7 +15,7 @@ export def main [] { }
 # The investigation is not on any live branch — it lives in an archived tag of
 # the cozy repo: git show archive/debug-freeze:todo/20260830-debug-freeze.md
 export def 'main test' [
-    --fail
+    --fail # exit non-zero when a test fails
     --threads: int = 1 # nutest worker threads; 1 by default for the reason above, 0 means one per core
 ] {
     use ../nutest/nutest

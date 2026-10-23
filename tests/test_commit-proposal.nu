@@ -64,7 +64,7 @@ def graph-with-a-link [tmp_dir: path]: nothing -> record {
     let repo = $tmp_dir | path join repo
 
     mkdir $repo
-    ^git init --object-format=sha256 -q $repo
+    ^git init --object-format=sha256 --quiet $repo
     ^git -C $repo config user.name t
     ^git -C $repo config user.email t@t
     let key = $tmp_dir | path join key
@@ -282,7 +282,7 @@ def "the proposed block runs and commits exactly what the seal wrote" [] {
 
     assert equal $run.exit_code 0 $"the proposed block did not run: ($run.stderr)"
 
-    let message = ^git -C $g.repo log -1 --format=%B
+    let message = ^git -C $g.repo log --max-count=1 --format=%B
 
     assert str contains $message $"seal: graph catalogued at merkle root ($root_hex | str substring 0..<8)"
     assert str contains $message $"Merkle root: ($root_hex)"

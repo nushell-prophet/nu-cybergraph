@@ -57,7 +57,7 @@ def make-signer [tmp_dir: path name: string --key-type: string = "ed25519"]: not
     let repo = $tmp_dir | path join $name
 
     mkdir $repo
-    ^git init --object-format=sha256 -q $repo
+    ^git init --object-format=sha256 --quiet $repo
     ^git -C $repo config user.name $name
     ^git -C $repo config user.email $"($name)@test"
     let key = $tmp_dir | path join $"key-($name)"
@@ -402,7 +402,7 @@ def "a bundle that could not copy an OTS file names the file" [] {
 def signer-cid [home: path]: nothing -> string {
     let pub = ls ($home | path join multiproofs pubkeys)
         | get name
-        | where ($it | str ends-with ".pub")
+        | where $it ends-with ".pub"
         | first
 
     open --raw $pub | into binary | cid-v0
@@ -694,7 +694,7 @@ def "two signature spellings by one key do not fork the endorsement" [] {
     let out = bundle $born.edge_cid --repo $a.repo --out ($tmp_dir | path join out)
 
     let mp = $out | path join multiproofs
-    let named = ls $mp | get name | where ($it | str ends-with ".sig") | first
+    let named = ls $mp | get name | where $it ends-with ".sig" | first
 
     cp $named ($mp | path join "tree-root.txt.sig")
 
@@ -987,7 +987,7 @@ def "a pubkey filed under the fingerprint of another key cannot borrow its autho
 
     let v = verify-bundle $out
 
-    assert equal ($v.signatures | where valid | get signer) [$mallory_fp]
+    assert equal ($v.signatures | where $it.valid | get signer) [$mallory_fp]
     assert not $v.signer.bound "the victim's signer CID was bound to mallory's signature"
     # And no endorsement date either, though the bundle carries one: mallory's
     # signature is valid, so upstream lists it in `endorsements`. Reporting that
@@ -1017,7 +1017,7 @@ def "a repo path holding glob metacharacters still seals and exports and imports
 
     assert equal $sealed.newborn 1
     # `ls`, not `glob`: the assertion must not repeat the bug it is pinning
-    assert equal (ls $sealed.snapshot | get name | where ($it | str ends-with ".sig") | length) 1
+    assert equal (ls $sealed.snapshot | get name | where $it ends-with ".sig" | length) 1
 
     let out = bundle $born.edge_cid --repo $a.repo --out ($tmp_dir | path join out) --to (signer-cid $b.home)
 
@@ -1090,7 +1090,7 @@ def "a pubkey file with a byte-order mark is not the canonical form" [] {
 
     ((0x[EF BB BF]) ++ $canon) | save --raw --force $pub
     assert equal (open --raw $pub | into binary | decode) ($canon | decode)
-    assert not ((open --raw $pub | into binary | cid-v0) == ($canon | cid-v0))
+    assert not equal (open --raw $pub | into binary | cid-v0) ($canon | cid-v0)
     assert error {|| verify-bundle $bundle_dir }
 }
 

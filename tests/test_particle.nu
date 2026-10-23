@@ -340,6 +340,7 @@ def "a registered key file given to --signer signs as its identity" [] {
 @test
 def "a key file that is not registered is refused by --signer" [] {
     let tmp = $in.tmp
+
     registered-key $tmp $in.root | ignore
     let other = $tmp | path join "other-key"
 
@@ -353,7 +354,7 @@ def "a key file that is not registered is refused by --signer" [] {
 # so --signer refuses it, and the refusal names the flag for a keyless name.
 @test
 def "a name that is not a key is refused by --signer and the refusal names keyless-signer" [] {
-    let err = try { link add "cyber" "bostrom" --repo $in.tmp --signer "alice"; null } catch {|e| $e.msg }
+    let err = try { link add "cyber" "bostrom" --repo $in.tmp --signer "alice"; null } catch {|e| $e.details.help }
 
     assert ($err | str contains "--keyless-signer alice")
     assert not ((particles-dir $in.root) | path exists) "a refused signer left particles behind"
@@ -485,11 +486,11 @@ def "a cyberlink preimage is published the same way with the signer included" []
 @test
 def "link add refuses a CID endpoint this repo holds no file for" [] {
     let tmp = $in.tmp
-    let err = try { link add $A $B --repo $tmp --signer $N; null } catch {|e| $e.msg }
+    let err = try { link add $A $B --repo $tmp --signer $N; null } catch {|e| $e }
 
     assert ($err != null) "an unpublished CID endpoint was accepted with no flag"
-    assert ($err | str contains $A) $"the refusal does not name the missing CID: ($err)"
-    assert ($err | str contains "allow-missing") $"the refusal does not name its own escape hatch: ($err)"
+    assert ($err.msg | str contains $A) $"the refusal does not name the missing CID: ($err.msg)"
+    assert ($err.details.help | str contains "allow-missing") $"the refusal does not name its own escape hatch: ($err.details.help)"
     # ...and the escape hatch actually works, same repo, no other change
     link add $A $B --repo $tmp --signer $N --allow-missing | ignore
 }

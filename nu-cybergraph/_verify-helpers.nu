@@ -17,7 +17,7 @@ use _order.nu [read-position]
 # bundle — reject it loudly, like read-link does for self-addressing.
 # One read per pubkey: the canonical check and the binding hash must see
 # the same bytes — a re-read could race with a file swap (check vs use).
-def canonical-pubkeys [dir: path]: nothing -> table {
+export def canonical-pubkeys [dir: path]: nothing -> table {
     let pubs = list-files ($dir | path join multiproofs pubkeys) --suffix ".pub"
         | each {|f| {path: $f bytes: (open --raw $f | into binary)} }
 
@@ -77,10 +77,10 @@ def canonical-pubkeys [dir: path]: nothing -> table {
 # Naming the two directly is what spares a throwaway bundle per link — 567
 # mktemp + copies over the acceptance graph, ~92ms each, to rearrange paths
 # `merkle verify` can be told about (nu-multiproof --multiproofs-dir).
-def verify-proof-dir [dir: path --cert: path --multiproofs-dir: path]: nothing -> record {
-    # Not `default`: it takes a value, so the listing below would run even when
+export def verify-proof-dir [dir: path --cert: path --multiproofs-dir: path]: nothing -> record {
+    # `default` with a closure, not a value: a value would run the listing below even when
     # the caller named the certificate — and over a graph home it finds none.
-    let proof = if $cert != null { $cert } else {
+    let proof = $cert | default {
         let certs = list-files $dir --suffix ".cert.json"
 
         if ($certs | length) != 1 {
@@ -109,8 +109,8 @@ def verify-proof-dir [dir: path --cert: path --multiproofs-dir: path]: nothing -
 # `valid: true`, `bound: true`, imported by a third repo as the victim's
 # authorship. Pinned by tests/test_roundtrip.nu "a pubkey filed under another
 # key's fingerprint cannot borrow its authorship".
-def bound [sigs: table pubs: table claimed: string]: nothing -> bool {
-    let signers = $sigs | where valid | get signer
+export def bound [sigs: table pubs: table claimed: string]: nothing -> bool {
+    let signers = $sigs | where $it.valid | get signer
 
     $pubs | any {|p| ($p.bytes | cid-v0) == $claimed and $p.fingerprint in $signers }
 }
@@ -156,7 +156,7 @@ def bound [sigs: table pubs: table claimed: string]: nothing -> bool {
 # `absent` with `pending` would then report "real but undated" for an endorsement
 # whose digest did reach a calendar — under-reporting, never a date invented, but
 # still the wrong answer and exactly what "the best one is chosen" denies.
-def endorsed-by [ends: table pubs: table claimed: string]: nothing -> any {
+export def endorsed-by [ends: table pubs: table claimed: string]: nothing -> oneof<record, nothing> {
     let fingerprints = $pubs | where ($it.bytes | cid-v0) == $claimed | get fingerprint
     let rows = $ends | where signer in $fingerprints
 
@@ -194,7 +194,7 @@ export def stamp-cell [stamp: record]: nothing -> string {
 # read-handoff requires the schema token byte-exact, so what keeps this
 # signature from being replayed as some other artifact is the signed bytes
 # themselves — no signature namespace is involved (see _handoff.nu).
-def check-handoff [dir: path edge_cid: string record: record holder: string expected_receipt: any pubs: table]: nothing -> any {
+export def check-handoff [dir: path edge_cid: string record: record holder: string expected_receipt: oneof<string, nothing> pubs: table]: nothing -> oneof<record, nothing> {
     let file = $dir | path join (handoff-filename $edge_cid)
 
     if not ($file | path exists) {
@@ -233,7 +233,7 @@ def check-handoff [dir: path edge_cid: string record: record holder: string expe
 # The number a position record states, as an int — null while it states a time
 # instead. The one place `seq`'s string form is turned into a number on the
 # read side, so the two branches below cannot disagree about it.
-def state-seq [state: record]: nothing -> any {
+export def state-seq [state: record]: nothing -> oneof<int, nothing> {
     let seq = $state | get --optional seq
 
     if $seq == null { null } else { $seq | into int }
@@ -265,7 +265,7 @@ def state-seq [state: record]: nothing -> any {
 # own. One rule, both cases — and it must be that root, never the dir's
 # current `multiproofs/`: a backfilled position freezes under a later seal than
 # its link, so a bundle legitimately carries two.
-def check-position [dir: path signer: string edge_cid: string pubs: table]: nothing -> any {
+export def check-position [dir: path signer: string edge_cid: string pubs: table]: nothing -> oneof<record, nothing> {
     let file = order-path $dir $signer $edge_cid
     let cert = order-cert-path $dir $signer $edge_cid
 
@@ -347,7 +347,7 @@ def check-position [dir: path signer: string edge_cid: string pubs: table]: noth
 # crypto/content/chain mismatches return valid: false rows.
 # root_handoff: the author's outgoing handoff (check-handoff on the bundle
 # root, null if absent) — the seam checks treat the birth bundle as layer 0.
-def verify-custody [bundle: path edge_cid: string record: record root_handoff: any]: nothing -> table {
+export def verify-custody [bundle: path edge_cid: string record: record root_handoff: oneof<record, nothing>]: nothing -> table {
     let author = $record.signer
     let layers = custody-layers $bundle
 
@@ -358,8 +358,7 @@ def verify-custody [bundle: path edge_cid: string record: record root_handoff: a
         error make {msg: $"custody layer indices are not contiguous from 1: ($layers | get index | str join ', ')"}
     }
     let birth_files = bundle-manifest $bundle
-    # "" = no previous layer yet ("" over null: a mut can't change type)
-    mut prev_hash = ""
+    mut prev_hash: oneof<string, nothing> = null
     mut prev_handoff = $root_handoff
     mut out = []
 
@@ -383,8 +382,7 @@ def verify-custody [bundle: path edge_cid: string record: record root_handoff: a
         let custodian_bound = bound $v.signatures $checked.pubs $receipt.custodian
         let custodian_endorsed = endorsed-by $v.endorsements $checked.pubs $receipt.custodian
         let files_ok = $receipt.files == $birth_files
-        let prev_expected = if $prev_hash == "" { null } else { $prev_hash }
-        let prev_ok = $receipt.prev == $prev_expected
+        let prev_ok = $receipt.prev == $prev_hash
         let handoff_hash_ok = $receipt.handoff == (if $prev_handoff == null { null } else { $prev_handoff.hash })
         let addressed_ok = $prev_handoff == null or $prev_handoff.to == $receipt.custodian
         let receipt_hash = open --raw ($layer.dir | path join $v.leaf.filepath) | hash sha256
@@ -448,8 +446,8 @@ const UNREAD_COLUMNS = {
 # hypothetical. `insert` stops the run and names the column; `merge` would hide
 # upstream's answer under this repo's default, and `custody: []` reads as "no
 # custody layers" rather than as "something went wrong".
-def add-columns [v: record cols: record]: nothing -> record {
-    $cols | items {|name value| {name: $name value: $value} }
+export def add-columns [v: record cols: record]: nothing -> record {
+    $cols | transpose name value
     | reduce --fold $v {|c acc| $acc | insert $c.name $c.value }
 }
 
@@ -576,6 +574,6 @@ export def verify-bundle [bundle: path --cert: path --multiproofs-dir: path]: no
     } else if not $root_handoff_ok {
         $root_handoff.error
     } else if not $custody_ok {
-        ($custody | where not valid | first | get error)
+        ($custody | where not $it.valid | first | get error)
     } else { null })
 }

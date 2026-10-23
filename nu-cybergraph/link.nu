@@ -22,6 +22,7 @@ use _fs.nu [ list-dirs cwd-relative ]
 # not an error. A CID endpoint must resolve to a file this repo holds — see
 # resolve-particle for why, and --allow-missing for the escape hatch to name a
 # CID whose bytes this repo does not (yet) hold.
+@category cybergraph
 @example "link two particles by the CIDs of their bytes" { link add QmUQUHEmv651XCBhiWUQpx2zf4PDts1aXL324ZFyV4QZPF QmW9519sfmW2MvDb4TU4dKtiFAXm1UPDvE7JrMaBjprVHp --allow-missing }
 @example "publish two texts as particles and link them" { link add "cyber" "bostrom" }
 @example "link a file to text, by its path" { link add path/to/doc.md "reviewed" }
@@ -129,7 +130,7 @@ export def add [
 # One link, read: both addresses, the triple, then what its endpoints say.
 # The one place the decoding rule lives, so `list` and `touching` cannot
 # drift.
-def statement [index: record l: record]: nothing -> record {
+export def statement [index: record l: record]: nothing -> record {
     let src = deref $index $l.cid_from
     let tgt = deref $index $l.cid_to
 
@@ -139,7 +140,7 @@ def statement [index: record l: record]: nothing -> record {
         cid_from: $l.cid_from
         cid_to: $l.cid_to
         signer: $l.signer
-        op: (if $src == null { null } else { $src | get --optional op })
+        op: ($src | get --optional op)
         src: $src
         tgt: $tgt
         src_tree: (if $src == null { null } else { $src | unfold $index })
@@ -225,7 +226,10 @@ export def touching [
     --scan # read every record instead of narrowing with rg (same answer, slower)
 ]: nothing -> table {
     if $cid !~ $CID_V0_RE {
-        error make {msg: $"not a CID v0: ($cid) — link touching takes the bare 46-char CID"}
+        error make {
+            msg: $"not a CID v0: ($cid) — link touching takes the bare 46-char CID"
+            label: {text: "not a CID v0" span: (metadata $cid).span}
+        }
     }
     let root = graph-root $repo
     let hits = touches $root $cid --scan=$scan
@@ -265,13 +269,13 @@ export def tally [
     --scan # read every record instead of narrowing with rg (same answer, slower)
 ]: nothing -> table {
     touching $cid --repo $repo --scan=$scan
-    | group-by {|r| [($r.op | default "—") $r.role] | to json --raw }
-    | items {|_ rows|
+    | group-by op role --to-table
+    | each {|g|
         {
-            op: ($rows | first | get op)
-            role: ($rows | first | get role)
-            links: ($rows | get link_cid | uniq | length)
-            signers: ($rows | get signer | uniq | length)
+            op: $g.op
+            role: $g.role
+            links: ($g.items | get link_cid | uniq | length)
+            signers: ($g.items | get signer | uniq | length)
         }
     }
     | sort-by op role

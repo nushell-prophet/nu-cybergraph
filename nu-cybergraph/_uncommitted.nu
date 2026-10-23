@@ -42,8 +42,7 @@ export def uncommitted-files [root: path]: nothing -> table {
     if not ($dir | path exists) { return [] }
     let top = ^git -C $root rev-parse --show-toplevel | str trim
     let dirty = ^git -C $root status --porcelain=v1 --untracked-files=all -- $dir
-        | lines
-        | where $it != ""
+        | lines --skip-empty
 
     # Before `reachable-cids`, which reads the store and dereferences every
     # endpoint: a clean store is the common case and it costs one `git status`.
@@ -79,7 +78,7 @@ export def uncommitted-files [root: path]: nothing -> table {
             cid: $cid
             size: (if $present { ls $file | get 0.size } else { null })
             state: $state
-            tracked: (not ($line | str starts-with "??"))
+            tracked: ($line not-starts-with "??")
         }
     }
 }
@@ -93,5 +92,5 @@ export def uncommitted-files [root: path]: nothing -> table {
 # command's business. The row still appears in the reading — that a file was
 # published and linked to nothing is worth seeing.
 export def stageable [rows: table]: nothing -> table {
-    $rows | where not tracked and state == "reachable"
+    $rows | where not $it.tracked and state == "reachable"
 }

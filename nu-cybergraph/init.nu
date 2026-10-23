@@ -7,13 +7,17 @@ use _deps/init.nu [ init ]
 
 # `init` here is nu-multiproof's init (pubkey registration in
 # multiproofs/pubkeys/); this wrapper adds the cybergraph layout on top.
+@category cybergraph
 export def main [
     --repo: path # Target repo root (default: the current directory; with --co-signer, the nearest dir holding cybergraph/, up to the git root)
     --pubkey: path # SSH public key to register (default: signing key from git config)
     --co-signer: path # SSH public key to add BESIDE the identity, without establishing one
 ]: nothing -> nothing {
     if $co_signer != null and $pubkey != null {
-        error make {msg: "--pubkey and --co-signer are alternatives: --pubkey establishes the identity this graph writes under, --co-signer adds a key beside it"}
+        error make {
+            msg: "--pubkey and --co-signer are alternatives: --pubkey establishes the identity this graph writes under, --co-signer adds a key beside it"
+            label: {text: "drop this or --pubkey" span: (metadata $co_signer).span}
+        }
     }
     # The graph always lives in <repo>/cybergraph/ — one service dir in an
     # arbitrary-shaped repo (see graph-root).
@@ -42,7 +46,7 @@ export def main [
     # side effect. `list-files` and not `glob`: a repo path is data and may
     # hold glob metacharacters.
     if ($after | is-empty) {
-        error make {msg: "no signer registered: set `git config user.signingKey <key>` or pass `--pubkey` — `init` establishes the signer identity, and a graph home without one cannot take a link"}
+        error make {msg: "no signer registered — `init` establishes the signer identity, and a graph home without one cannot take a link" help: "set `git config user.signingKey <key>` or pass `--pubkey`"}
     }
 
     # And refuse a run that added a key NOBODY ASKED FOR. Upstream's registration
@@ -73,9 +77,9 @@ export def main [
                 [
                     $"`init` registers the identity of ($pubkeys_dir | path relative-to $root) and does not grow its trust list — it holds ($before | length) already"
                     $"the key this run registered was removed again: ($added | path basename | str join ', ')"
-                    "to add a key beside the identity on purpose, pass --co-signer"
                 ] | str join "\n"
             )
+            help: "to add a key beside the identity on purpose, pass --co-signer"
         }
     }
 
@@ -99,9 +103,9 @@ export def main [
 # Refused on an empty list, because the first key is not a co-signer: it would
 # land as the only registered key while nothing established what it stands
 # beside, and `--pubkey` is the flag that says that deliberately.
-def add-co-signer [root: path pubkeys_dir: path before: list<path> key: path]: nothing -> nothing {
+export def add-co-signer [root: path pubkeys_dir: path before: list<path> key: path]: nothing -> nothing {
     if ($before | is-empty) {
-        error make {msg: "nothing to co-sign for: no pubkey is registered yet — run `nu-cybergraph init` (or `init --pubkey <key>.pub`) first, since a co-signer stands beside an identity"}
+        error make {msg: "nothing to co-sign for: no pubkey is registered yet — a co-signer stands beside an identity" help: "run `nu-cybergraph init` (or `init --pubkey <key>.pub`) first"}
     }
     init --repo $root --pubkey $key
     let after = list-files $pubkeys_dir --suffix ".pub"

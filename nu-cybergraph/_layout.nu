@@ -75,7 +75,7 @@ export def particle-path [root: path cid: string --ext: string]: nothing -> path
 # one rule, both directions, in the module that owns every other path under the
 # graph home. It also lets `strays` apply it — `_particle.nu` imports this
 # module, so reaching the other way would close an import cycle.
-export def store-cid [file: path]: nothing -> any {
+export def store-cid [file: path]: nothing -> oneof<string, nothing> {
     let base = $file | path basename
     let cid = $base | split row "." | first
 
@@ -143,7 +143,7 @@ export def receipt-relpath [author: string edge_cid: string]: nothing -> string 
 export def receipt-cid [file: path]: nothing -> string {
     let base = $file | path basename
 
-    if not ($base | str ends-with $RECEIPT_SUFFIX) {
+    if $base not-ends-with $RECEIPT_SUFFIX {
         error make {msg: $"not a receipt filename: ($base) — expected <cid>($RECEIPT_SUFFIX)"}
     }
     $base | str substring ..<(-1 * ($RECEIPT_SUFFIX | str length))
@@ -206,7 +206,7 @@ export def order-path [root: path signer: string edge_cid: string]: nothing -> p
 export def order-cid [file: path]: nothing -> string {
     let base = $file | path basename
 
-    if not ($base | str ends-with $ORDER_SUFFIX) {
+    if $base not-ends-with $ORDER_SUFFIX {
         error make {msg: $"not a position filename: ($base) — expected <cid>($ORDER_SUFFIX)"}
     }
     $base | str substring ..<(-1 * ($ORDER_SUFFIX | str length))
@@ -364,7 +364,7 @@ const ALLOWS = {
 
 # The edge CID a name in `certs/<signer>/` claims, or null when it is not a
 # certificate filename at all.
-def cert-name [file: path]: nothing -> any {
+export def cert-name [file: path]: nothing -> oneof<string, nothing> {
     named-after $file $CERT_SUFFIX
 }
 
@@ -372,27 +372,23 @@ def cert-name [file: path]: nothing -> any {
 # proof beside it — or null when it is neither. `receipt-cid` refuses instead
 # of answering, because its callers have already filtered by suffix; this is
 # that filter.
-def receipt-name [file: path]: nothing -> any {
-    let receipt = named-after $file $RECEIPT_SUFFIX
-
-    if $receipt != null { $receipt } else { named-after $file (receipt-cert-filename "") }
+export def receipt-name [file: path]: nothing -> oneof<string, nothing> {
+    named-after $file $RECEIPT_SUFFIX | default { named-after $file (receipt-cert-filename "") }
 }
 
 # The edge CID a name in `order/<signer>/` claims — a position or the frozen
 # proof beside it — or null when it is neither. `receipt-name`'s twin, and the
 # same two suffixes read the same way.
-def order-name [file: path]: nothing -> any {
-    let position = named-after $file $ORDER_SUFFIX
-
-    if $position != null { $position } else { named-after $file (order-cert-filename "") }
+export def order-name [file: path]: nothing -> oneof<string, nothing> {
+    named-after $file $ORDER_SUFFIX | default { named-after $file (order-cert-filename "") }
 }
 
 # `<cid><suffix>` -> the CID, or null. The shape every proof filename under the
 # graph home shares, so the three rules above are one rule with three suffixes.
-def named-after [file: path suffix: string]: nothing -> any {
+export def named-after [file: path suffix: string]: nothing -> oneof<string, nothing> {
     let base = $file | path basename
 
-    if not ($base | str ends-with $suffix) { return null }
+    if $base not-ends-with $suffix { return null }
     let stem = $base | str substring ..<(-1 * ($suffix | str length))
 
     if $stem =~ $CID_V0_RE { $stem } else { null }
@@ -402,16 +398,16 @@ def named-after [file: path suffix: string]: nothing -> any {
 # and answers whether the tree admits it; everything else becomes a row.
 #
 # `ls --all`, because a dotfile is exactly the kind of thing this looks for.
-def unexpected [dir: path allowed: string keep: closure]: nothing -> table {
+export def unexpected [dir: path allowed: string keep: closure]: nothing -> table {
     if not ($dir | path exists) { return [] }
     ls --all $dir
-    | where {|e| not (do $keep $e) }
+    | where not (do $keep $it)
     | each {|e| {path: $e.name under: $dir allowed: $allowed} }
 }
 
 # Directories named by a CID v0, and nothing else — the shape `certs/`,
 # `receipts/`, `exports/` and `imported/` all share one level down.
-def cid-dirs-only [dir: path allowed: string]: nothing -> table {
+export def cid-dirs-only [dir: path allowed: string]: nothing -> table {
     unexpected $dir $allowed {|e| $e.type == "dir" and ($e.name | path basename) =~ $CID_V0_RE }
 }
 
@@ -419,7 +415,7 @@ def cid-dirs-only [dir: path allowed: string]: nothing -> table {
 # because two callers need exactly this and nothing deeper: `strays`, which
 # continues downward, and `assert-known-home`, which must stay cheap enough to
 # run on every read.
-def top-strays [root: path]: nothing -> table {
+export def top-strays [root: path]: nothing -> table {
     unexpected $root $ALLOWS.root {|e|
         let name = $e.name | path basename
 
@@ -445,29 +441,41 @@ export def strays [root: path]: nothing -> table {
         $e.type != "dir" and (store-cid $e.name) != null
     }
 
-    let links = signer-dirs $root | each {|d|
-        unexpected $d $ALLOWS.signer {|e|
-            let parsed = $e.name | path parse
+    let links = signer-dirs $root
+        | each {|d|
+            unexpected $d $ALLOWS.signer {|e|
+                let parsed = $e.name | path parse
 
-            $e.type != "dir" and $parsed.extension == "json" and $parsed.stem =~ $CID_V0_RE
+                $e.type != "dir" and $parsed.extension == "json" and $parsed.stem =~ $CID_V0_RE
+            }
         }
-    } | flatten
+        | flatten
 
-    let certs = list-dirs (certs-dir $root) | each {|d|
-        unexpected $d $ALLOWS.certs_signer {|e| $e.type != "dir" and (cert-name $e.name) != null }
-    } | flatten
+    let certs = list-dirs (certs-dir $root)
+        | each {|d|
+            unexpected $d $ALLOWS.certs_signer {|e| $e.type != "dir" and (cert-name $e.name) != null }
+        }
+        | flatten
 
-    let receipts = list-dirs (receipts-dir $root) | each {|d|
-        unexpected $d $ALLOWS.receipts_author {|e| $e.type != "dir" and (receipt-name $e.name) != null }
-    } | flatten
+    let receipts = list-dirs (receipts-dir $root)
+        | each {|d|
+            unexpected $d $ALLOWS.receipts_author {|e| $e.type != "dir" and (receipt-name $e.name) != null }
+        }
+        | flatten
 
-    let order = list-dirs (order-dir $root) | each {|d|
-        unexpected $d $ALLOWS.order_signer {|e| $e.type != "dir" and (order-name $e.name) != null }
-    } | flatten
+    let order = list-dirs (order-dir $root)
+        | each {|d|
+            unexpected $d $ALLOWS.order_signer {|e| $e.type != "dir" and (order-name $e.name) != null }
+        }
+        | flatten
 
-    let bundles = [(exports-dir $root) (imported-dir $root)] | each {|top|
-        list-dirs $top | each {|d| cid-dirs-only $d $ALLOWS.bundles_signer } | flatten
-    } | flatten
+    let bundles = [(exports-dir $root) (imported-dir $root)]
+        | each {|top|
+            list-dirs $top
+            | each {|d| cid-dirs-only $d $ALLOWS.bundles_signer }
+            | flatten
+        }
+        | flatten
 
     [
         (top-strays $root)

@@ -96,7 +96,7 @@ def "init from inside a graph home is refused and creates nothing" [] {
     cd $project
     init
     cd ($project | path join cybergraph certs)
-    let err = try { init; null } catch {|e| $e.msg }
+    let err = try { init; null } catch {|e| $e.details.help }
 
     assert ($err != null) "init ran inside a graph home"
     assert str contains $err "--repo"
@@ -161,7 +161,7 @@ def "a current directory reached through a symlink resolves inside the repo" [] 
 @test
 def "outside a git repo the default fails and names the flag" [] {
     cd $in.tmp_dir
-    let err = try { repo-root; null } catch {|e| $e.msg }
+    let err = try { repo-root; null } catch {|e| $e.details.help }
 
     assert str contains $err "--repo"
 }

@@ -42,7 +42,7 @@ def "the golden bytes have alphabetical key order as compact JSON with one trail
 def "both addresses are plain derived CIDs under the one canon" [] {
     assert equal (edge-cid (golden-pair)) (derive (golden-pair))
     assert equal (link-cid (golden-record)) (derive (golden-record))
-    assert ((edge-cid (golden-pair)) != $GOLDEN_CID)
+    assert not equal (edge-cid (golden-pair)) $GOLDEN_CID
 }
 
 # Two signers, one edge — the whole reason the edge is the file's address:
@@ -52,7 +52,7 @@ def "the edge CID is the same for every signer of that edge" [] {
     let other = (golden-record) | update signer $GOLDEN_CID
 
     assert equal (edge-bytes ($other | reject signer)) (edge-bytes (golden-pair))
-    assert ((link-cid $other) != (link-cid (golden-record)))
+    assert not equal (link-cid $other) (link-cid (golden-record))
 }
 
 @test

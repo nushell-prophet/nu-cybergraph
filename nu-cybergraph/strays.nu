@@ -22,6 +22,7 @@ use _layout.nu [ strays ]
 # graph home. There is no third option and no flag to seal past it — a seal
 # signs whatever is committed under the graph home, so a file the layout cannot
 # describe is one the signer would be attesting without having checked it.
+@category cybergraph
 export def main [
     --repo: path # Repo root (default: the nearest dir holding cybergraph/, up to the git root)
 ]: nothing -> table {

@@ -42,7 +42,7 @@ export def nearest-home [marker: string --init]: nothing -> path {
     let result = ^git rev-parse --show-toplevel --show-prefix | complete
 
     if $result.exit_code != 0 {
-        error make {msg: "not inside a git repository — pass --repo to target one explicitly"}
+        error make {msg: "not inside a git repository" help: "pass --repo to target one explicitly"}
     }
     let lines = $result.stdout | lines
     let toplevel = $lines.0
@@ -61,11 +61,11 @@ export def nearest-home [marker: string --init]: nothing -> path {
         if $inside != null {
             let home = $toplevel | path join ...($parts | first $inside)
 
-            error make {msg: $"the current directory is inside ($marker)/ of ($home) — run init from ($home), or pass --repo"}
+            error make {msg: $"the current directory is inside ($marker)/ of ($home)" help: $"run init from ($home), or pass --repo"}
         }
         return ($candidates | first)
     }
-    let found = $candidates | where {|dir| ($dir | path join $marker | path type) == dir }
+    let found = $candidates | where ($it | path join $marker | path type) == dir
 
     $found | get --optional 0 | default $toplevel
 }

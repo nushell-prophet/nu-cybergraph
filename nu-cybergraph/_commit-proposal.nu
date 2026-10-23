@@ -41,7 +41,7 @@ export def quote-arg [s: string --multiline]: nothing -> string {
 
 # "1 endorsement" / "2 endorsements". The body states counts in three places and
 # a bare number reads as a field name typo in at least one of them.
-def count-of [n: int noun: string]: nothing -> string {
+export def count-of [n: int noun: string]: nothing -> string {
     if $n == 1 { $"($n) ($noun)" } else { $"($n) ($noun)s" }
 }
 
@@ -166,7 +166,7 @@ export def seal-commit-line [
         $"let msg = (quote-arg $message --multiline)"
         ""
         $"git -C $repo add -- ($staged | str join ' ')"
-        "git -C $repo commit -m $msg"
+        "git -C $repo commit --message $msg"
     ] | str join "\n"
 }
 
@@ -207,6 +207,6 @@ export def particle-commit-line [
         $"let msg = (quote-arg $message --multiline)"
         ""
         $"git -C $repo add -- ($staged | str join ' ')"
-        "git -C $repo commit -m $msg"
+        "git -C $repo commit --message $msg"
     ] | str join "\n"
 }

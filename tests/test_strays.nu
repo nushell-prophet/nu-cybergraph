@@ -35,7 +35,7 @@ def empty-graph [tmp_dir: path]: nothing -> record {
     let repo = $tmp_dir | path join repo
 
     mkdir $repo
-    ^git init --object-format=sha256 -q $repo
+    ^git init --object-format=sha256 --quiet $repo
     ^git -C $repo config user.name t
     ^git -C $repo config user.email t@t
     let key = $tmp_dir | path join key
@@ -44,7 +44,7 @@ def empty-graph [tmp_dir: path]: nothing -> record {
     ^git -C $repo config user.signingKey $key
     init --repo $repo
     ^git -C $repo add -- cybergraph
-    ^git -C $repo commit -q -m init
+    ^git -C $repo commit --quiet --message init
     {repo: $repo root: ($repo | path join cybergraph) key: $key}
 }
 
@@ -115,7 +115,7 @@ def "a seal refuses a graph home that holds a rule file" [] {
     link add "cyber" "bostrom" --repo $g.repo
     "particles\n" | save --force ($g.root | path join .multiproofignore)
     ^git -C $g.repo add -- cybergraph
-    ^git -C $g.repo commit -q -m link
+    ^git -C $g.repo commit --quiet --message link
 
     let err = try { seal --repo $g.repo --no-stamp; null } catch {|e| $e.msg }
 

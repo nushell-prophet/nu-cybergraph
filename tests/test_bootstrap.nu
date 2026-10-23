@@ -26,7 +26,7 @@ const P3 = "QmQXupHE6VPzpoBTivNXAAGwigJE68n4TeVUSxYnFL78GV"
 # Overwrite a link file with a DIFFERENT valid record, keeping the old name —
 # the tamper that self-addressing exists to catch: canonical, parseable, and
 # lying about which act it is.
-def swap-record [file: path rec: record] {
+def swap-record [file: path rec: record]: nothing -> nothing {
     edge-bytes $rec | save --force --raw $file
 }
 
@@ -44,7 +44,7 @@ def make-bare-repo [tmp_dir: path]: nothing -> record {
     let repo = $tmp_dir | path join repo
 
     mkdir $repo
-    ^git init --object-format=sha256 -q $repo
+    ^git init --object-format=sha256 --quiet $repo
     ^git -C $repo config user.name t
     ^git -C $repo config user.email t@t
     let key = $tmp_dir | path join key
@@ -67,13 +67,13 @@ def "init refuses to register a second key and undoes what it added" [] {
 
     ^ssh-keygen -t ed25519 -f $key2 -N "" -q
     ^git -C $r.repo config user.signingKey $key2
-    let err = try { init --repo $r.repo; null } catch {|e| $e.msg }
+    let err = try { init --repo $r.repo; null } catch {|e| $e }
 
     assert ($err != null) "a re-run under another signing key grew the trust list silently"
     assert equal (glob ($r.repo | path join cybergraph multiproofs pubkeys *.pub) | length) 1
     # The route out is named, because a second key IS legal — just never by
     # accident, which is the whole difference this refusal draws.
-    assert ($err | str contains "--co-signer")
+    assert ($err.details.help | str contains "--co-signer")
 }
 
 # What `--co-signer` is for: a key that signs the same seal root as the identity
@@ -111,15 +111,15 @@ def "co-signer refuses when nothing is registered yet" [] {
     let repo = $tmp_dir | path join fresh
 
     mkdir $repo
-    ^git init --object-format=sha256 -q $repo
+    ^git init --object-format=sha256 --quiet $repo
     let co = $tmp_dir | path join lonely
 
     ^ssh-keygen -t ed25519 -f $co -N "" -q
 
-    let err = try { init --repo $repo --co-signer $"($co).pub"; null } catch {|e| $e.msg }
+    let err = try { init --repo $repo --co-signer $"($co).pub"; null } catch {|e| $e }
 
     assert ($err != null) "a co-signer landed in a graph home with no identity"
-    assert ($err | str contains "--pubkey")
+    assert ($err.details.help | str contains "--pubkey")
     assert equal (glob ($repo | path join cybergraph multiproofs pubkeys *.pub) | length) 0
 }
 
@@ -224,16 +224,16 @@ def "init refuses when it registered no signer" [] {
     let repo = $tmp_dir | path join keyless
 
     mkdir $repo
-    ^git init --object-format=sha256 -q $repo
+    ^git init --object-format=sha256 --quiet $repo
     ^git -C $repo config user.name t
     ^git -C $repo config user.email t@t
 
-    let err = try { init --repo $repo; null } catch {|e| $e.msg }
+    let err = try { init --repo $repo; null } catch {|e| $e }
 
     assert ($err != null) "init reported success with an empty pubkeys/"
     # Both routes out are named, because the operator has heard of neither.
-    assert ($err | str contains "user.signingKey")
-    assert ($err | str contains "--pubkey")
+    assert ($err.details.help | str contains "user.signingKey")
+    assert ($err.details.help | str contains "--pubkey")
     # And it refuses before claiming a layout: no certs/ to suggest otherwise.
     assert not (($repo | path join cybergraph certs) | path exists)
 }
@@ -246,7 +246,7 @@ def "init with an explicit pubkey needs no git signing key" [] {
     let repo = $tmp_dir | path join explicit
 
     mkdir $repo
-    ^git init --object-format=sha256 -q $repo
+    ^git init --object-format=sha256 --quiet $repo
     ^git -C $repo config user.name t
     ^git -C $repo config user.email t@t
     let key = $tmp_dir | path join explicit-key
@@ -272,12 +272,12 @@ def "seal before init fails fast before anything is written" [] {
     let r = make-bare-repo $in.tmp_dir
 
     "hi\n" | save ($r.repo | path join readme.md)
-    ^git -C $r.repo add -A
+    ^git -C $r.repo add --all
 
-    let err = try { seal --repo $r.repo --no-stamp --allow-untracked-particles; null } catch {|e| $e.msg }
+    let err = try { seal --repo $r.repo --no-stamp --allow-untracked-particles; null } catch {|e| $e }
 
     assert ($err != null) "seal ran without a registered pubkey"
-    assert ($err | str contains "nu-cybergraph init")
+    assert ($err.details.help | str contains "nu-cybergraph init")
     # Nothing mutated: no manifest, no root statement
     assert not (($r.repo | path join cybergraph multiproofs tree-hashes.csv) | path exists)
 }
@@ -293,7 +293,7 @@ def "in a nested graph home init puts everything under cybergraph by default" []
     # An arbitrary user file at the repo root: tracked by git, untouched by
     # the graph — the seal manifest covers only the cybergraph/ subtree
     "arbitrary user file\n" | save ($r.repo | path join notes.md)
-    ^git -C $r.repo add -A
+    ^git -C $r.repo add --all
 
     let born = link add $P1 $P2 --repo $r.repo --allow-missing
 
@@ -410,10 +410,10 @@ def "seal with an unregistered signing key names the fix" [] {
     ^ssh-keygen -t ed25519 -f $other -N "" -q
     ^git -C $r.repo config user.signingKey $other
 
-    let err = try { seal --repo $r.repo --no-stamp --allow-untracked-particles; null } catch {|e| $e.msg }
+    let err = try { seal --repo $r.repo --no-stamp --allow-untracked-particles; null } catch {|e| $e }
 
     assert ($err != null) "seal accepted a key that is not registered"
-    assert ($err | str contains $"init --pubkey ($other | path expand).pub")
+    assert ($err.details.help | str contains $"init --pubkey ($other | path expand).pub")
     # These two asserts pass BECAUSE upstream asks its registration question
     # first: nu-multiproof's `seal` asks it at the top, ahead of the manifest
     # rewrite, so a refused seal leaves no manifest and no root statement
@@ -926,9 +926,9 @@ def "a signing key that is not on this machine names the config to fix" [] {
 
     init --repo $r.repo --pubkey $"($r.key).pub"
     ^git -C $r.repo config user.signingKey ($in.tmp_dir | path join elsewhere.pub)
-    let err = try { link add $P1 $P2 --repo $r.repo --allow-missing; null } catch {|e| $e.msg }
+    let err = try { link add $P1 $P2 --repo $r.repo --allow-missing; null } catch {|e| $e }
 
-    assert ($err | str contains "signing key not on this machine")
-    assert ($err | str contains "git config user.signingKey")
-    assert ($err | str contains "--worktree")
+    assert ($err.msg | str contains "signing key not on this machine")
+    assert ($err.details.help | str contains "git config user.signingKey")
+    assert ($err.details.help | str contains "--worktree")
 }
