@@ -68,7 +68,6 @@ export def main [
     --no-stamp # Skip OTS timestamping (stamping is the point — tests only)
     --response-file: path # TESTS ONLY: take the calendar's answer from this file instead of posting the digest
     --propose-commit # Leave a `git commit` for this seal in the prompt, unrun
-    --allow-untracked-particles # Seal without the store files the graph names (see the guard below)
     --external-signer # The root is signed on another device: run, sign there, run again (upstream's flag)
 ]: nothing -> record {
     let root = graph-root $repo
@@ -227,21 +226,20 @@ export def main [
     # instead of a habit, at the price of a command that can now fail on a graph
     # nothing is wrong with.
     #
-    # `uncommitted-files` runs whether or not the flag is set, and only the
-    # refusal is gated: it also raises on a name under particles/ that is no
-    # address at all, which is not something to seal past — a signature over it
-    # is the signer attesting what the store's own filename rule rejects. So the
-    # flag says "seal without these bytes", never "seal a store whose layout is
-    # already broken". A clean store costs one `git status`; the reachability
-    # walk runs only when something is dirty.
+    # Not a flag to seal past it: a file moved out of particles/ makes its end a
+    # missing particle, which a seal accepts, so the escape needs no switch of
+    # its own. `uncommitted-files` also raises on a name under particles/ that is
+    # no address at all — a signature over it is the signer attesting what the
+    # store's own filename rule rejects. A clean store costs one `git status`;
+    # the reachability walk runs only when something is dirty.
     #
     # Through `stageable` and not a second copy of its rule: what this refuses on
     # has to be exactly what `particle uncommitted --propose-commit` would stage,
     # or the seal refuses over a file the proposal never offers to commit.
     let loose = stageable (uncommitted-files $root)
 
-    if ($loose | is-not-empty) and not $allow_untracked_particles {
-        error make --unspanned {msg: $"the graph names bytes git does not track: ($loose | each {|r| $r.file | cwd-relative } | str join ', ') — the seal manifest walks `git ls-files`, so these would enter no root and the links naming them would be frozen pointing at nothing attested" help: "run `nu-cybergraph particle uncommitted --propose-commit` first, or seal with --allow-untracked-particles"}
+    if ($loose | is-not-empty) {
+        error make --unspanned {msg: $"the graph names bytes git does not track: ($loose | each {|r| $r.file | cwd-relative } | str join ', ') — the seal manifest walks `git ls-files`, so these would enter no root and the links naming them would be frozen pointing at nothing attested" help: "run `nu-cybergraph particle uncommitted --propose-commit` first, or move the file out of particles/ to seal without its bytes"}
     }
 
     # Number the provisional positions BEFORE the merkle run, so a position

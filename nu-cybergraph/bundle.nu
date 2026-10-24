@@ -23,7 +23,6 @@ use _repo.nu graph-root
 use _fs.nu [ list-files list-dirs copy-file copy-tree cwd-relative ]
 use _layout.nu [
     particles-dir
-    exports-dir
     certs-dir
     cert-path
     cert-filename
@@ -328,13 +327,23 @@ export def assemble-bundle [root: path out: path edge_cid: string resolved: reco
 export def main [
     edge_cid: string # Edge CID: authored here (certs/) or imported (imported/*/)
     --repo: path # Source repo root (default: the nearest dir holding cybergraph/, up to the git root)
-    --out: path # Bundle destination (default: exports/<signer>/<edge-cid>)
+    --out: path # Bundle destination, required: outside the graph home, where no seal signs it
     --to: string # Recipient signer CID — adds a signed handoff (default: none, an open export)
     --signer: string # Whose act to export, when more than one signer holds this edge
     --key: path # SSH private key for the handoff signature (default: from git config user.signingKey)
     --links-only # own act only: without particles — the record, its certificate and its position with their proofs (no-op re-exporting an imported act — its particles, if any, are the sender's foreign bytes, copied unchanged either way)
 ]: nothing -> path {
+    if $out == null {
+        error make {msg: "bundle needs --out: a bundle has no place inside the graph home" help: "pass --out <dir>, outside cybergraph/"}
+    }
     let root = graph-root $repo
+    let home = $root | path expand
+
+    # Why: a bundle under the graph home is signed by the next seal once it is
+    # committed, and under imported/ the closed-tree rule does not look inside it.
+    if ($out | path expand) == $home or ($out | path expand | str starts-with $"($home)/") {
+        error make {msg: $"bundle --out is inside the graph home: ($out)" help: "pass --out <dir>, outside cybergraph/"}
+    }
 
     if $to != null and $to !~ $CID_V0_RE {
         error make {
@@ -374,11 +383,9 @@ export def main [
         {own: false signer: $imported_hits.0.signer dir: $imported_hits.0.dir}
     }
 
-    # exports/ mirrors the layout too — signer above, edge below — so two
-    # signers' exports of one edge cannot collide.
     let record_root = if $resolved.own { $root } else { $resolved.dir }
     let act = read-link (link-path $record_root $resolved.signer $edge_cid)
-    let out = if $out != null { $out | path expand } else { exports-dir $root | path join $resolved.signer $edge_cid }
+    let out = $out | path expand
 
     if ($out | path exists) {
         error make {msg: $"bundle destination already exists: ($out)"}

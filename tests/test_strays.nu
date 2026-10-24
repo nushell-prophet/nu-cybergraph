@@ -194,7 +194,7 @@ def "what a bundle holds inside is not this rule to enforce" [] {
     let g = empty-graph $in.tmp_dir
     let added = link add "cyber" "bostrom" --repo $g.repo
     let signer = $added.path | path dirname | path basename
-    let bundle = $g.root | path join exports $signer $added.edge_cid
+    let bundle = $g.root | path join imported $signer $added.edge_cid
 
     mkdir ($bundle | path join particles)
     "anything at all" | save --raw ($bundle | path join "README.md")

@@ -291,7 +291,6 @@ cybergraph/
   certs/<signer-cid>/<edge-cid>.cert.json   # frozen birth certificates, mirroring the layout     3.3
   order/<signer-cid>/<edge-cid>.order.json  # the act's place in the signer's run (+ .order.cert.json)   3.5
   seals/<root-hex-12>/                      # per-seal root statement + signatures                3.4
-  exports/<signer-cid>/<edge-cid>/          # bundles this repo built                             6
   imported/<signer-cid>/<edge-cid>/         # bundles landed from others, read-only               10
   receipts/<author-cid>/<edge-cid>.receipt.json   # custody receipts (+ .receipt.cert.json)       10
   multiproofs/pubkeys/<fingerprint>.pub     # the registered key, canonical bytes                 2.4
@@ -313,7 +312,7 @@ Anything that is written by hand goes next to the graph home, not into it.
 `multiproofs/` is the one directory that this section names but does not govern.
 The directory belongs to the proof layer (section 7),
 so an implementation recognises it and does not apply the closed-tree rule to its contents.
-The rule also does not apply inside a bundle under `exports/` or `imported/`.
+The rule also does not apply inside a bundle under `imported/`.
 The reason is that a bundle is one artifact that is checked as a whole (section 8).
 It does not apply inside a seal snapshot either, because the proof layer owns the snapshot.
 
@@ -327,7 +326,8 @@ The reference implementation chooses the pubkey filename, and the filename carri
 — see 2.4.
 
 A seal stages the signer directories, `certs/`, `order/` and `seals/` into git;
-the seal does not stage `particles/` and `exports/` (see 5).
+the seal does not stage `particles/` (see 5).
+A bundle this repo builds goes outside the graph home.
 But if the graph reaches a store file, that file has to be in the index before the seal.
 The seal refuses while the file is not in the index.
 

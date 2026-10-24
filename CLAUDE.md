@@ -85,12 +85,12 @@ or park a note in `todo/`.
   while every reading refuses on the top level alone, through `graph-root`,
   because a reader that cannot tell a foreign layout from an empty one answers `[]` and is believed.
   The rule recognises `multiproofs/` without policing it,
-  and stops at a bundle's edge under `exports/` and `imported/`.
+  and stops at a bundle's edge under `imported/`.
 - The store is committed before the seal, not after:
   the manifest is every git-tracked file under the graph home,
   so a `particles/` file outside the index enters no root
   while the link naming it is signed and frozen.
-  `seal` refuses while the graph reaches an untracked store file (`--allow-untracked-particles` seals without those bytes, but never past a name under `particles/` that is no address);
+  `seal` refuses while the graph reaches an untracked store file (moving the file out of `particles/` seals without those bytes, and a name under `particles/` that is no address is refused in every case);
   `particle uncommitted` is the reading,
   `--propose-commit` writes the commit.
 - A seal waiting for an outside signature writes nothing of its own:

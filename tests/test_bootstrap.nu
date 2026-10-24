@@ -1,11 +1,10 @@
 # Bootstrap contracts: init is idempotent; seal refuses to run half-way when
 # the signer identity is not registered yet.
 #
-# Every seal here passes --allow-untracked-particles. None of these tests is
-# about the store's own commit discipline, and they never commit anything: the
-# guard `seal` grew would otherwise refuse them all, for a reason each of them
-# has already agreed to ignore. tests/test_uncommitted.nu is where the guard itself
-# is under test, both ways.
+# The seal refuses a store file git does not track. Most links here name bare
+# CIDs (--allow-missing) and write no store file; a test that writes one
+# commits it first (`commit-store`). tests/test_uncommitted.nu is where the
+# guard itself is under test.
 use std/assert
 use std/testing *
 
@@ -18,6 +17,15 @@ use ../nu-cybergraph/_fs.nu [ copy-file copy-tree list-files list-dirs move-file
 use ../nu-cybergraph/_layout.nu [ certs-dir order-path order-cert-path ]
 use ../nu-cybergraph/_deps/pubkey.nu [ pubkey ]
 use ../nu-cybergraph/_deps/cid-v0.nu [ cid-v0 ]
+
+# The seal refuses a store file git does not track, so a test that writes
+# particles commits them before it seals, as an operator would.
+def commit-store [repo: path] {
+    if not ($repo | path join cybergraph particles | path exists) { return }
+    ^git -C $repo add -- cybergraph/particles
+    ^git -C $repo commit --quiet --allow-empty --message particles
+}
+
 
 const P1 = "QmUQUHEmv651XCBhiWUQpx2zf4PDts1aXL324ZFyV4QZPF"
 const P2 = "QmW9519sfmW2MvDb4TU4dKtiFAXm1UPDvE7JrMaBjprVHp"
@@ -274,7 +282,7 @@ def "seal before init fails fast before anything is written" [] {
     "hi\n" | save ($r.repo | path join readme.md)
     ^git -C $r.repo add --all
 
-    let err = try { seal --repo $r.repo --no-stamp --allow-untracked-particles; null } catch {|e| $e }
+    let err = try { seal --repo $r.repo --no-stamp; null } catch {|e| $e }
 
     assert ($err != null) "seal ran without a registered pubkey"
     assert ($err.details.help | str contains "nu-cybergraph init")
@@ -298,7 +306,7 @@ def "in a nested graph home init puts everything under cybergraph by default" []
     let born = link add $P1 $P2 --repo $r.repo --allow-missing
 
     assert ($born.path | str contains $"cybergraph(char path_sep)($born.record.signer)")
-    let sealed = seal --repo $r.repo --no-stamp --allow-untracked-particles
+    let sealed = seal --repo $r.repo --no-stamp
 
     assert equal $sealed.newborn 1
     assert (($r.repo | path join cybergraph certs $born.record.signer $"($born.edge_cid).cert.json") | path exists)
@@ -353,7 +361,7 @@ def "seal refuses a link file that does not match its content address" [] {
 
     swap-record $born.path (open --raw $born.path | from json | update cid_to $P3)
 
-    let err = try { seal --repo $r.repo --no-stamp --allow-untracked-particles; null } catch {|e| $e.msg }
+    let err = try { seal --repo $r.repo --no-stamp; null } catch {|e| $e.msg }
 
     assert ($err != null) "seal signed a record that is not its own address"
     assert ($err | str contains $born.edge_cid) $"error should name the offending file: ($err)"
@@ -369,12 +377,12 @@ def "a record tampered after its birth seal aborts the next seal too" [] {
     init --repo $r.repo
     let born = link add $P1 $P2 --repo $r.repo --allow-missing
 
-    assert equal (seal --repo $r.repo --no-stamp --allow-untracked-particles | get newborn) 1
+    assert equal (seal --repo $r.repo --no-stamp | get newborn) 1
 
     # Every seal re-attests the whole catalogue, so the check covers links that
     # already have a certificate — not just the newborns of this seal
     swap-record $born.path (open --raw $born.path | from json | update cid_to $P3)
-    let err = try { seal --repo $r.repo --no-stamp --allow-untracked-particles; null } catch {|e| $e.msg }
+    let err = try { seal --repo $r.repo --no-stamp; null } catch {|e| $e.msg }
 
     assert ($err != null) "a tampered record was re-attested by a later seal"
     assert ($err | str contains $born.edge_cid)
@@ -393,7 +401,7 @@ def "seal fails fast when the signing key has no public half beside it" [] {
     rm $"($other).pub"
     ^git -C $r.repo config user.signingKey $other
 
-    let err = try { seal --repo $r.repo --no-stamp --allow-untracked-particles; null } catch {|e| $e.msg }
+    let err = try { seal --repo $r.repo --no-stamp; null } catch {|e| $e.msg }
 
     assert ($err != null) "seal ran without the public key present"
     assert ($err | str contains $"($other | path expand).pub")
@@ -410,7 +418,7 @@ def "seal with an unregistered signing key names the fix" [] {
     ^ssh-keygen -t ed25519 -f $other -N "" -q
     ^git -C $r.repo config user.signingKey $other
 
-    let err = try { seal --repo $r.repo --no-stamp --allow-untracked-particles; null } catch {|e| $e }
+    let err = try { seal --repo $r.repo --no-stamp; null } catch {|e| $e }
 
     assert ($err != null) "seal accepted a key that is not registered"
     assert ($err.details.help | str contains $"init --pubkey ($other | path expand).pub")
@@ -441,7 +449,7 @@ def "a seal with nothing new still mints a new root" [] {
     init --repo $r.repo
     link add $P1 $P2 --repo $r.repo --allow-missing | ignore
 
-    let seals = 1..4 | each {|_| seal --repo $r.repo --no-stamp --allow-untracked-particles }
+    let seals = 1..4 | each {|_| seal --repo $r.repo --no-stamp }
     let roots = $seals | get sealed.merkle_root
 
     assert equal ($roots | uniq | length) 4 $"roots repeated across four seals: ($roots)"
@@ -472,7 +480,7 @@ def "the seal chain runs from genesis with no gaps" [] {
 
     init --repo $r.repo
     link add $P1 $P2 --repo $r.repo --allow-missing | ignore
-    let roots = 1..4 | each {|_| seal --repo $r.repo --no-stamp --allow-untracked-particles } | get sealed.merkle_root
+    let roots = 1..4 | each {|_| seal --repo $r.repo --no-stamp } | get sealed.merkle_root
 
     let chain = seal chain --repo $r.repo
 
@@ -488,7 +496,7 @@ def "a seal chain missing a snapshot is refused and not reported short" [] {
 
     init --repo $r.repo
     link add $P1 $P2 --repo $r.repo --allow-missing | ignore
-    let roots = 1..3 | each {|_| seal --repo $r.repo --no-stamp --allow-untracked-particles } | get sealed.merkle_root
+    let roots = 1..3 | each {|_| seal --repo $r.repo --no-stamp } | get sealed.merkle_root
 
     # Drop the middle seal's snapshot: every certificate born under that root
     # now verifies against nothing, which is a fact about the repo — so the
@@ -533,7 +541,7 @@ def "a node that is not this links frozen proof is refused before anything is st
     # 1. a directory
     mkdir $cert
     "junk\n" | save --raw ($cert | path join filler.txt)
-    let e1 = try { seal --repo $r.repo --no-stamp --allow-untracked-particles; null } catch {|e| $e.msg }
+    let e1 = try { seal --repo $r.repo --no-stamp; null } catch {|e| $e.msg }
 
     assert ($e1 != null) "seal reported success while the link went uncertified"
     assert ($e1 | str contains $born.edge_cid) $"the refusal should name the path in the way: ($e1)"
@@ -544,7 +552,7 @@ def "a node that is not this links frozen proof is refused before anything is st
     # 2. an empty file — a truncated write or an interrupted move, and the more
     #    likely accident of the two
     "" | save --raw $cert
-    let e2 = try { seal --repo $r.repo --no-stamp --allow-untracked-particles; null } catch {|e| $e.msg }
+    let e2 = try { seal --repo $r.repo --no-stamp; null } catch {|e| $e.msg }
 
     assert ($e2 != null) "an empty file passed as a frozen certificate"
     assert ($e2 | str contains $born.edge_cid)
@@ -553,13 +561,13 @@ def "a node that is not this links frozen proof is refused before anything is st
     # 3. a real proof, but for a different link
     let other = link add $P1 $P3 --repo $r.repo --allow-missing
 
-    seal --repo $r.repo --no-stamp --allow-untracked-particles | ignore
+    seal --repo $r.repo --no-stamp | ignore
     let other_cert = $r.repo | path join cybergraph certs $other.record.signer $"($other.edge_cid).cert.json"
 
     assert ($other_cert | path exists) "the fixture needs a genuine proof to misfile"
     rm $cert
     cp $other_cert $cert
-    let e3 = try { seal --repo $r.repo --no-stamp --allow-untracked-particles; null } catch {|e| $e.msg }
+    let e3 = try { seal --repo $r.repo --no-stamp; null } catch {|e| $e.msg }
 
     assert ($e3 != null) "a proof for another link passed as this links certificate"
     assert ($e3 | str contains $other.edge_cid) $"the refusal should name the record actually certified: ($e3)"
@@ -567,7 +575,7 @@ def "a node that is not this links frozen proof is refused before anything is st
     # And the repo still seals once the misfiled proof is gone: every refusal
     # above has to be recoverable by removing what was named, nothing more.
     rm $cert
-    let ok = seal --repo $r.repo --no-stamp --allow-untracked-particles
+    let ok = seal --repo $r.repo --no-stamp
 
     assert equal $ok.newborn 1
     assert equal (open $cert | get leaf.filepath) $"($born.record.signer)/($born.edge_cid).json"
@@ -596,7 +604,7 @@ def "a freeze loop that fails still leaves the snapshot its certificates name" [
 
     $"cybergraph/($a.record.signer)/($victim).json\n" | save --raw ($r.repo | path join .gitignore)
 
-    let err = try { seal --repo $r.repo --no-stamp --allow-untracked-particles; null } catch {|e| $e.msg }
+    let err = try { seal --repo $r.repo --no-stamp; null } catch {|e| $e.msg }
 
     assert ($err != null) "merkle prove found a link that git does not track"
     assert ($err | str contains $victim) $"error should name the untracked link: ($err)"
@@ -784,7 +792,7 @@ def "a stray under receipts is refused before anything is staged" [] {
     # 1. a flat receipt — valid-looking bytes, wrong level
     mkdir $receipts
     '{"link":"x"}' | save --raw ($receipts | path join $"($P1).receipt.json")
-    let e1 = try { seal --repo $r.repo --no-stamp --allow-untracked-particles; null } catch {|e| $e.msg }
+    let e1 = try { seal --repo $r.repo --no-stamp; null } catch {|e| $e.msg }
 
     assert ($e1 != null) "seal signed a receipt the sweep never validated"
     assert ($e1 | str contains $"($P1).receipt.json") $"the refusal should name the stray: ($e1)"
@@ -795,14 +803,14 @@ def "a stray under receipts is refused before anything is staged" [] {
     #    the sweep, whatever it holds
     mkdir ($receipts | path join alice)
     '{"link":"x"}' | save --raw ($receipts | path join alice $"($P1).receipt.json")
-    let e2 = try { seal --repo $r.repo --no-stamp --allow-untracked-particles; null } catch {|e| $e.msg }
+    let e2 = try { seal --repo $r.repo --no-stamp; null } catch {|e| $e.msg }
 
     assert ($e2 != null) "a non-CID author directory was signed unchecked"
     assert ($e2 | str contains "alice") $"the refusal should name the stray directory: ($e2)"
 
     # And the repo still seals once the strays are gone.
     rm --recursive ($receipts | path join alice)
-    let ok = seal --repo $r.repo --no-stamp --allow-untracked-particles
+    let ok = seal --repo $r.repo --no-stamp
 
     assert equal $ok.newborn 1
 }
@@ -821,7 +829,8 @@ def "a sealed edge file moved to another signer directory earns no credit" [] {
     let own = link add $P1 $P2 --repo $r.repo --allow-missing
     let adhoc = link add $P1 $P2 --repo $r.repo --allow-missing --keyless-signer alice
 
-    seal --repo $r.repo --no-stamp --allow-untracked-particles | ignore
+    commit-store $r.repo
+    seal --repo $r.repo --no-stamp | ignore
     assert equal (verify $own.edge_cid --repo $r.repo | length) 2
 
     # Relocate the ad-hoc copy into a fresh directory named by a valid CID —
@@ -850,7 +859,7 @@ def "a sealed edge file moved to another signer directory earns no credit" [] {
 
     # And the next seal refuses outright — the manifest still tracks the
     # vacated path — rather than certifying the relocation as a new birth.
-    let sealed = try { seal --repo $r.repo --no-stamp --allow-untracked-particles; null } catch {|e| $e.msg }
+    let sealed = try { seal --repo $r.repo --no-stamp; null } catch {|e| $e.msg }
 
     assert ($sealed != null) "seal certified a relocated link file"
     assert ($sealed | str contains $"($adhoc.record.signer)/($adhoc.edge_cid).json") $"the refusal should name the vacated path: ($sealed)"
@@ -865,7 +874,7 @@ def "an external signer seal freezes nothing until the signature arrives" [] {
 
     init --repo $r.repo
     link add $P1 $P2 --repo $r.repo --allow-missing | ignore
-    seal --repo $r.repo --no-stamp --allow-untracked-particles
+    seal --repo $r.repo --no-stamp
     link add $P2 $P3 --repo $r.repo --allow-missing | ignore
 
     let graph = $r.repo | path join cybergraph
@@ -873,7 +882,7 @@ def "an external signer seal freezes nothing until the signature arrives" [] {
     let sig = $"($statement).(open --raw $"($r.key).pub" | pubkey fingerprint).sig"
     let seals_before = list-dirs ($graph | path join seals)
 
-    let waiting = seal --repo $r.repo --no-stamp --allow-untracked-particles --external-signer
+    let waiting = seal --repo $r.repo --no-stamp --external-signer
 
     assert ("awaiting_signature" in $waiting.sealed)
     assert equal (list-dirs ($graph | path join seals)) $seals_before "a snapshot was written for a root nobody signed"
@@ -881,7 +890,7 @@ def "an external signer seal freezes nothing until the signature arrives" [] {
 
     open --raw $statement | ^ssh-keygen -Y sign -q -f $r.key -n file | save --raw $sig
     let signed = open --raw $statement
-    let sealed = seal --repo $r.repo --no-stamp --allow-untracked-particles --external-signer
+    let sealed = seal --repo $r.repo --no-stamp --external-signer
 
     assert equal (open --raw $statement) $signed "the second run computed another root, so the signature went stale"
     assert equal $sealed.newborn 1
@@ -900,19 +909,19 @@ def "a root replaced while it waits for its signature leaves the seal chain whol
 
         init --repo $r.repo
         link add $P1 $P2 --repo $r.repo --allow-missing | ignore
-        seal --repo $r.repo --no-stamp --allow-untracked-particles
+        seal --repo $r.repo --no-stamp
         link add $P2 $P3 --repo $r.repo --allow-missing | ignore
 
         let statement = $r.repo | path join cybergraph multiproofs tree-root.txt
         let sig = $"($statement).(open --raw $"($r.key).pub" | pubkey fingerprint).sig"
 
-        seal --repo $r.repo --no-stamp --allow-untracked-particles --external-signer | ignore
+        seal --repo $r.repo --no-stamp --external-signer | ignore
         if $sign_draft { open --raw $statement | ^ssh-keygen -Y sign -q -f $r.key -n file | save --raw $sig }
         link add $P1 $P3 --repo $r.repo --allow-missing | ignore
-        seal --repo $r.repo --no-stamp --allow-untracked-particles --external-signer | ignore
+        seal --repo $r.repo --no-stamp --external-signer | ignore
 
         open --raw $statement | ^ssh-keygen -Y sign -q -f $r.key -n file | save --raw $sig
-        seal --repo $r.repo --no-stamp --allow-untracked-particles --external-signer | ignore
+        seal --repo $r.repo --no-stamp --external-signer | ignore
 
         assert equal (seal chain --repo $r.repo | get seq) [0 1] $"draft signed: ($sign_draft)"
     }

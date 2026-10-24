@@ -67,8 +67,8 @@ nu-cybergraph seal                       # sign the root + stamp that signature,
 nu-cybergraph seal --propose-commit      # …and leave the git commit for that seal in the prompt, unrun
 nu-cybergraph seal --external-signer     # the root is signed on another device: run, sign there, run again
 nu-cybergraph seal chain                 # the run of seals, oldest first — refuses a gap
-nu-cybergraph bundle Qm…edge             # portable bundle → exports/<signer>/<edge>/, particles the ends reach included (imported act: re-export + custody layer)
-nu-cybergraph bundle Qm…edge --links-only # own act: …without particles, the record + certificate alone (no-op re-exporting an import)
+nu-cybergraph bundle Qm…edge --out x    # portable bundle → x/, particles the ends reach included (imported act: re-export + custody layer)
+nu-cybergraph bundle Qm…edge --out x --links-only # own act: …without particles, the record + certificate alone (no-op re-exporting an import)
 nu-cybergraph bundle Qm…edge --to Qm…signer # …plus a signed handoff naming the recipient
 nu-cybergraph import path/to/bundle      # verify, keep under imported/<signer>/<edge>/, write custody receipt
 nu-cybergraph verify Qm…edge             # every copy held — own signers and imports — always against the birth seal
@@ -257,7 +257,6 @@ cybergraph/
   particles/<cid>[.ext]                     # the particle store, self-addressed: derived records and published content (extension optional, cosmetic)
   certs/<signer-cid>/<edge-cid>.cert.json   # birth certificates (frozen `merkle prove` output), mirroring the layout
   seals/<root-hex-12>/                      # archival root statement + signatures, one per seal
-  exports/<signer-cid>/<edge-cid>/          # bundles built by `bundle` (default --out)
   imported/<signer-cid>/<edge-cid>/         # foreign bundles, verified on import, kept intact
   receipts/<author-cid>/<edge-cid>.receipt.json # custody receipts for imported links (+ frozen *.receipt.cert.json beside them)
   multiproofs/                              # nu-multiproof machinery (manifest, pubkeys, OTS)
@@ -291,7 +290,7 @@ the anchor of a CID extends to any bytes that hash to that CID.
 (Attestation of the files of a whole repo is a different job — for that, use nu-multiproof's `seal` directly.)
 
 **The graph home is a closed set.** SPEC section 3 draws the whole tree that it may hold.
-The tree holds the signer directories, `particles/`, `certs/`, `seals/`, `exports/`, `imported/`, `receipts/`, and `multiproofs/`, which belongs to the proof layer.
+The tree holds the signer directories, `particles/`, `certs/`, `seals/`, `imported/`, `receipts/`, and `multiproofs/`, which belongs to the proof layer.
 Nothing else may be there, and that includes a hand-written `README.md` or `.gitignore`.
 The reason is the seal:
 it stages those directories wholesale.
@@ -303,7 +302,7 @@ the signer would sign that file without any of the checks that give a signature 
 There is no flag to seal past it.
 The rule stops where the authority of this repo stops.
 The rule recognises `multiproofs/` but does not police it.
-The rule also does not go inside a bundle under `exports/` or `imported/`.
+The rule also does not go inside a bundle under `imported/`.
 `verify-bundle` checks such a bundle as one artifact.
 
 Two refusals carry that rule,
@@ -681,10 +680,10 @@ exactly as `seal --propose-commit` does.
 An orphan is never staged, and no flag includes it.
 This is because a file that no link names is not in the graph.
 So the commit of an orphan is a plain `git add`, not the business of this command.
-The escape hatch is `seal --allow-untracked-particles`, which seals without those bytes.
-The escape hatch never accepts a name under `particles/` that is not an address at all.
-This is because the closed-set refusal below runs before the escape hatch,
-and no flag changes that refusal.
+To seal without those bytes, move the file out of `particles/`:
+the end then reads as a missing particle, and a seal accepts a missing particle.
+A name under `particles/` that is not an address at all is refused in every case,
+because the closed-set refusal below runs first.
 
 **Time semantics.** The record carries no timestamp.
 The reason is that a time inside the record would fork the same act into different CIDs, one per moment of the record.

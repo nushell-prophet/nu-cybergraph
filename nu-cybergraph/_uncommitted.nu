@@ -33,9 +33,8 @@ use _read.nu [ reachable-cids ]
 # The bytes are NOT hashed back to the name here. Every read path already does
 # that where it matters (`particle cat`, the graph reader), and this reading
 # answers one question — is the file in the index, and does the graph name it.
-# A tamper check bolted on would be a second refusal that
-# `--allow-untracked-particles` could not skip, which is not the one check with
-# one escape hatch this was asked to be.
+# A tamper check bolted on would be a second refusal here, beside the one
+# `seal` makes on what this returns.
 export def uncommitted-files [root: path]: nothing -> table {
     let dir = particles-dir $root
 

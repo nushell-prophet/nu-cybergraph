@@ -168,12 +168,16 @@ def "seal proceeds once the store is in the index" [] {
 }
 
 @test
-def "the flag seals without the untracked bytes" [] {
+def "a store file moved out of particles seals without its bytes" [] {
     let g = empty-graph $in.tmp_dir
+    let out = link add "cyber" "bostrom" --repo $g.repo
+    let aside = $in.tmp_dir | path join aside
 
-    link add "cyber" "bostrom" --repo $g.repo
-
-    let sealed = seal --repo $g.repo --no-stamp --allow-untracked-particles
+    mkdir $aside
+    for cid in [$out.record.cid_from $out.record.cid_to] {
+        mv ($g.root | path join particles $cid) $aside
+    }
+    let sealed = seal --repo $g.repo --no-stamp
 
     assert equal $sealed.newborn 1
     let manifest = open ($g.root | path join multiproofs tree-hashes.csv) | get filepath

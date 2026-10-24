@@ -10,7 +10,6 @@ use _validate.nu CID_V0_RE
 export const PARTICLES_DIR = "particles"
 export const CERTS_DIR = "certs"
 export const SEALS_DIR = "seals"
-export const EXPORTS_DIR = "exports"
 export const IMPORTED_DIR = "imported"
 export const RECEIPTS_DIR = "receipts"
 export const CUSTODY_DIR = "custody"
@@ -94,11 +93,6 @@ export def certs-dir [root: path]: nothing -> path {
 # <root>/seals
 export def seals-dir [root: path]: nothing -> path {
     $root | path join $SEALS_DIR
-}
-
-# <root>/exports
-export def exports-dir [root: path]: nothing -> path {
-    $root | path join $EXPORTS_DIR
 }
 
 # <root>/imported
@@ -334,7 +328,7 @@ export def snapshot-dir [root: path root_hex: string]: nothing -> path {
 # distinction `signer-dirs` makes, written once as a list so the walk and the
 # refusal cannot drift apart.
 export const RESERVED_DIRS = [
-    $PARTICLES_DIR $CERTS_DIR $SEALS_DIR $EXPORTS_DIR $IMPORTED_DIR $RECEIPTS_DIR $ORDER_DIR $MULTIPROOFS_DIR
+    $PARTICLES_DIR $CERTS_DIR $SEALS_DIR $IMPORTED_DIR $RECEIPTS_DIR $ORDER_DIR $MULTIPROOFS_DIR
 ]
 
 # A seal snapshot directory: the 12-char truncation `snapshot-dir` writes.
@@ -348,7 +342,7 @@ const CERT_SUFFIX = ".cert.json"
 # above: the operator reading the row needs the rule, not the name of the check
 # that produced it.
 const ALLOWS = {
-    root: "the reserved directories (particles, certs, seals, exports, imported, receipts, order, multiproofs) and <signer-cid>/ directories"
+    root: "the reserved directories (particles, certs, seals, imported, receipts, order, multiproofs) and <signer-cid>/ directories"
     signer: "<edge-cid>.json link records"
     particles: "<cid> and <cid>.<ext> files"
     certs: "<signer-cid>/ directories"
@@ -406,7 +400,7 @@ export def unexpected [dir: path allowed: string keep: closure]: nothing -> tabl
 }
 
 # Directories named by a CID v0, and nothing else — the shape `certs/`,
-# `receipts/`, `exports/` and `imported/` all share one level down.
+# `receipts/` and `imported/` all share one level down.
 export def cid-dirs-only [dir: path allowed: string]: nothing -> table {
     unexpected $dir $allowed {|e| $e.type == "dir" and ($e.name | path basename) =~ $CID_V0_RE }
 }
@@ -469,12 +463,8 @@ export def strays [root: path]: nothing -> table {
         }
         | flatten
 
-    let bundles = [(exports-dir $root) (imported-dir $root)]
-        | each {|top|
-            list-dirs $top
-            | each {|d| cid-dirs-only $d $ALLOWS.bundles_signer }
-            | flatten
-        }
+    let bundles = list-dirs (imported-dir $root)
+        | each {|d| cid-dirs-only $d $ALLOWS.bundles_signer }
         | flatten
 
     [
@@ -490,7 +480,6 @@ export def strays [root: path]: nothing -> table {
         $receipts
         (cid-dirs-only (order-dir $root) $ALLOWS.order)
         $order
-        (cid-dirs-only (exports-dir $root) $ALLOWS.bundles)
         (cid-dirs-only (imported-dir $root) $ALLOWS.bundles)
         $bundles
     ] | flatten
