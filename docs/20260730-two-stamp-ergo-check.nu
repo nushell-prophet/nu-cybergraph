@@ -34,6 +34,7 @@
 # code beside this file, which is the one thing an embeds document exists to
 # prevent.
 use ../nu-cybergraph
+use ../nu-cybergraph/convention.nu
 use ../nu-cybergraph/_verify-helpers.nu [ verify-bundle ]
 use ../nu-cybergraph/_signer.nu [ own-signer ]
 
@@ -245,11 +246,11 @@ let B = nu-cybergraph particle add "doc B: the excerpt" --repo $a.repo
 let P = nu-cybergraph particle add "person P" --repo $a.repo
 
 # A spread of convention verbs, so the reading commands have a real graph.
-nu-cybergraph convention quote-particle $A $B --repo $a.repo | ignore
-nu-cybergraph convention agree-particle $B --repo $a.repo | ignore
-nu-cybergraph convention author-particle $B $P --repo $a.repo | ignore
-nu-cybergraph convention question $B "what is it?" --repo $a.repo | ignore
-nu-cybergraph convention translation-particle $A "перевод" --repo $a.repo | ignore
+convention quote-particle $A $B --repo $a.repo | ignore
+convention agree-particle $B --repo $a.repo | ignore
+convention author-particle $B $P --repo $a.repo | ignore
+convention question $B "what is it?" --repo $a.repo | ignore
+convention translation-particle $A "перевод" --repo $a.repo | ignore
 let plain = nu-cybergraph link add $A $B --repo $a.repo
 
 # Reading the graph back: which edges touch B, and what they add up to.

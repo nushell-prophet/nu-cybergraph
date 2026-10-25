@@ -9,13 +9,16 @@ module link { export use link.nu [ add imported list tally touching ] }
 export use link
 module order { export use order.nu [ backfill list ] }
 export use order
-module convention {
-    export use convention.nu [
-        agree-particle answer-edge author-particle claimed-at con confirm-edge confirm-link deny-edge deny-link derive
-        disagree-particle pro question quote-particle repeat same translation-particle update-edge update-particle
-    ]
-}
-export use convention
+# Why: the eighteen convention verbs would fill the completion list of `nu-cybergraph`,
+# so a caller imports them on their own: `use nu-cybergraph/convention.nu`.
+
+# Exported so a reader can compute any address by hand: the edge address
+# `derive {cid_from: A, cid_to: B}`, the cyberlink's derived CID
+# `derive {cid_from: A, cid_to: B, signer: S}`, a candidate instruction
+# source (bj002 appendix, "Reading instructions"), or the act a receipt or a handoff states.
+# Why: it is the canon of the whole format, not of the conventions alone,
+# so a reader who checks a bundle needs no convention import to get it.
+export use _derive.nu [ derive ]
 export use seal.nu [ main ]
 module seal { export use seal.nu [ chain ] }
 export use seal

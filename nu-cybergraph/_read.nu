@@ -2,7 +2,7 @@
 #
 # A CID is opaque, so the edge X → Y does not show that X is an instruction.
 # What makes it readable is that every convention publishes the record it
-# minted (convention.nu `address`): the source is its own preimage, so
+# minted (_convention.nu `address`): the source is its own preimage, so
 # dereferencing it gives the named fields back with the real operand CIDs. That
 # is the second of the two ways bj002 names. The first — derive the candidate
 # addresses of everything already seen and match them against `cid_from` —

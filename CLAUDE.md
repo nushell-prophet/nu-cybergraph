@@ -48,6 +48,11 @@ so a check is never what gets dropped for simplicity.
 
 - Every submodule file exports every command, helpers included, so tests can import any of them;
   `nu-cybergraph/mod.nu` names the public commands of the non-`_` files, and nothing else is public.
+  There are two exceptions.
+  `mod.nu` also names `derive` from `_derive.nu`.
+  `mod.nu` leaves out `convention.nu`:
+  a caller imports it on its own (`use nu-cybergraph/convention.nu`),
+  because its eighteen verbs would fill the completion list of `nu-cybergraph`.
   A file's subcommands go through an inline module of the same name (`module link { export use link.nu [ add list ] }`, then `export use link`),
   and its `main` is imported outside that module (`export use seal.nu [ main ]`).
   `_*.nu` files are internal;

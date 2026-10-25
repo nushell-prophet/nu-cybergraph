@@ -239,7 +239,7 @@ def "operand-embedding conventions put the operand in the source" [] {
 
 # --literal plumbing through address/edge to resolve-particle — checked once
 # on `pro`, since every verb's content operand routes through the same
-# `address` call (see convention.nu's `edge`/`address`).
+# `address` call (see _convention.nu's `edge`/`address`).
 @test
 def "a text operand opens a path argument and --literal forces literal" [] {
     let tmp = $in.tmp

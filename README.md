@@ -54,6 +54,7 @@ nu-cybergraph init --co-signer k.pub     # …register a key beside the identity
 nu-cybergraph particle add "any text"    # publish content as particles/<cid>, get the CID
 nu-cybergraph particle add-edge Qm…A Qm…B      # publish an edge address's preimage, so a later act can name it
 nu-cybergraph particle add-link Qm…A Qm…B Qm…S # …the same for a cyberlink address (the triple)
+nu-cybergraph derive {cid_from: Qm…A, cid_to: Qm…B} # compute a derived CID (here the edge address); writes nothing
 nu-cybergraph particle cat Qm…           # read a stored file's exact bytes by its bare CID
 nu-cybergraph particle uncommitted       # store files git does not have, and whether the graph names them
 nu-cybergraph particle uncommitted --propose-commit # …and leave the git commit for the ones it names in the prompt, unrun
@@ -73,6 +74,9 @@ nu-cybergraph bundle Qm…edge --to Qm…signer # …plus a signed handoff namin
 nu-cybergraph import path/to/bundle      # verify, keep under imported/<signer>/<edge>/, write custody receipt
 nu-cybergraph verify Qm…edge             # every copy held — own signers and imports — always against the birth seal
 nu-cybergraph verify-bundle path/to/bundle # a bundle you received: check it with no repo of your own
+
+use nu-cybergraph/convention.nu          # the convention verbs are a separate import (see Conventions below)
+convention question Qm… "who reviews this?" # write an instruction edge: publish the question, link it to Qm…
 ```
 
 ## Link record format
@@ -100,7 +104,7 @@ so an independent implementation reproduces the same CIDs.
   The JSON is compact (no whitespace),
   with exactly one `\n` at the end.
   This is the one canon of the format,
-  and the same rule serializes derived records (see `convention derive` below).
+  and the same rule serializes derived records (see `nu-cybergraph derive` below).
   The charsets are constrained, so no JSON escape can occur,
   and the bytes are easy to reproduce.
 - **Self-addressing**: the filename stem is the CID v0 of the exact bytes of the file
@@ -328,7 +332,10 @@ These conventions *encode* an instruction to process the graph.
 The conventions encode the instruction as an ordinary edge.
 bj002 holds the concept and the reasons for it;
 this section gives the mechanics.
-`nu-cybergraph convention <verb>` writes the edge through the same record path as `link add` (triple guard, self-addressing, signer resolution),
+The verbs are not part of `use nu-cybergraph/`:
+they are a separate import, `use nu-cybergraph/convention.nu`,
+so that they do not fill the command list of `nu-cybergraph`.
+`convention <verb>` writes the edge through the same record path as `link add` (triple guard, self-addressing, signer resolution),
 so it takes the same `--signer`/`--keyless-signer`/`--repo` controls.
 Four more verbs are not in the twelve.
 `repeat` publishes the bare edge again.
@@ -372,12 +379,12 @@ and derives addresses from the same canonical record,
 so an address here is the same address in bj002.
 
 Every convention uses one primitive, the canonical record:
-**`convention derive`** takes a flat record
+**`nu-cybergraph derive`** takes a flat record
 and serializes it canonically.
 The canonical form is compact JSON with keys in alphabetical order and exactly one trailing `\n`.
 All values are strings:
 no nesting, and a reference to another record is its CID.
-**`convention derive`** then returns the CID v0 of those bytes, a **derived CID**.
+**`nu-cybergraph derive`** then returns the CID v0 of those bytes, a **derived CID**.
 To reproduce one, use `printf '<record>\n' | ipfs add --only-hash --cid-version=0`.
 The record form is **the canon of bj002 itself**.
 The appendix of bj002 defines a derived CID by these same bytes.
@@ -819,7 +826,7 @@ The author directory and the edge name together address the act as unambiguously
 If the edge alone were the key, it would collide as soon as the copy of the same edge from a second author arrives.
 The receipt is `{cid_from, cid_to, signer, custodian, received_at, files, prev, handoff}`.
 The first three fields spell out the cyberlink and do not address it.
-So `convention derive` over them recovers the derived CID of the cyberlink,
+So `nu-cybergraph derive` over them recovers the derived CID of the cyberlink,
 while the receipt itself needs nothing external to say what it is about.
 A receipt is not content-addressed,
 so a lone derived CID here would name an act whose preimage is somewhere else.
@@ -861,7 +868,7 @@ The claim is a handoff file `<edge-cid>.handoff.json` — `{schema, cid_from, ci
 The file states the act and does not address it, exactly as a receipt does.
 `cid_from`/`cid_to`/`signer` are the three components of the cyberlink.
 So the file says which act it moves without a store to dereference a CID in.
-And `convention derive` over them recovers the address anyway.
+And `nu-cybergraph derive` over them recovers the address anyway.
 `signer` is the author of the act and does not move;
 `from` and `to` are the two holders of this transfer,
 and they are the same as `signer` only for the handoff of the author.
