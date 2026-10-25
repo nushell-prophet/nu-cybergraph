@@ -5,6 +5,8 @@ use _layout.nu [ certs-dir ]
 use _fs.nu [ list-files ]
 use _deps/init.nu [ init ]
 
+# Start a graph here: register the signer key and create cybergraph/ with certs/.
+#
 # `init` here is nu-multiproof's init (pubkey registration in
 # multiproofs/pubkeys/); this wrapper adds the cybergraph layout on top.
 @category cybergraph

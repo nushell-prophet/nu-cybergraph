@@ -51,6 +51,8 @@ export def assert-frozen-proof [proof: path leaf: string]: nothing -> nothing {
     }
 }
 
+# Sign and stamp the graph root, then freeze birth certificates for new links.
+#
 # `seal` in the body is nu-multiproof's seal; this wrapper stages the
 # cybergraph files, runs it, then freezes certificates and the root snapshot.
 #
